@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
+import { describeError } from "../utils/logger.js";
 
 /** The slice of pg's Client/Pool this runner needs, so tests can pass a fake. */
 export interface Queryable {
@@ -48,7 +49,7 @@ export async function runMigrations(db: Queryable, migrations: Migration[]): Pro
         done.push(migration.name);
       } catch (err) {
         await db.query("ROLLBACK");
-        throw new Error(`Migration ${migration.name} failed: ${err instanceof Error ? err.message : String(err)}`);
+        throw new Error(`Migration ${migration.name} failed: ${describeError(err)}`);
       }
     }
     return done;

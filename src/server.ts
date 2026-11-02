@@ -11,7 +11,7 @@ import { startJobWatchdog } from "./services/job-watchdog.service.js";
 import { memoryRepositories, pgRepositories } from "./repositories/index.js";
 import { FracService } from "./services/frac.service.js";
 import { ReviewService } from "./services/review.service.js";
-import { logger } from "./utils/logger.js";
+import { describeError, logger } from "./utils/logger.js";
 
 const inMemory = SERVER.store === "memory";
 
@@ -44,6 +44,6 @@ async function start(): Promise<void> {
 }
 
 start().catch((err: unknown) => {
-  logger.error("Startup failed", { error: err instanceof Error ? err.message : String(err) });
+  logger.error("Startup failed", { error: describeError(err) });
   process.exit(1);
 });

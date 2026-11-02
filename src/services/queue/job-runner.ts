@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Job } from "../../models/job.model.js";
 import type { JobRepository } from "../../repositories/job.repository.js";
 import { ApiError } from "../../utils/response.js";
-import { logger } from "../../utils/logger.js";
+import { describeError, logger } from "../../utils/logger.js";
 
 /** Code for a job that threw something other than an ApiError. */
 export const JOB_FAILED = "JOB_FAILED";
@@ -68,7 +68,7 @@ export class JobRunner {
       await task(progress);
       await this.jobs.update(id, { status: "done" });
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      const message = describeError(err);
       const errorCode = err instanceof ApiError ? err.code : JOB_FAILED;
       logger.warn("Job failed", { jobId: id, errorCode, error: message });
       await this.jobs.update(id, { status: "error", error: message, errorCode });

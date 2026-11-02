@@ -20,6 +20,20 @@ function write(level: Level, message: string, fields: Fields): void {
 }
 
 /**
+ * A one-line description of any thrown value. Some errors carry no message: a refused Postgres
+ * connection is an AggregateError with message "" and the detail in `code` and `errors[]`
+ * ("ECONNREFUSED ::1:5432"). Those details are included so a log line never says just "".
+ */
+export function describeError(err: unknown): string {
+  if (!(err instanceof Error)) return String(err);
+  const { code, address, port } = err as Error & { code?: string; address?: string; port?: number };
+  const where = address ? ` ${address}${port ? `:${port}` : ""}` : "";
+  const own = err.message || (code ? `${code}${where}` : err.name);
+  const inner = err instanceof AggregateError ? err.errors.map(describeError).filter((d) => d && d !== own) : [];
+  return inner.length ? `${own}${own ? ": " : ""}${inner.join("; ")}` : own;
+}
+
+/**
  * Structured logger: one JSON object per line in production (LOG_FORMAT=json), readable text
  * locally. Adds the request id when called inside a request. Use instead of console.*.
  */

@@ -2,7 +2,7 @@ import type { NextFunction, Request, Response } from "express";
 import multer from "multer";
 import { WorkbookParseError } from "../services/review-engine/parse-workbook.js";
 import { ApiError, payloadTooLarge, sendError } from "../utils/response.js";
-import { logger } from "../utils/logger.js";
+import { describeError, logger } from "../utils/logger.js";
 
 /** body-parser marks its own failures with a `type`; these are the client's fault, not ours. */
 function bodyParserError(err: unknown): ApiError | null {
@@ -32,6 +32,6 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
     sendError(res, parsed);
     return;
   }
-  logger.error("Unhandled error", { error: err instanceof Error ? err.stack : String(err) });
+  logger.error("Unhandled error", { error: describeError(err), stack: err instanceof Error ? err.stack : undefined });
   sendError(res, new ApiError(500, "INTERNAL_ERROR", "Something went wrong"));
 }

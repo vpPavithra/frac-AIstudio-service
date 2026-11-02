@@ -1,5 +1,5 @@
 import type { JobRepository } from "../repositories/job.repository.js";
-import { logger } from "../utils/logger.js";
+import { describeError, logger } from "../utils/logger.js";
 
 export const JOB_INTERRUPTED = "JOB_INTERRUPTED";
 export const INTERRUPTED_MESSAGE = "This step was interrupted (the service restarted or the step stopped responding). Run it again.";
@@ -22,7 +22,7 @@ export async function sweepStuckJobs(jobs: JobRepository, staleAfterMs: number, 
 export function startJobWatchdog(jobs: JobRepository, opts: { staleAfterMs: number; sweepEveryMs: number }): () => void {
   const sweep = () => {
     sweepStuckJobs(jobs, opts.staleAfterMs).catch((err: unknown) => {
-      logger.error("Job watchdog sweep failed", { error: err instanceof Error ? err.message : String(err) });
+      logger.error("Job watchdog sweep failed", { error: describeError(err) });
     });
   };
   sweep();
