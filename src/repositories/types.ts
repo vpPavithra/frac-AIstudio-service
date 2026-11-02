@@ -13,6 +13,8 @@ export interface Job {
   done: number;
   total: number;
   error: string | null;
+  /** Stable code for `error` (e.g. JOB_INTERRUPTED), so the portal can branch on it. */
+  errorCode: string | null;
   usage: Record<string, number>;
   createdAt: string;
   updatedAt: string;
@@ -61,12 +63,14 @@ export interface ReviewRepository {
   listByOwner(ownerId: string): Promise<ReviewRecord[]>;
 }
 
-export type JobPatch = Partial<Pick<Job, "status" | "msg" | "done" | "total" | "error" | "usage">>;
+export type JobPatch = Partial<Pick<Job, "status" | "msg" | "done" | "total" | "error" | "errorCode" | "usage">>;
 
 export interface JobRepository {
   insert(job: Job): Promise<void>;
   update(id: string, patch: JobPatch): Promise<void>;
   get(id: string): Promise<Job | null>;
+  /** Marks queued/running jobs last updated before `before` as failed; returns how many. */
+  failStale(before: Date, error: string, errorCode: string): Promise<number>;
 }
 
 export interface Repositories {

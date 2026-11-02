@@ -17,6 +17,11 @@ Without Postgres: `FRAC_STUDIO_STORE=memory npm run dev` (data is lost on restar
 development, run it on another port (`PORT=3010`) and add the `/apis/protected/v8/fracStudio` rule to
 orgportal's `proxy/localhost.proxy.json`.
 
+Settings live in `config/service.json` (models, rates, limits, timeouts, CORS); the environment overrides
+any of them, and `.env` holds secrets and per-deployment values only. After editing config, run
+`npm run config:check`. `npm run check` runs typecheck, lint, config check and tests. New here? Read
+`ONBOARDING.md` and `CLAUDE.md`.
+
 ## Deploy
 
 Same pipeline as playlist-service (`Jenkinsfile`): `Dockerfile.build` compiles and zips `dist/`, `config/` and

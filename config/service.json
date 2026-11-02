@@ -1,0 +1,35 @@
+{
+  "//": "Non-secret settings, reviewed like code. Environment variables override these. Secrets (ANTHROPIC_API_KEY, POSTGRES_PASSWORD) never go here; startup refuses them. Run `npm run config:check` after editing.",
+
+  "PORT": 3005,
+  "LOG_FORMAT": "pretty",
+  "LOG_LEVEL": "info",
+
+  "// models": "Spec section 9: complex tier for research, roles, competencies and the review; default tier for activities and ladders.",
+  "ANTHROPIC_COMPLEX_MODEL": "claude-opus-5-5",
+  "ANTHROPIC_DEFAULT_MODEL": "claude-sonnet-5-5",
+  "LLM_TEMPERATURE": 0.3,
+  "LLM_TIMEOUT_MS": 120000,
+  "LLM_RETRIES": 3,
+  "LLM_BACKOFF_MS": 1000,
+  "LLM_MAX_BACKOFF_MS": 20000,
+
+  "// rates": "USD per million tokens, used to log cost per job. 0 until the price list is confirmed.",
+  "RATE_COMPLEX_IN_USD_PER_1M": 0,
+  "RATE_COMPLEX_OUT_USD_PER_1M": 0,
+  "RATE_DEFAULT_IN_USD_PER_1M": 0,
+  "RATE_DEFAULT_OUT_USD_PER_1M": 0,
+
+  "MAX_UPLOAD_MB": 15,
+  "MAX_JSON_MB": 5,
+  "MAX_TEXT_CHARS": 20000,
+  "MAX_ROLES": 200,
+  "MAX_ACTIVITIES_PER_ROLE": 200,
+  "MAX_COMPETENCIES": 500,
+
+  "JOB_STALE_AFTER_MS": 900000,
+  "JOB_SWEEP_EVERY_MS": 60000,
+
+  "// cors": "Comma-separated browser origins. Empty: only the uiproxy calls this service.",
+  "CORS_ORIGINS": ""
+}

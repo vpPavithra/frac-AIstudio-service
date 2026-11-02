@@ -92,17 +92,34 @@ describe("reviewer", () => {
     await request(app).get(`/v1/jobs/${res.body.jobId}`).set(OTHER).expect(404);
   });
 
-  it("rejects missing, non-xlsx, unreadable and sheet-less uploads with 400", async () => {
+  it("rejects missing, non-xlsx, unreadable and sheet-less uploads with a coded 400", async () => {
     const { app } = setup();
-    await request(app).post("/v1/frac-reviews").set(OWNER).expect(400);
-    await request(app).post("/v1/frac-reviews").set(OWNER).attach("file", Buffer.from("x"), "f.csv").expect(400);
-    await request(app).post("/v1/frac-reviews").set(OWNER).attach("file", Buffer.from("not a zip"), "f.xlsx").expect(400);
+    const code = (res: request.Response) => res.body.error.code;
+    expect(code(await request(app).post("/v1/frac-reviews").set(OWNER).expect(400))).toBe("FILE_REQUIRED");
+    const csv = await request(app).post("/v1/frac-reviews").set(OWNER).attach("file", Buffer.from("x"), "f.csv").expect(400);
+    expect(code(csv)).toBe("FILE_TYPE_NOT_ALLOWED");
+    const zip = await request(app).post("/v1/frac-reviews").set(OWNER).attach("file", Buffer.from("not a zip"), "f.xlsx").expect(400);
+    expect(code(zip)).toBe("FILE_UNREADABLE");
     const noComp = await request(app)
       .post("/v1/frac-reviews")
       .set(OWNER)
       .attach("file", await xlsx([{ name: "Sheet1", rows: [["Role", "Activity"]] }]), "f.xlsx")
       .expect(400);
-    expect(noComp.body.error).toBe(NO_COMPETENCY_SHEET);
+    expect(noComp.body.error).toEqual({ code: "NO_COMPETENCY_SHEET", message: NO_COMPETENCY_SHEET });
+  });
+
+  it("validates the context fields and answers unknown identity with a coded 401", async () => {
+    const { app } = setup();
+    const res = await request(app)
+      .post("/v1/frac-reviews")
+      .set(OWNER)
+      .field("notes", "x".repeat(6000))
+      .attach("file", await xlsx(gnmSample()), "g.xlsx")
+      .expect(400);
+    expect(res.body.error).toMatchObject({ code: "VALIDATION_FAILED", message: expect.stringContaining("notes") });
+    const anon = await request(app).get("/v1/frac-reviews").expect(401);
+    expect(anon.body.error.code).toBe("NOT_SIGNED_IN");
+    expect(anon.headers["x-request-id"]).toBeTruthy();
   });
 
   it("exports the report and opens the reviewed file in the Creator once", async () => {
@@ -157,11 +174,12 @@ describe("creator", () => {
     // The team can confirm the mapping by hand; true is never accepted from the client
     const cleared = await request(app).patch(`/v1/fracs/${id}`).set(OWNER).send({ rolesDirty: false }).expect(200);
     expect(cleared.body.frac.rolesDirty).toBe(false);
-    const ignored = await request(app).patch(`/v1/fracs/${id}`).set(OWNER).send({ rolesDirty: true }).expect(200);
-    expect(ignored.body.frac.rolesDirty).toBe(false);
+    const refused = await request(app).patch(`/v1/fracs/${id}`).set(OWNER).send({ rolesDirty: true }).expect(400);
+    expect(refused.body.error.code).toBe("VALIDATION_FAILED");
 
     await request(app).patch(`/v1/fracs/${id}`).set(OWNER).send({ research: { summary: "s" } }).expect(200);
-    await request(app).patch(`/v1/fracs/${id}`).set(OWNER).send({ cadre: "GNM" }).expect(400);
+    const locked = await request(app).patch(`/v1/fracs/${id}`).set(OWNER).send({ cadre: "GNM" }).expect(409);
+    expect(locked.body.error.code).toBe("BRIEF_LOCKED");
     // Re-sending the unchanged brief is fine
     await request(app).patch(`/v1/fracs/${id}`).set(OWNER).send({ cadre: "ANM", codePrefix: "an-m9x" }).expect(200);
     const frac = await request(app).get(`/v1/fracs/${id}`).set(OWNER);

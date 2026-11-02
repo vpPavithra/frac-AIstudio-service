@@ -24,7 +24,10 @@ jobs:
           cache: npm
 
       - run: npm ci
+      - run: npm run typecheck
       - run: npm run lint
+      - name: Config check (service.json keys, no secrets)
+        run: npm run config:check
       - run: npm run build
       - name: Test with coverage
         run: npm run test:coverage

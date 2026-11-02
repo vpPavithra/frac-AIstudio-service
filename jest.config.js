@@ -8,6 +8,7 @@ export default {
   extensionsToTreatAsEsm: [".ts"],
   moduleFileExtensions: ["ts", "js", "json", "node"],
   // Co-located unit tests under src/, fixture-driven acceptance tests under test/
+  setupFiles: ["<rootDir>/test/setup-env.ts"],
   testMatch: ["<rootDir>/src/**/*.test.ts", "<rootDir>/test/**/*.test.ts"],
   collectCoverage: false,
   collectCoverageFrom: [
@@ -16,6 +17,7 @@ export default {
     // Bootstrap / infra wiring with no unit logic
     "!src/server.ts",
     "!src/migrate.ts",
+    "!src/scripts/**",
     "!src/app.ts",
     "!src/config/**",
   ],

@@ -1,15 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { fracToModel } from "../engine/convert.js";
-import type { Frac, FracSize } from "../engine/types.js";
+import type { Frac } from "../engine/types.js";
 import { buildFracWorkbook, fracWorkbookFilename } from "../io/workbook-writer.js";
 import type { JobRunner } from "../jobs/job-runner.js";
 import { EXPERT_CHECK_NOTES, JOB_MESSAGES } from "../jobs/messages.js";
-import { badRequest, notFound } from "../middleware/errors.js";
 import type { FracVersion, Repositories } from "../repositories/types.js";
+import { badRequest, conflict, notFound } from "../utils/api-error.js";
+import type { CreateFracInput, PatchFracInput } from "../validations/frac.schema.js";
 import { type ReviewService, worstSeverity } from "./review.service.js";
-
-const SIZES: readonly FracSize[] = ["compact", "standard", "full"];
-const MAX_TEXT = 20_000;
 
 export interface FracSummary {
   id: string;
@@ -22,51 +20,14 @@ export interface FracSummary {
   updatedAt: string;
 }
 
-export interface Brief {
-  cadre: string;
-  state: string;
-  size: FracSize;
-  prompt: string;
-}
-
-type Body = Record<string, unknown>;
-
-function text(body: Body, key: string, required = false): string | undefined {
-  const value = body[key];
-  if (value === undefined || value === null) {
-    if (required) throw badRequest(`${key} is required`);
-    return undefined;
-  }
-  if (typeof value !== "string") throw badRequest(`${key} must be text`);
-  const trimmed = value.trim();
-  if (required && !trimmed) throw badRequest(`${key} is required`);
-  if (trimmed.length > MAX_TEXT) throw badRequest(`${key} is too long`);
-  return trimmed;
-}
-
-function size(body: Body): FracSize | undefined {
-  const value = body.size;
-  if (value === undefined) return undefined;
-  if (!SIZES.includes(value as FracSize)) throw badRequest(`size must be one of ${SIZES.join(", ")}`);
-  return value as FracSize;
-}
-
-/** Spec 5.1. State defaults to the national baseline. */
-export function parseBrief(body: Body): Brief {
-  return {
-    cadre: text(body, "cadre", true) as string,
-    state: text(body, "state") || "India (national baseline)",
-    size: size(body) ?? "standard",
-    prompt: text(body, "prompt") ?? "",
-  };
-}
+const BRIEF_FIELDS = ["cadre", "state", "size", "prompt"] as const;
 
 /** A–Z only, at most 4 characters, fallback "C" (spec 4.1). */
 export function sanitizeCodePrefix(value: string): string {
   return value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 4) || "C";
 }
 
-export function newFrac(ownerId: string, brief: Brief, id = randomUUID(), now = new Date()): Frac {
+export function newFrac(ownerId: string, brief: CreateFracInput, id = randomUUID(), now = new Date()): Frac {
   const at = now.toISOString();
   return {
     id,
@@ -90,51 +51,24 @@ export function newFrac(ownerId: string, brief: Brief, id = randomUUID(), now = 
   };
 }
 
-function array(body: Body, key: string): unknown[] | undefined {
-  const value = body[key];
-  if (value === undefined) return undefined;
-  if (!Array.isArray(value)) throw badRequest(`${key} must be a list`);
-  return value;
-}
-
 /**
- * Applies team edits (spec 8, PATCH). The brief locks once research exists (5.1); editing roles
- * after competencies exist sets rolesDirty (5.3). Shapes inside roles/competencies/research are
- * the UI's to keep; this only guards the top-level types.
+ * Applies validated team edits (spec 8, PATCH). The brief locks once research exists (5.1);
+ * editing roles after competencies exist sets rolesDirty (5.3); the team may clear it.
  */
-export function applyEdits(frac: Frac, body: Body, now = new Date()): Frac {
-  const next: Frac = { ...frac };
-  const briefKeys = (["cadre", "state", "size", "prompt"] as const).filter(
-    (k) => body[k] !== undefined && body[k] !== frac[k],
-  );
-  if (briefKeys.length && frac.research) throw badRequest("The brief is locked once research exists");
+export function applyEdits(frac: Frac, edits: PatchFracInput, now = new Date()): Frac {
+  const changesBrief = BRIEF_FIELDS.some((k) => edits[k] !== undefined && edits[k] !== frac[k]);
+  if (changesBrief && frac.research) throw conflict("BRIEF_LOCKED", "The brief is locked once research exists");
 
-  next.cadre = text(body, "cadre") || frac.cadre;
-  next.state = text(body, "state") || frac.state;
-  next.size = size(body) ?? frac.size;
-  next.prompt = text(body, "prompt") ?? frac.prompt;
-  next.cadreFull = text(body, "cadreFull") || frac.cadreFull;
-  const prefix = text(body, "codePrefix");
-  if (prefix !== undefined) next.codePrefix = sanitizeCodePrefix(prefix);
-
-  const postings = array(body, "postings");
-  if (postings) next.postings = postings as Frac["postings"];
-  const competencies = array(body, "competencies");
-  if (competencies) next.competencies = competencies as Frac["competencies"];
-  if (body.research !== undefined) {
-    if (body.research !== null && typeof body.research !== "object") throw badRequest("research must be an object");
-    next.research = body.research as Frac["research"];
-  }
-  const roles = array(body, "roles");
+  const { codePrefix, roles, rolesDirty, ...rest } = edits;
+  const next: Frac = { ...frac, ...rest, updatedAt: now.toISOString() };
+  if (codePrefix !== undefined) next.codePrefix = sanitizeCodePrefix(codePrefix);
   if (roles) {
     const changed = JSON.stringify(roles) !== JSON.stringify(frac.roles);
-    next.roles = roles as Frac["roles"];
+    next.roles = roles;
     if (changed && next.competencies.length) next.rolesDirty = true;
+  } else if (rolesDirty === false) {
+    next.rolesDirty = false;
   }
-  // The team may confirm the mapping by hand; only the server ever sets it back to true
-  if (body.rolesDirty === false && !roles) next.rolesDirty = false;
-
-  next.updatedAt = now.toISOString();
   return next;
 }
 
@@ -164,8 +98,8 @@ export class FracService {
     private readonly methodParagraph: () => string,
   ) {}
 
-  async create(ownerId: string, body: Body): Promise<Frac> {
-    const frac = newFrac(ownerId, parseBrief(body));
+  async create(ownerId: string, brief: CreateFracInput): Promise<Frac> {
+    const frac = newFrac(ownerId, brief);
     await this.repos.fracs.insert(frac);
     return frac;
   }
@@ -180,8 +114,8 @@ export class FracService {
     return (await this.repos.fracs.listByOwner(ownerId)).map(summarise);
   }
 
-  async patch(ownerId: string, id: string, body: Body): Promise<Frac> {
-    const next = applyEdits(await this.get(ownerId, id), body);
+  async patch(ownerId: string, id: string, edits: PatchFracInput): Promise<Frac> {
+    const next = applyEdits(await this.get(ownerId, id), edits);
     await this.repos.fracs.update(next);
     return next;
   }
@@ -189,7 +123,9 @@ export class FracService {
   /** Step 6 expert check: the Reviewer engine on fracToModel (spec 5.6). */
   async startCheck(ownerId: string, id: string) {
     const frac = await this.get(ownerId, id);
-    if (!frac.competencies.length) throw badRequest("Derive competencies before running the expert check");
+    if (!frac.competencies.length) {
+      throw badRequest("NO_COMPETENCIES", "Derive competencies before running the expert check");
+    }
 
     return this.runner.start({ ownerId, kind: "check", targetId: id, msg: JOB_MESSAGES.check }, async () => {
       const model = fracToModel(frac);

@@ -1,5 +1,10 @@
 import { randomUUID } from "node:crypto";
 import type { Job, JobRepository } from "../repositories/types.js";
+import { ApiError } from "../utils/api-error.js";
+import { logger } from "../utils/logger.js";
+
+/** Code for a job that threw something other than an ApiError. */
+export const JOB_FAILED = "JOB_FAILED";
 
 export interface JobProgress {
   /** Updates the message shown in the UI and, optionally, the x-of-y counter. */
@@ -38,6 +43,7 @@ export class JobRunner {
       done: 0,
       total: spec.total ?? 0,
       error: null,
+      errorCode: null,
       usage: {},
       createdAt: now,
       updatedAt: now,
@@ -62,7 +68,9 @@ export class JobRunner {
       await this.jobs.update(id, { status: "done" });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      await this.jobs.update(id, { status: "error", error: message });
+      const errorCode = err instanceof ApiError ? err.code : JOB_FAILED;
+      logger.warn("Job failed", { jobId: id, errorCode, error: message });
+      await this.jobs.update(id, { status: "error", error: message, errorCode });
     }
   }
 }

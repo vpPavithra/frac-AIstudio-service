@@ -108,6 +108,18 @@ export class MemoryJobRepository implements JobRepository {
     const row = this.rows.get(id);
     return row ? clone(row) : null;
   }
+
+  async failStale(before: Date, error: string, errorCode: string): Promise<number> {
+    let failed = 0;
+    for (const [id, row] of this.rows) {
+      const inFlight = row.status === "queued" || row.status === "running";
+      if (inFlight && new Date(row.updatedAt) < before) {
+        this.rows.set(id, { ...row, status: "error", error, errorCode, updatedAt: new Date().toISOString() });
+        failed++;
+      }
+    }
+    return failed;
+  }
 }
 
 export function memoryRepositories(): Repositories {

@@ -22,21 +22,27 @@ app/frac-studio                  /protected/v8/fracStudio/*        /v1/...
 
 ## Service layout
 
+Layered like [aastrika-ai-service](https://github.com/Sphere/aastrika-ai-service): routes wire, controllers
+handle HTTP, services hold the rules, repositories own the queries, validations own the shapes.
+
 ```
-config/outdated.json   OUTDATED list, read at runtime (OUTDATED_CONFIG_PATH overrides)
-migrations/            Postgres schema (fracs, frac_versions, reviews, jobs)
-src/engine/            deterministic, no I/O: types, refs, parse-workbook, checks, report, convert   ← done
-src/io/                workbook-reader (exceljs, values only)                                       ← done
-src/io/                workbook-writer (FRAC + review Excel, spec 7)                                ← done
-src/agents/            AgentReviewer seam + ComputedOnlyReviewer stand-in                           ← done
-                       prompts.ts (METHOD, SOURCE_LIBRARY, personas; verbatim from the prototype),
-                       research / roles / activities / competencies / ladders / review steps
-src/llm/               Anthropic client: model tiers, retry with backoff, JSON repair, usage → cost
-src/jobs/              in-process job runner + progress (status, msg, done, total), spec 8 messages ← done
-                       partial-batch recovery comes with the LLM steps
-src/repositories/      fracs, versions, reviews, jobs: pg + in-memory (FRAC_STUDIO_STORE=memory)    ← done
+config/service.json    every non-secret setting (models, rates, limits, timeouts, CORS)            ← done
+config/outdated.json   OUTDATED list, read per review (OUTDATED_CONFIG_PATH overrides)             ← done
+migrations/            numbered SQL: 001 schema, 002 jobs.error_code                                 ← done
+src/config/            settings.ts (service.json → env, refuses secrets), constants.ts, db.ts        ← done
+src/routes/            URL → middleware → controller wiring, under /v1                              ← done
+src/controllers/       HTTP only: frac, review, job                                                  ← done
+src/validations/       Zod request schemas (frac, review)                                            ← done
+src/middleware/        owner (x-aastrika-creator), validate, errors, request-context, request-logger ← done
 src/services/          review.service (Reviewer + shared engine), frac.service (Creator, My FRACs)  ← done
-src/routes/            spec section 8 API under /v1                                                 ← done
+src/engine/            deterministic, no I/O: types, refs, parse-workbook, checks, report, convert   ← done
+src/io/                workbook-reader / workbook-writer (exceljs, spec 7)                           ← done
+src/repositories/      fracs, versions, reviews, jobs: pg + in-memory (FRAC_STUDIO_STORE=memory)    ← done
+src/jobs/              job runner, spec 8 messages, stuck-job watchdog                               ← done
+src/utils/             api-error (one error shape), logger, request-context                          ← done
+src/agents/            AgentReviewer seam + ComputedOnlyReviewer stand-in                           ← done
+src/prompts/           pure *.prompts.ts builders, verbatim from the prototype, golden snapshots    (with LLM)
+src/providers/         LlmProvider + ClaudeProvider (tiers from config), retry, fixtures replay      (with LLM)
 ```
 
 Until the LLM layer lands, reviews carry the computed findings only (the verdict says so), and

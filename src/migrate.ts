@@ -1,15 +1,16 @@
 import "dotenv/config";
 import { createPool } from "./config/db.js";
 import { loadMigrations, runMigrations } from "./db/migrate.js";
+import { logger } from "./utils/logger.js";
 
 // `npm run migrate` locally, `node migrate.js` in the image (a deploy job or init container).
 const pool = createPool();
 runMigrations(pool, loadMigrations())
   .then((applied) => {
-    console.log(applied.length ? `Applied: ${applied.join(", ")}` : "Database is up to date");
+    logger.info(applied.length ? "Applied migrations" : "Database is up to date", { applied });
   })
   .catch((err: unknown) => {
-    console.error(err instanceof Error ? err.message : err);
+    logger.error("Migration failed", { error: err instanceof Error ? err.message : String(err) });
     process.exitCode = 1;
   })
   .finally(() => pool.end());

@@ -18,7 +18,9 @@
     "lint": "eslint 'src/**/*.ts'",
     "format": "prettier --write 'src/**/*.{ts,json}'",
     "clean": "rm -rf dist",
-    "migrate": "node --loader ts-node/esm src/migrate.ts"
+    "migrate": "node --loader ts-node/esm src/migrate.ts",
+    "config:check": "node --loader ts-node/esm src/scripts/check-config.ts",
+    "check": "npm run typecheck && npm run lint && npm run config:check && npm test"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -27,7 +29,8 @@
     "express": "^5.1.0",
     "helmet": "^8.1.0",
     "multer": "^2.5.0",
-    "pg": "^8.16.3"
+    "pg": "^8.16.3",
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@eslint/js": "^9.37.0",

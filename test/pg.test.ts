@@ -48,9 +48,9 @@ const competencies = [
 ];
 
 describe("Postgres path (pg-mem)", () => {
-  it("applies 001_init.sql once and is a no-op the second time", async () => {
+  it("applies every migration once and is a no-op the second time", async () => {
     const { pool, applied } = await setup();
-    expect(applied).toEqual(["001_init.sql"]);
+    expect(applied).toEqual(["001_init.sql", "002_job_error_code.sql"]);
     expect(await runMigrations(pool, loadMigrations())).toEqual([]);
   });
 

@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import { HttpError } from "./errors.js";
+import { unauthorized } from "../utils/api-error.js";
 
 /**
  * Set by sunbird-cb-uiproxy (protectedApi_v8/fracStudio, via the AI Studio helpers) from the
@@ -9,13 +9,14 @@ export const USER_ID_HEADER = "x-aastrika-creator";
 
 /**
  * The owner always comes from the proxy-forwarded header, never from the request body or a
- * query param. This service must only be reachable through the proxy (cluster-internal), since
- * it trusts that header.
+ * query param, and is required: every record is scoped by it. Unlike aastrika-ai-service (where
+ * the header is attribution only and defaults to "admin"), here it is authorisation, so there is
+ * no fallback. The service must only be reachable through the proxy.
  */
 export function requireOwner(req: Request, res: Response, next: NextFunction): void {
   const ownerId = req.header(USER_ID_HEADER)?.trim();
   if (!ownerId) {
-    next(new HttpError(401, "Missing user identity"));
+    next(unauthorized("Missing user identity"));
     return;
   }
   res.locals.ownerId = ownerId;

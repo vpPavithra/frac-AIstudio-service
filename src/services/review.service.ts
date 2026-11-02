@@ -9,7 +9,7 @@ import { readWorkbook } from "../io/workbook-reader.js";
 import { buildReviewWorkbook, reviewWorkbookFilename } from "../io/workbook-writer.js";
 import type { JobRunner } from "../jobs/job-runner.js";
 import { JOB_MESSAGES } from "../jobs/messages.js";
-import { badRequest, notFound } from "../middleware/errors.js";
+import { badRequest, conflict, notFound } from "../utils/api-error.js";
 import type { Repositories, ReviewContext, ReviewKind, ReviewRecord } from "../repositories/types.js";
 
 export interface UploadedWorkbook {
@@ -62,7 +62,7 @@ export class ReviewService {
     try {
       sheets = await readWorkbook(file.buffer);
     } catch {
-      throw badRequest("Could not read the file. Upload an .xlsx workbook.");
+      throw badRequest("FILE_UNREADABLE", "Could not read the file. Upload an .xlsx workbook.");
     }
     const { model, warnings } = parseWorkbook(sheets, titleFromFilename(file.name));
 
@@ -127,7 +127,7 @@ export class ReviewService {
 
   async exportWorkbook(ownerId: string, id: string): Promise<{ buffer: Buffer; filename: string }> {
     const review = await this.get(ownerId, id);
-    if (!review.report) throw badRequest("The review is still running");
+    if (!review.report) throw conflict("REVIEW_NOT_READY", "The review is still running");
     return {
       buffer: await buildReviewWorkbook(review.report),
       filename: reviewWorkbookFilename(review.report.title),
@@ -137,7 +137,7 @@ export class ReviewService {
   /** "Open in Create FRAC to fix" (spec 6.5): imports the reviewed file as a FRAC at step 6. */
   async openInCreator(ownerId: string, id: string): Promise<string> {
     const review = await this.get(ownerId, id);
-    if (!review.sourceModel) throw badRequest("This review has no stored workbook to open");
+    if (!review.sourceModel) throw badRequest("NO_SOURCE_WORKBOOK", "This review has no stored workbook to open");
     if (review.fracId && (await this.repos.fracs.get(review.fracId))) return review.fracId;
 
     const frac = modelToFrac({

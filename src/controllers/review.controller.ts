@@ -1,0 +1,38 @@
+import type { Request, Response } from "express";
+import { ownerOf } from "../middleware/owner.js";
+import type { ReviewService } from "../services/review.service.js";
+import { badRequest } from "../utils/api-error.js";
+import type { ReviewContextInput } from "../validations/review.schema.js";
+import { param, sendXlsx } from "./http.js";
+
+/** HTTP handlers for the Reviewer (spec 8, /frac-reviews). */
+export function reviewController(reviews: ReviewService) {
+  return {
+    /** Multipart: the workbook as `file`, context fields validated by the route. */
+    async upload(req: Request, res: Response) {
+      const file = req.file;
+      if (!file) throw badRequest("FILE_REQUIRED", "Attach the FRAC workbook as 'file'");
+      if (!/\.xlsx$/i.test(file.originalname)) throw badRequest("FILE_TYPE_NOT_ALLOWED", "Upload an .xlsx workbook");
+      const ctx = req.body as ReviewContextInput;
+      const started = await reviews.startUploadReview(ownerOf(res), { name: file.originalname, buffer: file.buffer }, ctx);
+      res.status(202).json(started);
+    },
+
+    async list(_req: Request, res: Response) {
+      res.json({ reviews: await reviews.list(ownerOf(res)) });
+    },
+
+    async get(req: Request, res: Response) {
+      const review = await reviews.get(ownerOf(res), param(req.params.id));
+      res.json({ report: review.report, ctx: review.ctx, sourceModel: review.sourceModel, kind: review.kind });
+    },
+
+    async exportWorkbook(req: Request, res: Response) {
+      sendXlsx(res, await reviews.exportWorkbook(ownerOf(res), param(req.params.id)));
+    },
+
+    async openInCreator(req: Request, res: Response) {
+      res.json({ fracId: await reviews.openInCreator(ownerOf(res), param(req.params.id)) });
+    },
+  };
+}

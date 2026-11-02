@@ -139,6 +139,7 @@ interface JobRow {
   done: number;
   total: number;
   error: string | null;
+  error_code: string | null;
   usage: Job["usage"];
   created_at: Date;
   updated_at: Date;
@@ -150,6 +151,7 @@ const JOB_COLUMNS: Record<keyof JobPatch, string> = {
   done: "done",
   total: "total",
   error: "error",
+  errorCode: "error_code",
   usage: "usage",
 };
 
@@ -158,10 +160,19 @@ export class PgJobRepository implements JobRepository {
 
   async insert(j: Job): Promise<void> {
     await this.pool.query(
-      `INSERT INTO jobs (id, owner_id, kind, target_id, status, msg, done, total, error, usage, created_at, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-      [j.id, j.ownerId, j.kind, j.targetId, j.status, j.msg, j.done, j.total, j.error, j.usage, j.createdAt, j.updatedAt],
+      `INSERT INTO jobs (id, owner_id, kind, target_id, status, msg, done, total, error, error_code, usage, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+      [j.id, j.ownerId, j.kind, j.targetId, j.status, j.msg, j.done, j.total, j.error, j.errorCode, j.usage, j.createdAt, j.updatedAt],
     );
+  }
+
+  async failStale(before: Date, error: string, errorCode: string): Promise<number> {
+    const { rowCount } = await this.pool.query(
+      `UPDATE jobs SET status = 'error', error = $2, error_code = $3, updated_at = now()
+       WHERE status IN ('queued', 'running') AND updated_at < $1`,
+      [before, error, errorCode],
+    );
+    return rowCount ?? 0;
   }
 
   async update(id: string, patch: JobPatch): Promise<void> {
@@ -188,6 +199,7 @@ export class PgJobRepository implements JobRepository {
       done: r.done,
       total: r.total,
       error: r.error,
+      errorCode: r.error_code ?? null,
       usage: r.usage ?? {},
       createdAt: iso(r.created_at),
       updatedAt: iso(r.updated_at),
