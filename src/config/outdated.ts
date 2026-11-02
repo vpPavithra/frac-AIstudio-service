@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import type { OutdatedPattern } from "../engine/checks.js";
+import type { OutdatedPattern } from "../services/review-engine/checks.js";
 import { PATHS } from "./constants.js";
 
 /**

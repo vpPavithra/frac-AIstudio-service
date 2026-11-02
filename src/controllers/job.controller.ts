@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
-import { ownerOf } from "../middleware/owner.js";
-import type { JobRepository } from "../repositories/types.js";
-import { notFound } from "../utils/api-error.js";
+import { ownerOf } from "../middleware/auth.js";
+import type { JobRepository } from "../repositories/job.repository.js";
+import { notFound } from "../utils/response.js";
 import { param } from "./http.js";
 
 /** GET /jobs/:id: what the portal polls while a step runs. */

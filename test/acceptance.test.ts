@@ -2,10 +2,10 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { loadOutdatedPatterns } from "../src/config/outdated.js";
-import { computeChecks } from "../src/engine/checks.js";
-import { parseWorkbook } from "../src/engine/parse-workbook.js";
-import type { Finding } from "../src/engine/types.js";
-import { readWorkbook } from "../src/io/workbook-reader.js";
+import { computeChecks } from "../src/services/review-engine/checks.js";
+import { parseWorkbook } from "../src/services/review-engine/parse-workbook.js";
+import type { Finding } from "../src/models/report.model.js";
+import { readWorkbook } from "../src/services/excel/workbook-reader.js";
 
 const FIXTURES = path.resolve(process.cwd(), "test/fixtures");
 const GNM = "GNM COMPETENCY DICTIONARY 9 June 2025.xlsx";

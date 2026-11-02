@@ -1,13 +1,13 @@
 // Spec 8 API end to end over HTTP, on the in-memory store and the computed-only reviewer.
 import ExcelJS from "exceljs";
 import request from "supertest";
-import { ComputedOnlyReviewer } from "../src/agents/agent-reviewer.js";
+import { ComputedOnlyReviewer } from "../src/services/ai-review.service.js";
 import { createApp } from "../src/app.js";
 import { loadOutdatedPatterns } from "../src/config/outdated.js";
-import type { SheetData } from "../src/engine/parse-workbook.js";
-import { NO_COMPETENCY_SHEET } from "../src/engine/parse-workbook.js";
-import { JobRunner } from "../src/jobs/job-runner.js";
-import { memoryRepositories } from "../src/repositories/memory.js";
+import type { SheetData } from "../src/services/review-engine/parse-workbook.js";
+import { NO_COMPETENCY_SHEET } from "../src/services/review-engine/parse-workbook.js";
+import { JobRunner } from "../src/services/queue/job-runner.js";
+import { memoryRepositories } from "../src/repositories/index.js";
 import { FracService } from "../src/services/frac.service.js";
 import { ReviewService } from "../src/services/review.service.js";
 import { gnmSample } from "./support/sample-workbooks.js";

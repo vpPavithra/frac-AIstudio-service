@@ -1,5 +1,5 @@
 import { LOG } from "../config/constants.js";
-import { currentReqId } from "./request-context.js";
+import { currentReqId } from "./context.js";
 
 type Level = "debug" | "info" | "warn" | "error";
 type Fields = Record<string, unknown>;

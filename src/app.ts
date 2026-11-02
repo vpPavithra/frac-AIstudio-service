@@ -3,10 +3,10 @@ import cors from "cors";
 import helmet from "helmet";
 import { CORS, LIMITS } from "./config/constants.js";
 import { health } from "./health/health.controller.js";
-import { errorHandler } from "./middleware/errors.js";
-import { requireOwner, USER_ID_HEADER } from "./middleware/owner.js";
-import { requestContextMiddleware } from "./middleware/request-context.js";
-import { requestLogger } from "./middleware/request-logger.js";
+import { errorHandler } from "./middleware/errorHandler.js";
+import { requireOwner, USER_ID_HEADER } from "./middleware/auth.js";
+import { requestContextMiddleware } from "./middleware/requestContext.js";
+import { requestLogger } from "./middleware/requestLogger.js";
 import { apiRoutes, type RouteDeps } from "./routes/index.js";
 
 export function createApp(deps: RouteDeps): express.Express {

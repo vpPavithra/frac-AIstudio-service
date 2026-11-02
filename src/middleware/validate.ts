@@ -1,6 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import type { ZodType, ZodTypeDef } from "zod";
-import { badRequest } from "../utils/api-error.js";
+import { badRequest } from "../utils/response.js";
 
 /**
  * Parses a value with a schema or throws VALIDATION_FAILED. The message names the first problem

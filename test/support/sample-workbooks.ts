@@ -1,6 +1,6 @@
 // Synthetic stand-ins for the real dictionaries in spec 6.1 / 6.6. Every defect is planted at a known
 // count so the tests can assert exact numbers. Not clinical content: do not use as a reference FRAC.
-import type { SheetData } from "../../src/engine/parse-workbook.js";
+import type { SheetData } from "../../src/services/review-engine/parse-workbook.js";
 
 const TOPICS = [
   "antenatal assessment",

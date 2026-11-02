@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { jobController } from "../controllers/job.controller.js";
-import type { JobRepository } from "../repositories/types.js";
+import type { JobRepository } from "../repositories/job.repository.js";
 import type { FracService } from "../services/frac.service.js";
 import type { ReviewService } from "../services/review.service.js";
 import { fracRoutes } from "./frac.routes.js";

@@ -2,11 +2,11 @@
 // and asserts the planted counts exactly. The real dictionaries are covered by acceptance.test.ts.
 import ExcelJS from "exceljs";
 import { loadOutdatedPatterns } from "../src/config/outdated.js";
-import { computeChecks } from "../src/engine/checks.js";
-import { parseWorkbook } from "../src/engine/parse-workbook.js";
-import type { SheetData } from "../src/engine/parse-workbook.js";
-import type { Finding } from "../src/engine/types.js";
-import { readWorkbook } from "../src/io/workbook-reader.js";
+import { computeChecks } from "../src/services/review-engine/checks.js";
+import { parseWorkbook } from "../src/services/review-engine/parse-workbook.js";
+import type { SheetData } from "../src/services/review-engine/parse-workbook.js";
+import type { Finding } from "../src/models/report.model.js";
+import { readWorkbook } from "../src/services/excel/workbook-reader.js";
 import { anmSample, GNM_COUNTS, gnmSample, staffNurseSample } from "./support/sample-workbooks.js";
 
 async function review(sheets: SheetData[]) {
