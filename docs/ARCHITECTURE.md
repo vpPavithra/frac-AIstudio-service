@@ -7,7 +7,7 @@ Behavioural reference: the `frac-studio.html` prototype (line refs `Lnnn` in the
 
 ```
 orgportal (Angular 20)           sunbird-cb-uiproxy                frac-studio-service (this repo)
-app/frac-studio                  /apis/proxies/v8/frac-studio/*    /v1/...
+app/frac-studio                  /protected/v8/fracStudio/*        /v1/...
   Creator | Reviewer | My FRACs ──► auth, user id, multipart ──────► engine + agents + jobs + Postgres
                                    pass-through, no logic             │
                                                                       └─(later) publish to entity-v2
@@ -17,7 +17,7 @@ app/frac-studio                  /apis/proxies/v8/frac-studio/*    /v1/...
 | Layer | Repo | Notes |
 |---|---|---|
 | UI | `sunbird-cb-orgportal`, `project/ws/app/src/lib/routes/frac-studio/` | NgModule, `*ngIf`, constructor DI, `_ws-design-system-v2` mixins, native `<select>`. Route `app/frac-studio` gated by a lowercase role. |
-| Proxy | `sunbird-cb-uiproxy`, `src/proxies_v8/proxies_v8.ts` | `proxiesV8.use('/frac-studio/*', …)` → `CONSTANTS.FRAC_STUDIO_API_BASE`; forwards the user id/token headers, like `proxyCreatorEtlFrac`. |
+| Proxy | `sunbird-cb-uiproxy`, `src/protectedApi_v8/fracStudio/fracStudio.ts` | `protectedApiV8.use('/fracStudio', …)` → `CONSTANTS.FRAC_STUDIO_API_BASE` (default `${KONG_API_BASE}/frac-studio`) + `/v1`. Built on the AI Studio helpers (`forwardAny`): owner as `x-aastrika-creator` from the session, multipart rebuilt, downloads streamed, upstream errors relayed. |
 | Service | this repo | Holds the Anthropic key, runs the long jobs, owns the Postgres tables. |
 
 ## Service layout
@@ -45,7 +45,7 @@ Until the LLM layer lands, reviews carry the computed findings only (the verdict
 The engine is the "computed counts" half of the design: everything countable is decided there, and
 the agents get its findings as "already computed, do not recount".
 
-## API (spec 8, mounted under /v1, reached via /apis/proxies/v8/frac-studio/v1/...)
+## API (spec 8, mounted under /v1, reached from the portal as /apis/protected/v8/fracStudio/...)
 
 ```
 POST   /v1/fracs                          GET /v1/fracs           GET|PATCH /v1/fracs/:id
@@ -57,9 +57,10 @@ GET    /v1/jobs/:id
 ```
 
 Owner comes from the proxy-forwarded user id header, never from a query param (`?owner=me` in the spec).
-The service trusts `x-authenticated-userid`, so it must be reachable only through the proxy. On the
-proxy side, set that header from `req.session.userId`: uiproxy's `extractUserIdFromRequest` prefers a
-client-sent `wid` header, which would let a browser act as another user.
+The service trusts `x-aastrika-creator`, so it must be reachable only through the proxy. The proxy
+fills it with `resolveCreatorId` (session user id, else the token subject) and overwrites anything the
+browser sent. It deliberately avoids `extractUserIdFromRequest`, which prefers a client-sent `wid`
+header and would let a browser act as another user.
 
 ## Prototype gaps (spec 10) and where they are handled
 

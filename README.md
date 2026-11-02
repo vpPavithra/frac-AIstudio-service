@@ -1,7 +1,7 @@
 # frac-studio-service
 
 Backend for FRAC Studio (FRAC Creator, FRAC Reviewer, My FRACs). The UI lives in `sunbird-cb-orgportal`
-at `app/frac-studio`, and calls this service through `sunbird-cb-uiproxy` at `/apis/proxies/v8/frac-studio/*`.
+at `app/frac-studio`, and calls this service through `sunbird-cb-uiproxy` at `/apis/protected/v8/fracStudio/*`.
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Run

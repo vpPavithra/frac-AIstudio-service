@@ -13,8 +13,8 @@ import { ReviewService } from "../src/services/review.service.js";
 import { gnmSample } from "./support/sample-workbooks.js";
 import { goodLevels } from "./support/test-data.js";
 
-const OWNER = { "x-authenticated-userid": "user-1" };
-const OTHER = { "x-authenticated-userid": "user-2" };
+const OWNER = { "x-aastrika-creator": "user-1" };
+const OTHER = { "x-aastrika-creator": "user-2" };
 
 function setup() {
   const repos = memoryRepositories();

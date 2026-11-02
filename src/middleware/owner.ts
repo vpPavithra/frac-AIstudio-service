@@ -1,8 +1,11 @@
 import type { NextFunction, Request, Response } from "express";
 import { HttpError } from "./errors.js";
 
-/** Header set by sunbird-cb-uiproxy's buildProxyHeaders from the user's session. */
-export const USER_ID_HEADER = "x-authenticated-userid";
+/**
+ * Set by sunbird-cb-uiproxy (protectedApi_v8/fracStudio, via the AI Studio helpers) from the
+ * signed-in user's session, overwriting any value the browser sent. Same header AI Studio uses.
+ */
+export const USER_ID_HEADER = "x-aastrika-creator";
 
 /**
  * The owner always comes from the proxy-forwarded header, never from the request body or a
