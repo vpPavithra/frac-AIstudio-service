@@ -1,0 +1,9 @@
+node_modules
+dist/
+coverage/
+.env
+.env.local
+.DS_Store
+.scannerwork/
+# Real FRAC workbooks are shared by Sarvesh out of band; keep them out of git
+test/fixtures/*.xlsx

@@ -1,0 +1,15 @@
+{
+  "_comment": "Outdated laws/programme names (spec 6.3). Clinical reviewers extend this list; no code change needed. 'unlessNear' suppresses a hit when that pattern appears within 80 characters.",
+  "patterns": [
+    { "id": "lunacy", "pattern": "\\blunacy\\b|\\blunatics?\\b", "flags": "i", "sev": "B", "found": "Lunacy Act / lunatic", "correct": "Mental Healthcare Act 2017" },
+    { "id": "mha1987", "pattern": "mental\\s+health\\s+act,?\\s*(of\\s+)?1987", "flags": "i", "sev": "B", "found": "Mental Health Act 1987", "correct": "Mental Healthcare Act 2017 (MHCA 2017)" },
+    { "id": "ndps1965", "pattern": "\\bNDPS\\b[^.\\n]{0,40}1965", "flags": "i", "sev": "B", "found": "NDPS … 1965", "correct": "NDPS Act 1985" },
+    { "id": "tt", "pattern": "\\bTT\\b|[Tt]etanus\\s+[Tt]oxoid", "flags": "", "sev": "M", "found": "TT / tetanus toxoid", "correct": "Td (2018)" },
+    { "id": "rntcp", "pattern": "\\bRNTCP\\b", "flags": "i", "sev": "m", "found": "RNTCP", "correct": "NTEP (2020)" },
+    { "id": "npcdcs", "pattern": "\\bNPCDCS\\b", "flags": "i", "sev": "m", "found": "NPCDCS", "correct": "NP-NCD (2023)" },
+    { "id": "hwc", "pattern": "\\bHWCs?\\b|health\\s*(&|and)\\s*wellness\\s*cent(re|er)", "flags": "i", "sev": "m", "found": "HWC / Health & Wellness Centre", "correct": "Ayushman Arogya Mandir (2023)" },
+    { "id": "nvbdcp", "pattern": "\\bNVBDCP\\b", "flags": "i", "sev": "m", "found": "NVBDCP", "correct": "NCVBDC" },
+    { "id": "mcts", "pattern": "\\bMCTS\\b", "flags": "i", "sev": "m", "found": "MCTS", "correct": "RCH portal / U-WIN" },
+    { "id": "mtp1971", "pattern": "(\\bMTP\\b|medical\\s+termination\\s+of\\s+pregnancy)\\s*act[^.\\n]{0,20}1971", "flags": "i", "unlessNear": "2021", "sev": "m", "found": "MTP Act 1971", "correct": "MTP (Amendment) Act 2021" }
+  ]
+}
