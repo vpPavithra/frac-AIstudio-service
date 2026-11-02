@@ -1,5 +1,5 @@
-import { buildReport, normaliseAgentReview, summariseChecks } from "./report.js";
-import type { Finding } from "../../models/report.model.js";
+import { buildReport, normaliseAgentReview, summariseChecks } from "./report.ts";
+import type { Finding } from "../../models/report.model.ts";
 
 const f = (check: Finding["check"], sev: Finding["sev"], fixed?: boolean): Finding => ({
   check,

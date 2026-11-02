@@ -1,18 +1,18 @@
 import { randomUUID } from "node:crypto";
-import type { AgentReviewer } from "./ai-review.service.js";
-import { computeChecks, type OutdatedPattern } from "./review-engine/checks.js";
-import { modelToFrac } from "./review-engine/convert.js";
-import { parseWorkbook } from "./review-engine/parse-workbook.js";
-import { buildReport } from "./review-engine/report.js";
-import type { Frac } from "../models/frac.model.js";
-import type { Report } from "../models/report.model.js";
-import type { ReviewContext, ReviewKind, ReviewModel, ReviewRecord } from "../models/review.model.js";
-import { readWorkbook } from "./excel/workbook-reader.js";
-import { buildReviewWorkbook, reviewWorkbookFilename } from "./excel/workbook-writer.js";
-import type { JobRunner } from "./queue/job-runner.js";
-import { JOB_MESSAGES } from "./queue/job-messages.js";
-import { badRequest, conflict, notFound } from "../utils/response.js";
-import type { Repositories } from "../repositories/index.js";
+import type { AgentReviewer } from "./ai-review.service.ts";
+import { computeChecks, type OutdatedPattern } from "./review-engine/checks.ts";
+import { modelToFrac } from "./review-engine/convert.ts";
+import { parseWorkbook } from "./review-engine/parse-workbook.ts";
+import { buildReport } from "./review-engine/report.ts";
+import type { Frac } from "../models/frac.model.ts";
+import type { Report } from "../models/report.model.ts";
+import type { ReviewContext, ReviewKind, ReviewModel, ReviewRecord } from "../models/review.model.ts";
+import { readWorkbook } from "./excel/workbook-reader.ts";
+import { buildReviewWorkbook, reviewWorkbookFilename } from "./excel/workbook-writer.ts";
+import type { JobRunner } from "./queue/job-runner.ts";
+import { JOB_MESSAGES } from "./queue/job-messages.ts";
+import { badRequest, conflict, notFound } from "../utils/response.ts";
+import type { Repositories } from "../repositories/index.ts";
 
 export interface UploadedWorkbook {
   name: string;

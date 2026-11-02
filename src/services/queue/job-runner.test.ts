@@ -1,5 +1,5 @@
-import { MemoryJobRepository } from "../../repositories/job.repository.js";
-import { JobRunner } from "./job-runner.js";
+import { MemoryJobRepository } from "../../repositories/job.repository.ts";
+import { JobRunner } from "./job-runner.ts";
 
 const spec = { ownerId: "u1", kind: "review", targetId: null, msg: "Working…" };
 

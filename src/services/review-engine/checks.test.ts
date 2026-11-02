@@ -1,8 +1,8 @@
-import { loadOutdatedPatterns } from "../../config/outdated.js";
-import { computeChecks, computeStats, indicators, stripLead, typeClass } from "./checks.js";
-import { comp, goodLevels, model } from "../../../test/support/test-data.js";
-import type { Finding } from "../../models/report.model.js";
-import type { ReviewModel } from "../../models/review.model.js";
+import { loadOutdatedPatterns } from "../../config/outdated.ts";
+import { computeChecks, computeStats, indicators, stripLead, typeClass } from "./checks.ts";
+import { comp, goodLevels, model } from "../../../test/support/test-data.ts";
+import type { Finding } from "../../models/report.model.ts";
+import type { ReviewModel } from "../../models/review.model.ts";
 
 const OUTDATED = loadOutdatedPatterns();
 const run = (m: ReviewModel) => computeChecks(m, OUTDATED).findings;

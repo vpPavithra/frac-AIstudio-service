@@ -22,6 +22,8 @@ export default {
     "!src/config/**",
   ],
   coverageDirectory: "coverage",
+  // Source imports say ".ts"; ts-jest compiles with rewriteRelativeImportExtensions, so the compiled
+  // test asks for ".js". Point those back at the .ts source.
   moduleNameMapper: {
     "^(\\.{1,2}/.*)\\.js$": "$1",
   },

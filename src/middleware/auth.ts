@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import { unauthorized } from "../utils/response.js";
+import { unauthorized } from "../utils/response.ts";
 
 /**
  * Set by sunbird-cb-uiproxy (protectedApi_v8/fracStudio, via the AI Studio helpers) from the

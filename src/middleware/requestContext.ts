@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { NextFunction, Request, Response } from "express";
-import { requestContext } from "../utils/context.js";
+import { requestContext } from "../utils/context.ts";
 
 const REQUEST_ID_HEADER = "x-request-id";
 const SAFE_REQUEST_ID = /^[A-Za-z0-9._-]{1,64}$/;

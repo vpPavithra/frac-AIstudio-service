@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
-import type { Job, JobPatch } from "../models/job.model.js";
-import { clone, iso } from "./row-helpers.js";
+import type { Job, JobPatch } from "../models/job.model.ts";
+import { clone, iso } from "./row-helpers.ts";
 
 export interface JobRepository {
   insert(job: Job): Promise<void>;

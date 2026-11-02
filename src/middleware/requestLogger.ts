@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import { logger } from "../utils/logger.js";
+import { logger } from "../utils/logger.ts";
 
 const QUIET_PATHS = new Set(["/health"]);
 

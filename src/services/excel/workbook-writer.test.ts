@@ -1,14 +1,14 @@
 import ExcelJS from "exceljs";
-import { parseWorkbook } from "../review-engine/parse-workbook.js";
-import type { Finding, Report } from "../../models/report.model.js";
-import type { Frac } from "../../models/frac.model.js";
-import { readWorkbook } from "./workbook-reader.js";
+import { parseWorkbook } from "../review-engine/parse-workbook.ts";
+import type { Finding, Report } from "../../models/report.model.ts";
+import type { Frac } from "../../models/frac.model.ts";
+import { readWorkbook } from "./workbook-reader.ts";
 import {
   buildFracWorkbook,
   buildReviewWorkbook,
   fracWorkbookFilename,
   reviewWorkbookFilename,
-} from "./workbook-writer.js";
+} from "./workbook-writer.ts";
 
 function frac(): Frac {
   return {

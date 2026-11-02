@@ -63,5 +63,8 @@ the prototype (`frac-studio.html`). Never invent wording for them.
 6. Log through `utils/logger.ts`, never `console.*`.
 7. No new dependency without asking.
 8. Every production bug earns a regression test.
+9. Relative imports name the source file: `import { logger } from "../utils/logger.ts"`. The compiler
+   rewrites them to `.js` in `dist/` (`rewriteRelativeImportExtensions`), so source says `.ts` and
+   compiled output says `.js`. (aastrika-ai-service writes `.js` in source; this repo chose `.ts`.)
 
 `npm run check` runs typecheck, lint, config check and tests.

@@ -1,7 +1,7 @@
 // Small in-memory workbooks for unit tests. Real dictionaries live in test/fixtures (not in git).
-import type { SheetData } from "../../src/services/review-engine/parse-workbook.js";
-import type { Level } from "../../src/models/frac.model.js";
-import type { ModelCompetency, ReviewModel } from "../../src/models/review.model.js";
+import type { SheetData } from "../../src/services/review-engine/parse-workbook.ts";
+import type { Level } from "../../src/models/frac.model.ts";
+import type { ModelCompetency, ReviewModel } from "../../src/models/review.model.ts";
 
 export const COMP_HEADERS = [
   "Competency Code",

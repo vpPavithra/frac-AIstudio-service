@@ -1,4 +1,4 @@
-import { dominantPrefix, formatRefs, normalizeCode, parseRefs } from "./refs.js";
+import { dominantPrefix, formatRefs, normalizeCode, parseRefs } from "./refs.ts";
 
 const codes = (input: string, prefix = "") => parseRefs(input, prefix).map((r) => (r.level ? `${r.code}@${r.level}` : r.code));
 

@@ -1,5 +1,5 @@
 // FRAC shapes from the FRAC Studio spec, section 4.1.
-import type { Report } from "./report.model.js";
+import type { Report } from "./report.model.ts";
 
 export type SourceTier = "JD" | "Programme guideline" | "Facility standard" | "Inferred – verify";
 export type CompetencyType = "Domain" | "Functional" | "Behavioural";

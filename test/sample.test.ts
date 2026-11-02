@@ -1,13 +1,13 @@
 // Runs the synthetic sample workbooks through the real xlsx path (write → readWorkbook → parse → checks)
 // and asserts the planted counts exactly. The real dictionaries are covered by acceptance.test.ts.
 import ExcelJS from "exceljs";
-import { loadOutdatedPatterns } from "../src/config/outdated.js";
-import { computeChecks } from "../src/services/review-engine/checks.js";
-import { parseWorkbook } from "../src/services/review-engine/parse-workbook.js";
-import type { SheetData } from "../src/services/review-engine/parse-workbook.js";
-import type { Finding } from "../src/models/report.model.js";
-import { readWorkbook } from "../src/services/excel/workbook-reader.js";
-import { anmSample, GNM_COUNTS, gnmSample, staffNurseSample } from "./support/sample-workbooks.js";
+import { loadOutdatedPatterns } from "../src/config/outdated.ts";
+import { computeChecks } from "../src/services/review-engine/checks.ts";
+import { parseWorkbook } from "../src/services/review-engine/parse-workbook.ts";
+import type { SheetData } from "../src/services/review-engine/parse-workbook.ts";
+import type { Finding } from "../src/models/report.model.ts";
+import { readWorkbook } from "../src/services/excel/workbook-reader.ts";
+import { anmSample, GNM_COUNTS, gnmSample, staffNurseSample } from "./support/sample-workbooks.ts";
 
 async function review(sheets: SheetData[]) {
   const wb = new ExcelJS.Workbook();

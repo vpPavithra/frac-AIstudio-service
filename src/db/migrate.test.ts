@@ -1,5 +1,5 @@
 import path from "node:path";
-import { loadMigrations, pendingMigrations, runMigrations, type Queryable } from "./migrate.js";
+import { loadMigrations, pendingMigrations, runMigrations, type Queryable } from "./migrate.ts";
 
 /** Records every statement; answers the applied-names query from a preset list. */
 function fakeDb(applied: string[], failOn?: string) {

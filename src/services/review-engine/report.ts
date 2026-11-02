@@ -1,4 +1,4 @@
-import type { CheckKey, CheckSummary, Finding, Report, Severity, Stats, Triage } from "../../models/report.model.js";
+import type { CheckKey, CheckSummary, Finding, Report, Severity, Stats, Triage } from "../../models/report.model.ts";
 
 export const CHECK_NAMES: Record<CheckKey, string> = {
   bloom: "Bloom's verbs",

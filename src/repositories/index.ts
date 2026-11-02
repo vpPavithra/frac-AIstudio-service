@@ -1,7 +1,7 @@
 import type { Pool } from "pg";
-import { MemoryFracRepository, PgFracRepository, type FracRepository } from "./frac.repository.js";
-import { MemoryJobRepository, PgJobRepository, type JobRepository } from "./job.repository.js";
-import { MemoryReviewRepository, PgReviewRepository, type ReviewRepository } from "./review.repository.js";
+import { MemoryFracRepository, PgFracRepository, type FracRepository } from "./frac.repository.ts";
+import { MemoryJobRepository, PgJobRepository, type JobRepository } from "./job.repository.ts";
+import { MemoryReviewRepository, PgReviewRepository, type ReviewRepository } from "./review.repository.ts";
 
 export interface Repositories {
   fracs: FracRepository;

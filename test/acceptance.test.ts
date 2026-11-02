@@ -1,11 +1,11 @@
 // Spec 6.6 regression. Needs the real dictionaries in test/fixtures (ask Sarvesh; not committed).
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { loadOutdatedPatterns } from "../src/config/outdated.js";
-import { computeChecks } from "../src/services/review-engine/checks.js";
-import { parseWorkbook } from "../src/services/review-engine/parse-workbook.js";
-import type { Finding } from "../src/models/report.model.js";
-import { readWorkbook } from "../src/services/excel/workbook-reader.js";
+import { loadOutdatedPatterns } from "../src/config/outdated.ts";
+import { computeChecks } from "../src/services/review-engine/checks.ts";
+import { parseWorkbook } from "../src/services/review-engine/parse-workbook.ts";
+import type { Finding } from "../src/models/report.model.ts";
+import { readWorkbook } from "../src/services/excel/workbook-reader.ts";
 
 const FIXTURES = path.resolve(process.cwd(), "test/fixtures");
 const GNM = "GNM COMPETENCY DICTIONARY 9 June 2025.xlsx";

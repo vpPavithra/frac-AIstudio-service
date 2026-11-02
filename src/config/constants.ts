@@ -1,6 +1,6 @@
 // Every tunable, read once from process.env (after loadSettings merged config/service.json) into
 // frozen groups. Add a setting here and in config/service.json; never read process.env elsewhere.
-import { loadSettings } from "./settings.js";
+import { loadSettings } from "./settings.ts";
 
 loadSettings();
 

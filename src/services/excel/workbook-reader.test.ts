@@ -1,7 +1,7 @@
 import ExcelJS from "exceljs";
-import { parseWorkbook } from "../review-engine/parse-workbook.js";
-import { workbook } from "../../../test/support/test-data.js";
-import { cellText, readWorkbook } from "./workbook-reader.js";
+import { parseWorkbook } from "../review-engine/parse-workbook.ts";
+import { workbook } from "../../../test/support/test-data.ts";
+import { cellText, readWorkbook } from "./workbook-reader.ts";
 
 describe("cellText", () => {
   it("flattens every exceljs value shape", () => {

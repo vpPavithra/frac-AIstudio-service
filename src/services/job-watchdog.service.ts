@@ -1,5 +1,5 @@
-import type { JobRepository } from "../repositories/job.repository.js";
-import { describeError, logger } from "../utils/logger.js";
+import type { JobRepository } from "../repositories/job.repository.ts";
+import { describeError, logger } from "../utils/logger.ts";
 
 export const JOB_INTERRUPTED = "JOB_INTERRUPTED";
 export const INTERRUPTED_MESSAGE = "This step was interrupted (the service restarted or the step stopped responding). Run it again.";

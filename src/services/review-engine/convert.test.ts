@@ -1,7 +1,7 @@
-import { competencyRefs, fracToModel, modelToFrac, serializeModel } from "./convert.js";
-import { parseWorkbook } from "./parse-workbook.js";
-import { workbook } from "../../../test/support/test-data.js";
-import type { Frac } from "../../models/frac.model.js";
+import { competencyRefs, fracToModel, modelToFrac, serializeModel } from "./convert.ts";
+import { parseWorkbook } from "./parse-workbook.ts";
+import { workbook } from "../../../test/support/test-data.ts";
+import type { Frac } from "../../models/frac.model.ts";
 
 function frac(): Frac {
   return {

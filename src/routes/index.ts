@@ -1,10 +1,10 @@
 import { Router } from "express";
-import { jobController } from "../controllers/job.controller.js";
-import type { JobRepository } from "../repositories/job.repository.js";
-import type { FracService } from "../services/frac.service.js";
-import type { ReviewService } from "../services/review.service.js";
-import { fracRoutes } from "./frac.routes.js";
-import { reviewRoutes } from "./review.routes.js";
+import { jobController } from "../controllers/job.controller.ts";
+import type { JobRepository } from "../repositories/job.repository.ts";
+import type { FracService } from "../services/frac.service.ts";
+import type { ReviewService } from "../services/review.service.ts";
+import { fracRoutes } from "./frac.routes.ts";
+import { reviewRoutes } from "./review.routes.ts";
 
 export interface RouteDeps {
   fracs: FracService;

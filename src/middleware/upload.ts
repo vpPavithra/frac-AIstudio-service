@@ -1,5 +1,5 @@
 import multer from "multer";
-import { LIMITS } from "../config/constants.js";
+import { LIMITS } from "../config/constants.ts";
 
 const BYTES_PER_MB = 1024 * 1024;
 

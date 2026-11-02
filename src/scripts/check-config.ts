@@ -3,14 +3,14 @@
 // constants.ts (a typo would otherwise be ignored and the code default used), and numbers that
 // parse. Prints the resolved non-secret settings.
 import path from "node:path";
-import { readSettingsFile, SettingsError } from "../config/settings.js";
+import { readSettingsFile, SettingsError } from "../config/settings.ts";
 
 const NUMERIC = /(_MS|_MB|_CHARS|_RETRIES|_USD_PER_1M|^MAX_|^PORT$|_TEMPERATURE$)/;
 
 async function main(): Promise<number> {
   const configDir = path.resolve(process.cwd(), "config");
   const files = ["service.json", ...(process.env.NODE_ENV ? [`service.${process.env.NODE_ENV}.json`] : [])];
-  const { KNOWN_SETTINGS, ...groups } = await import("../config/constants.js");
+  const { KNOWN_SETTINGS, ...groups } = await import("../config/constants.ts");
   const known = new Set<string>(KNOWN_SETTINGS);
   const problems: string[] = [];
 

@@ -1,6 +1,6 @@
-import { MemoryJobRepository } from "../repositories/job.repository.js";
-import type { Job } from "../models/job.model.js";
-import { INTERRUPTED_MESSAGE, JOB_INTERRUPTED, startJobWatchdog, sweepStuckJobs } from "./job-watchdog.service.js";
+import { MemoryJobRepository } from "../repositories/job.repository.ts";
+import type { Job } from "../models/job.model.ts";
+import { INTERRUPTED_MESSAGE, JOB_INTERRUPTED, startJobWatchdog, sweepStuckJobs } from "./job-watchdog.service.ts";
 
 const MINUTE = 60_000;
 

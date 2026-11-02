@@ -1,6 +1,6 @@
 // Review shapes: the normalised review model (spec 4.2) and the stored review record.
-import type { Level } from "./frac.model.js";
-import type { Report } from "./report.model.js";
+import type { Level } from "./frac.model.ts";
+import type { Report } from "./report.model.ts";
 
 // ---- 4.2 Review model (normalised input to the review engine) ----
 

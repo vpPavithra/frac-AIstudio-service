@@ -1,7 +1,7 @@
 import "dotenv/config";
-import { createPool } from "./config/db.js";
-import { loadMigrations, runMigrations } from "./db/migrate.js";
-import { describeError, logger } from "./utils/logger.js";
+import { createPool } from "./config/db.ts";
+import { loadMigrations, runMigrations } from "./db/migrate.ts";
+import { describeError, logger } from "./utils/logger.ts";
 
 // `npm run migrate` locally, `node migrate.js` in the image (a deploy job or init container).
 const pool = createPool();

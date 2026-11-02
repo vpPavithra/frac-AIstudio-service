@@ -1,13 +1,13 @@
 import { randomUUID } from "node:crypto";
-import { fracToModel } from "./review-engine/convert.js";
-import type { Frac, FracVersion } from "../models/frac.model.js";
-import { buildFracWorkbook, fracWorkbookFilename } from "./excel/workbook-writer.js";
-import type { JobRunner } from "./queue/job-runner.js";
-import { EXPERT_CHECK_NOTES, JOB_MESSAGES } from "./queue/job-messages.js";
-import type { Repositories } from "../repositories/index.js";
-import { badRequest, conflict, notFound } from "../utils/response.js";
-import type { CreateFracInput, PatchFracInput } from "../validations/frac.schema.js";
-import { type ReviewService, worstSeverity } from "./review.service.js";
+import { fracToModel } from "./review-engine/convert.ts";
+import type { Frac, FracVersion } from "../models/frac.model.ts";
+import { buildFracWorkbook, fracWorkbookFilename } from "./excel/workbook-writer.ts";
+import type { JobRunner } from "./queue/job-runner.ts";
+import { EXPERT_CHECK_NOTES, JOB_MESSAGES } from "./queue/job-messages.ts";
+import type { Repositories } from "../repositories/index.ts";
+import { badRequest, conflict, notFound } from "../utils/response.ts";
+import type { CreateFracInput, PatchFracInput } from "../validations/frac.schema.ts";
+import { type ReviewService, worstSeverity } from "./review.service.ts";
 
 export interface FracSummary {
   id: string;

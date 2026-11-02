@@ -1,4 +1,4 @@
-import type { Ref } from "../../models/review.model.js";
+import type { Ref } from "../../models/review.model.ts";
 
 const MAX_RANGE = 80;
 

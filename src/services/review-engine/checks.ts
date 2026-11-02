@@ -1,5 +1,5 @@
-import type { CheckKey, Finding, Severity, Stats } from "../../models/report.model.js";
-import type { ModelActivity, ModelCompetency, ReviewModel } from "../../models/review.model.js";
+import type { CheckKey, Finding, Severity, Stats } from "../../models/report.model.ts";
+import type { ModelActivity, ModelCompetency, ReviewModel } from "../../models/review.model.ts";
 
 export const BANNED =
   /^(understand|understands|understanding|know|knows|knowing|learn|learns|is aware|aware|appreciate|appreciates|is familiar|familiar|realis|realiz|comprehend)/i;

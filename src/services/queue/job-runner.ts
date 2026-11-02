@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
-import type { Job } from "../../models/job.model.js";
-import type { JobRepository } from "../../repositories/job.repository.js";
-import { ApiError } from "../../utils/response.js";
-import { describeError, logger } from "../../utils/logger.js";
+import type { Job } from "../../models/job.model.ts";
+import type { JobRepository } from "../../repositories/job.repository.ts";
+import { ApiError } from "../../utils/response.ts";
+import { describeError, logger } from "../../utils/logger.ts";
 
 /** Code for a job that threw something other than an ApiError. */
 export const JOB_FAILED = "JOB_FAILED";

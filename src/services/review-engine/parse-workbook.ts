@@ -1,6 +1,6 @@
-import { dominantPrefix, normalizeCode, parseRefs } from "./refs.js";
-import type { Level } from "../../models/frac.model.js";
-import type { ModelActivity, ModelCompetency, ModelRole, ReviewModel } from "../../models/review.model.js";
+import { dominantPrefix, normalizeCode, parseRefs } from "./refs.ts";
+import type { Level } from "../../models/frac.model.ts";
+import type { ModelActivity, ModelCompetency, ModelRole, ReviewModel } from "../../models/review.model.ts";
 
 /** Reader-agnostic sheet: every cell already flattened to trimmed text. */
 export interface SheetData {

@@ -1,8 +1,8 @@
 import { Router } from "express";
-import { fracController } from "../controllers/frac.controller.js";
-import { validateBody } from "../middleware/validate.js";
-import type { FracService } from "../services/frac.service.js";
-import { createFracSchema, patchFracSchema } from "../validations/frac.schema.js";
+import { fracController } from "../controllers/frac.controller.ts";
+import { validateBody } from "../middleware/validate.ts";
+import type { FracService } from "../services/frac.service.ts";
+import { createFracSchema, patchFracSchema } from "../validations/frac.schema.ts";
 
 /** /fracs: Creator and My FRACs (spec 8). Wiring only; logic is in the controller and service. */
 export function fracRoutes(fracs: FracService): Router {

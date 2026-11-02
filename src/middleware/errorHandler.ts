@@ -1,8 +1,8 @@
 import type { NextFunction, Request, Response } from "express";
 import multer from "multer";
-import { WorkbookParseError } from "../services/review-engine/parse-workbook.js";
-import { ApiError, payloadTooLarge, sendError } from "../utils/response.js";
-import { describeError, logger } from "../utils/logger.js";
+import { WorkbookParseError } from "../services/review-engine/parse-workbook.ts";
+import { ApiError, payloadTooLarge, sendError } from "../utils/response.ts";
+import { describeError, logger } from "../utils/logger.ts";
 
 /** body-parser marks its own failures with a `type`; these are the client's fault, not ours. */
 function bodyParserError(err: unknown): ApiError | null {

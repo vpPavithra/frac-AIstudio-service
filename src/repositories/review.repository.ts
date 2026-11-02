@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
-import type { ReviewRecord } from "../models/review.model.js";
-import { byNewest, clone, iso } from "./row-helpers.js";
+import type { ReviewRecord } from "../models/review.model.ts";
+import { byNewest, clone, iso } from "./row-helpers.ts";
 
 export interface ReviewRepository {
   insert(review: ReviewRecord): Promise<void>;

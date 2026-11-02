@@ -1,10 +1,10 @@
 import type { Request, Response } from "express";
-import { parseInput } from "../middleware/validate.js";
-import { ownerOf } from "../middleware/auth.js";
-import type { FracService } from "../services/frac.service.js";
-import { notFound, notImplemented } from "../utils/response.js";
-import { versionIdSchema, type CreateFracInput, type PatchFracInput } from "../validations/frac.schema.js";
-import { param, sendXlsx } from "./http.js";
+import { parseInput } from "../middleware/validate.ts";
+import { ownerOf } from "../middleware/auth.ts";
+import type { FracService } from "../services/frac.service.ts";
+import { notFound, notImplemented } from "../utils/response.ts";
+import { versionIdSchema, type CreateFracInput, type PatchFracInput } from "../validations/frac.schema.ts";
+import { param, sendXlsx } from "./http.ts";
 
 /** Generation steps that need the LLM layer (spec 5.2–5.5); `check` is live. */
 const PENDING_STEPS = new Set(["research", "roles", "competencies", "ladders"]);

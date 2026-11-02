@@ -4,16 +4,16 @@ import ExcelJS from "exceljs";
 import { DataType, newDb } from "pg-mem";
 import type { Pool } from "pg";
 import request from "supertest";
-import { ComputedOnlyReviewer } from "../src/services/ai-review.service.js";
-import { createApp } from "../src/app.js";
-import { loadOutdatedPatterns } from "../src/config/outdated.js";
-import { loadMigrations, runMigrations } from "../src/db/migrate.js";
-import { JobRunner } from "../src/services/queue/job-runner.js";
-import { pgRepositories } from "../src/repositories/index.js";
-import { FracService } from "../src/services/frac.service.js";
-import { ReviewService } from "../src/services/review.service.js";
-import { gnmSample } from "./support/sample-workbooks.js";
-import { goodLevels } from "./support/test-data.js";
+import { ComputedOnlyReviewer } from "../src/services/ai-review.service.ts";
+import { createApp } from "../src/app.ts";
+import { loadOutdatedPatterns } from "../src/config/outdated.ts";
+import { loadMigrations, runMigrations } from "../src/db/migrate.ts";
+import { JobRunner } from "../src/services/queue/job-runner.ts";
+import { pgRepositories } from "../src/repositories/index.ts";
+import { FracService } from "../src/services/frac.service.ts";
+import { ReviewService } from "../src/services/review.service.ts";
+import { gnmSample } from "./support/sample-workbooks.ts";
+import { goodLevels } from "./support/test-data.ts";
 
 const OWNER = { "x-aastrika-creator": "user-1" };
 

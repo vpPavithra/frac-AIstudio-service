@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { loadSettings, readSettingsFile, SettingsError } from "./settings.js";
+import { loadSettings, readSettingsFile, SettingsError } from "./settings.ts";
 
 function tempConfig(files: Record<string, unknown>): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "frac-settings-"));

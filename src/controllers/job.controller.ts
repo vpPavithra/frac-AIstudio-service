@@ -1,8 +1,8 @@
 import type { Request, Response } from "express";
-import { ownerOf } from "../middleware/auth.js";
-import type { JobRepository } from "../repositories/job.repository.js";
-import { notFound } from "../utils/response.js";
-import { param } from "./http.js";
+import { ownerOf } from "../middleware/auth.ts";
+import type { JobRepository } from "../repositories/job.repository.ts";
+import { notFound } from "../utils/response.ts";
+import { param } from "./http.ts";
 
 /** GET /jobs/:id: what the portal polls while a step runs. */
 export function jobController(jobs: JobRepository) {

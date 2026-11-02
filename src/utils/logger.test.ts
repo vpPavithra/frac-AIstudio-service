@@ -1,4 +1,4 @@
-import { describeError } from "./logger.js";
+import { describeError } from "./logger.ts";
 
 describe("describeError", () => {
   it("uses the message when there is one", () => {

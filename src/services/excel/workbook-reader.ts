@@ -1,5 +1,5 @@
 import ExcelJS from "exceljs";
-import type { SheetData } from "../review-engine/parse-workbook.js";
+import type { SheetData } from "../review-engine/parse-workbook.ts";
 
 /** Flattens any exceljs cell value (rich text, formula, hyperlink, date) to plain text. */
 export function cellText(value: ExcelJS.CellValue): string {

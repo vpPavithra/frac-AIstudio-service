@@ -1,5 +1,5 @@
-import { NO_COMPETENCY_SHEET, NO_FRAC_SHEET_WARNING, parseWorkbook, WorkbookParseError } from "./parse-workbook.js";
-import { COMP_HEADERS, workbook } from "../../../test/support/test-data.js";
+import { NO_COMPETENCY_SHEET, NO_FRAC_SHEET_WARNING, parseWorkbook, WorkbookParseError } from "./parse-workbook.ts";
+import { COMP_HEADERS, workbook } from "../../../test/support/test-data.ts";
 
 describe("parseWorkbook", () => {
   it("finds both sheets, skips Hindi copies and drops blank codes", () => {

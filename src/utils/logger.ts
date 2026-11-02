@@ -1,5 +1,5 @@
-import { LOG } from "../config/constants.js";
-import { currentReqId } from "./context.js";
+import { LOG } from "../config/constants.ts";
+import { currentReqId } from "./context.ts";
 
 type Level = "debug" | "info" | "warn" | "error";
 type Fields = Record<string, unknown>;

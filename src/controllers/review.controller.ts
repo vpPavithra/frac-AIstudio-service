@@ -1,9 +1,9 @@
 import type { Request, Response } from "express";
-import { ownerOf } from "../middleware/auth.js";
-import type { ReviewService } from "../services/review.service.js";
-import { badRequest } from "../utils/response.js";
-import type { ReviewContextInput } from "../validations/review.schema.js";
-import { param, sendXlsx } from "./http.js";
+import { ownerOf } from "../middleware/auth.ts";
+import type { ReviewService } from "../services/review.service.ts";
+import { badRequest } from "../utils/response.ts";
+import type { ReviewContextInput } from "../validations/review.schema.ts";
+import { param, sendXlsx } from "./http.ts";
 
 /** HTTP handlers for the Reviewer (spec 8, /frac-reviews). */
 export function reviewController(reviews: ReviewService) {

@@ -1,8 +1,8 @@
 import ExcelJS from "exceljs";
-import { parseRefs } from "../review-engine/refs.js";
-import type { Finding, Report } from "../../models/report.model.js";
-import type { Frac } from "../../models/frac.model.js";
-import { TRIAGE_LABELS } from "../review-engine/report.js";
+import { parseRefs } from "../review-engine/refs.ts";
+import type { Finding, Report } from "../../models/report.model.ts";
+import type { Frac } from "../../models/frac.model.ts";
+import { TRIAGE_LABELS } from "../review-engine/report.ts";
 
 const HEADER_FONT = { bold: true, color: { argb: "FF1F3B3E" } };
 const HEADER_FILL: ExcelJS.Fill = {

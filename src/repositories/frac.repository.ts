@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
-import type { Frac, FracVersion } from "../models/frac.model.js";
-import { byNewest, clone, iso } from "./row-helpers.js";
+import type { Frac, FracVersion } from "../models/frac.model.ts";
+import { byNewest, clone, iso } from "./row-helpers.ts";
 
 // FRAC documents and their version snapshots. The FRAC lives in `doc`; the other columns are copies
 // for listing and indexing. The memory store runs tests and local work without Postgres.

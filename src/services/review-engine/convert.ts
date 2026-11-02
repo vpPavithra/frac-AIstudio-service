@@ -1,7 +1,7 @@
-import { dominantPrefix, formatRefs, parseRefs } from "./refs.js";
-import type { Finding, Report } from "../../models/report.model.js";
-import type { Frac, FracRole } from "../../models/frac.model.js";
-import type { ModelCompetency, ReviewModel } from "../../models/review.model.js";
+import { dominantPrefix, formatRefs, parseRefs } from "./refs.ts";
+import type { Finding, Report } from "../../models/report.model.ts";
+import type { Frac, FracRole } from "../../models/frac.model.ts";
+import type { ModelCompetency, ReviewModel } from "../../models/review.model.ts";
 
 const EMPTY_LEVELS = () => [1, 2, 3, 4, 5].map(() => ({ label: "", desc: "" }));
 

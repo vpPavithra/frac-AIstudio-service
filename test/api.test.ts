@@ -1,17 +1,17 @@
 // Spec 8 API end to end over HTTP, on the in-memory store and the computed-only reviewer.
 import ExcelJS from "exceljs";
 import request from "supertest";
-import { ComputedOnlyReviewer } from "../src/services/ai-review.service.js";
-import { createApp } from "../src/app.js";
-import { loadOutdatedPatterns } from "../src/config/outdated.js";
-import type { SheetData } from "../src/services/review-engine/parse-workbook.js";
-import { NO_COMPETENCY_SHEET } from "../src/services/review-engine/parse-workbook.js";
-import { JobRunner } from "../src/services/queue/job-runner.js";
-import { memoryRepositories } from "../src/repositories/index.js";
-import { FracService } from "../src/services/frac.service.js";
-import { ReviewService } from "../src/services/review.service.js";
-import { gnmSample } from "./support/sample-workbooks.js";
-import { goodLevels } from "./support/test-data.js";
+import { ComputedOnlyReviewer } from "../src/services/ai-review.service.ts";
+import { createApp } from "../src/app.ts";
+import { loadOutdatedPatterns } from "../src/config/outdated.ts";
+import type { SheetData } from "../src/services/review-engine/parse-workbook.ts";
+import { NO_COMPETENCY_SHEET } from "../src/services/review-engine/parse-workbook.ts";
+import { JobRunner } from "../src/services/queue/job-runner.ts";
+import { memoryRepositories } from "../src/repositories/index.ts";
+import { FracService } from "../src/services/frac.service.ts";
+import { ReviewService } from "../src/services/review.service.ts";
+import { gnmSample } from "./support/sample-workbooks.ts";
+import { goodLevels } from "./support/test-data.ts";
 
 const OWNER = { "x-aastrika-creator": "user-1" };
 const OTHER = { "x-aastrika-creator": "user-2" };

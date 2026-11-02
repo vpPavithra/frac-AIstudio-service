@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { LIMITS } from "../config/constants.js";
+import { LIMITS } from "../config/constants.ts";
 
 // Request shapes for the Creator API (spec 4.1). Every field a handler uses is declared here;
 // validateBody drops anything else.

@@ -1,9 +1,9 @@
 import { Router } from "express";
-import { reviewController } from "../controllers/review.controller.js";
-import { upload } from "../middleware/upload.js";
-import { validateBody } from "../middleware/validate.js";
-import type { ReviewService } from "../services/review.service.js";
-import { reviewContextSchema } from "../validations/review.schema.js";
+import { reviewController } from "../controllers/review.controller.ts";
+import { upload } from "../middleware/upload.ts";
+import { validateBody } from "../middleware/validate.ts";
+import type { ReviewService } from "../services/review.service.ts";
+import { reviewContextSchema } from "../validations/review.schema.ts";
 
 /** /frac-reviews: the Reviewer (spec 8). */
 export function reviewRoutes(reviews: ReviewService): Router {

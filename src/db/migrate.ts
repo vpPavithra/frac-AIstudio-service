@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { describeError } from "../utils/logger.js";
+import { describeError } from "../utils/logger.ts";
 
 /** The slice of pg's Client/Pool this runner needs, so tests can pass a fake. */
 export interface Queryable {

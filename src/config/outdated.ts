@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import type { OutdatedPattern } from "../services/review-engine/checks.js";
-import { PATHS } from "./constants.js";
+import type { OutdatedPattern } from "../services/review-engine/checks.ts";
+import { PATHS } from "./constants.ts";
 
 /**
  * Reads the OUTDATED list at runtime so clinical reviewers can extend it without a deploy.

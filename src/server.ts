@@ -1,17 +1,17 @@
 import "dotenv/config";
-import { ComputedOnlyReviewer } from "./services/ai-review.service.js";
-import { createApp } from "./app.js";
-import { JOBS, SERVER } from "./config/constants.js";
-import { createPool } from "./config/db.js";
-import { loadMethodParagraph } from "./config/method.js";
-import { loadOutdatedPatterns } from "./config/outdated.js";
-import { loadMigrations, runMigrations } from "./db/migrate.js";
-import { JobRunner } from "./services/queue/job-runner.js";
-import { startJobWatchdog } from "./services/job-watchdog.service.js";
-import { memoryRepositories, pgRepositories } from "./repositories/index.js";
-import { FracService } from "./services/frac.service.js";
-import { ReviewService } from "./services/review.service.js";
-import { describeError, logger } from "./utils/logger.js";
+import { ComputedOnlyReviewer } from "./services/ai-review.service.ts";
+import { createApp } from "./app.ts";
+import { JOBS, SERVER } from "./config/constants.ts";
+import { createPool } from "./config/db.ts";
+import { loadMethodParagraph } from "./config/method.ts";
+import { loadOutdatedPatterns } from "./config/outdated.ts";
+import { loadMigrations, runMigrations } from "./db/migrate.ts";
+import { JobRunner } from "./services/queue/job-runner.ts";
+import { startJobWatchdog } from "./services/job-watchdog.service.ts";
+import { memoryRepositories, pgRepositories } from "./repositories/index.ts";
+import { FracService } from "./services/frac.service.ts";
+import { ReviewService } from "./services/review.service.ts";
+import { describeError, logger } from "./utils/logger.ts";
 
 const inMemory = SERVER.store === "memory";
 

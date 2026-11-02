@@ -1,6 +1,6 @@
-import type { AgentReview } from "./review-engine/report.js";
-import type { Finding, Stats } from "../models/report.model.js";
-import type { ReviewModel } from "../models/review.model.js";
+import type { AgentReview } from "./review-engine/report.ts";
+import type { Finding, Stats } from "../models/report.model.ts";
+import type { ReviewModel } from "../models/review.model.ts";
 
 export interface AgentReviewInput {
   model: ReviewModel;
