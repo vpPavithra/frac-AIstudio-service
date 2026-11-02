@@ -2,7 +2,8 @@ import "dotenv/config";
 import { ComputedOnlyReviewer } from "./services/ai-review.service.ts";
 import { createApp } from "./app.ts";
 import { JOBS, SERVER } from "./config/constants.ts";
-import { createPool } from "./config/db.ts";
+import { createPool, poolTarget } from "./config/db.ts";
+import { checkDatabase } from "./db/check.ts";
 import { loadMethodParagraph } from "./config/method.ts";
 import { loadOutdatedPatterns } from "./config/outdated.ts";
 import { loadMigrations, runMigrations } from "./db/migrate.ts";
@@ -23,6 +24,7 @@ const reviews = new ReviewService(repos, runner, new ComputedOnlyReviewer(), () 
 const fracs = new FracService(repos, runner, reviews, () => loadMethodParagraph());
 
 async function start(): Promise<void> {
+  if (pool) await checkDatabase(pool, poolTarget());
   if (pool && SERVER.migrateOnStart) {
     const applied = await runMigrations(pool, loadMigrations());
     logger.info(applied.length ? "Applied migrations" : "Database is up to date", { applied });
@@ -43,7 +45,8 @@ async function start(): Promise<void> {
   });
 }
 
-start().catch((err: unknown) => {
+start().catch(async (err: unknown) => {
   logger.error("Startup failed", { error: describeError(err) });
+  await pool?.end().catch(() => undefined);
   process.exit(1);
 });
