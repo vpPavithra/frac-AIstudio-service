@@ -13,6 +13,7 @@ import type { JobRunner } from "./queue/job-runner.ts";
 import { JOB_MESSAGES } from "./queue/job-messages.ts";
 import { badRequest, conflict, notFound } from "../utils/response.ts";
 import type { Repositories } from "../repositories/index.ts";
+import { describeError, logger } from "../utils/logger.ts";
 
 export interface UploadedWorkbook {
   name: string;
@@ -63,7 +64,9 @@ export class ReviewService {
     let sheets;
     try {
       sheets = await readWorkbook(file.buffer);
-    } catch {
+    } catch (err) {
+      // The person sees a plain sentence; the log keeps the reason (e.g. a parser limitation)
+      logger.warn("Uploaded workbook could not be read", { file: file.name, bytes: file.buffer.length, error: describeError(err) });
       throw badRequest("FILE_UNREADABLE", "Could not read the file. Upload an .xlsx workbook.");
     }
     const { model, warnings } = parseWorkbook(sheets, titleFromFilename(file.name));

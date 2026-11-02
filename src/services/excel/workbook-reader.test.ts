@@ -1,4 +1,6 @@
 import ExcelJS from "exceljs";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import { parseWorkbook } from "../review-engine/parse-workbook.ts";
 import { workbook } from "../../../test/support/test-data.ts";
 import { cellText, readWorkbook } from "./workbook-reader.ts";
@@ -27,5 +29,22 @@ describe("readWorkbook", () => {
     const { model } = parseWorkbook(sheets, "t");
     expect(model.competencies.map((c) => c.code)).toEqual(["C1", "C2", "C3"]);
     expect(model.roles.flatMap((r) => r.activities)).toHaveLength(3);
+  });
+
+  // Regression: exceljs's full loader rejects a sheet named "History" ("The name "History" is
+  // protected"), so a real upload (a SonarQube export) failed with FILE_UNREADABLE. The fixture is
+  // synthetic, laid out like that file (workbook.xml before the sheets in the zip).
+  it("reads a workbook that has a sheet named History", async () => {
+    const buffer = readFileSync(path.resolve("test/fixtures/regression/history-sheet.xlsx"));
+    await expect(new ExcelJS.Workbook().xlsx.load(buffer as unknown as ArrayBuffer)).rejects.toThrow(/History/);
+
+    const sheets = await readWorkbook(buffer);
+    expect(sheets.map((s) => s.name)).toEqual(["Competencies", "History"]);
+    expect(sheets[1].rows[0]).toEqual(["Snapshot History"]);
+    expect(parseWorkbook(sheets, "t").model.competencies.map((c) => c.code)).toEqual(["C1"]);
+  });
+
+  it("throws when neither reader can open the file", async () => {
+    await expect(readWorkbook(Buffer.from("not a zip"))).rejects.toThrow();
   });
 });
