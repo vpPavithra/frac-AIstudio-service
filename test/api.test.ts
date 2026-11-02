@@ -154,7 +154,10 @@ describe("creator", () => {
 
   it("creates from a brief with defaults and validates it", async () => {
     const { app } = setup();
-    await request(app).post("/v1/fracs").set(OWNER).send({ state: "Bihar" }).expect(400);
+    const missing = await request(app).post("/v1/fracs").set(OWNER).send({ state: "Bihar" }).expect(400);
+    expect(missing.body.error).toMatchObject({ code: "VALIDATION_FAILED", message: "cadre: Cadre is required" });
+    const blank = await request(app).post("/v1/fracs").set(OWNER).send({ cadre: "  " }).expect(400);
+    expect(blank.body.error.message).toBe("cadre: Cadre is required");
     await request(app).post("/v1/fracs").set(OWNER).send({ cadre: "ANM", size: "huge" }).expect(400);
     const res = await request(app).post("/v1/fracs").set(OWNER).send({ cadre: " ANM " }).expect(201);
     expect(res.body.frac).toMatchObject({ cadre: "ANM", state: "India (national baseline)", size: "standard", step: 1 });

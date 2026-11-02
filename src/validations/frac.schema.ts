@@ -5,7 +5,11 @@ import { LIMITS } from "../config/constants.js";
 // validateBody drops anything else.
 
 const text = () => z.string().max(LIMITS.maxTextChars).default("");
-const shortText = (max = 200) => z.string().trim().max(max);
+/** `required` is the message for both a missing field and an empty one, so the person sees one sentence. */
+const shortText = (max = 200, required?: string) => {
+  const base = z.string(required ? { required_error: required } : undefined).trim().max(max);
+  return required ? base.min(1, required) : base;
+};
 
 export const FRAC_SIZES = ["compact", "standard", "full"] as const;
 export const NATIONAL_BASELINE = "India (national baseline)";
@@ -43,7 +47,7 @@ const roleSchema = z.object({
 });
 
 const competencySchema = z.object({
-  code: shortText(20).min(1, "Competency code is required"),
+  code: shortText(20, "Competency code is required"),
   label: text(),
   description: text(),
   type: text(),
@@ -54,7 +58,7 @@ const competencySchema = z.object({
 
 /** POST /fracs: the brief (spec 5.1). */
 export const createFracSchema = z.object({
-  cadre: shortText().min(1, "Cadre is required"),
+  cadre: shortText(200, "Cadre is required"),
   state: shortText().optional().transform((s) => s || NATIONAL_BASELINE),
   size: z.enum(FRAC_SIZES).default("standard"),
   prompt: text(),
