@@ -17,12 +17,14 @@ orgportal /app/home/frac-studio  →  uiproxy /protected/v8/fracStudio/*  →  t
 | `src/routes/` | Which middleware and handler each URL gets. Wiring only. |
 | `src/controllers/` | HTTP: read params, call a service, send the response. |
 | `src/validations/` | Zod schemas for every request body. |
-| `src/services/` | The rules: Creator (`frac.service.ts`), Reviewer (`review.service.ts`). |
-| `src/engine/` | Deterministic review: workbook parser, mapping-cell parser, computed checks, report. |
-| `src/io/` | Excel read and write (exceljs). |
-| `src/repositories/` | Postgres and in-memory stores behind one interface. |
-| `src/jobs/` | In-process job runner, progress messages, stuck-job watchdog. |
-| `src/agents/` | The AI review seam (`ComputedOnlyReviewer` until the LLM layer lands). |
+| `src/services/` | The rules: Creator (`frac.service.ts`), Reviewer (`review.service.ts`), stuck-job watchdog (`job-watchdog.service.ts`), the AI review seam (`ai-review.service.ts`, computed-only until the LLM layer lands). |
+| `src/services/review-engine/` | Deterministic review: workbook parser, mapping-cell parser, computed checks, report. |
+| `src/services/excel/` | Excel read and write (exceljs). |
+| `src/services/queue/` | In-process job runner and the progress messages. |
+| `src/models/` | Domain types: FRAC, review, report, job. |
+| `src/repositories/` | One file per entity (frac, review, job), each with its Postgres and in-memory store. |
+| `src/middleware/` | `auth` (owner header), `validate`, `errorHandler`, `requestContext`, `requestLogger`, `upload`. |
+| `src/utils/` | `response` (`ApiError`), `logger`, `context` (request id). |
 | `src/config/` | `settings.ts` loads `config/service.json`; `constants.ts` exposes every setting. |
 | `config/` | `service.json` (settings), `outdated.json` (outdated law and programme names). |
 | `migrations/` | Numbered SQL, applied by `npm run migrate`. |

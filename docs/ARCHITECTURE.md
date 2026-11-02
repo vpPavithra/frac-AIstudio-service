@@ -33,14 +33,15 @@ src/config/            settings.ts (service.json → env, refuses secrets), cons
 src/routes/            URL → middleware → controller wiring, under /v1                              ← done
 src/controllers/       HTTP only: frac, review, job                                                  ← done
 src/validations/       Zod request schemas (frac, review)                                            ← done
-src/middleware/        owner (x-aastrika-creator), validate, errors, request-context, request-logger ← done
-src/services/          review.service (Reviewer + shared engine), frac.service (Creator, My FRACs)  ← done
-src/engine/            deterministic, no I/O: types, refs, parse-workbook, checks, report, convert   ← done
-src/io/                workbook-reader / workbook-writer (exceljs, spec 7)                           ← done
-src/repositories/      fracs, versions, reviews, jobs: pg + in-memory (FRAC_STUDIO_STORE=memory)    ← done
-src/jobs/              job runner, spec 8 messages, stuck-job watchdog                               ← done
-src/utils/             api-error (one error shape), logger, request-context                          ← done
-src/agents/            AgentReviewer seam + ComputedOnlyReviewer stand-in                           ← done
+src/middleware/        auth (x-aastrika-creator), validate, errorHandler, requestContext, requestLogger, upload ← done
+src/models/            frac, review, report, job types (spec 4)                                      ← done
+src/services/          frac.service (Creator, My FRACs), review.service (Reviewer + shared engine),  ← done
+                       job-watchdog.service, ai-review.service (AgentReviewer + computed-only stand-in)
+src/services/review-engine/  deterministic, no I/O: refs, parse-workbook, checks, report, convert     ← done
+src/services/excel/    workbook-reader / workbook-writer (exceljs, spec 7)                           ← done
+src/services/queue/    job runner, spec 8 job messages                                               ← done
+src/repositories/      frac / review / job .repository.ts: Postgres + in-memory per entity           ← done
+src/utils/             response (ApiError, one error shape), logger, context (request id)            ← done
 src/prompts/           pure *.prompts.ts builders, verbatim from the prototype, golden snapshots    (with LLM)
 src/providers/         LlmProvider + ClaudeProvider (tiers from config), retry, fixtures replay      (with LLM)
 ```

@@ -25,13 +25,18 @@ Commits: Conventional Commits (`feat:`, `fix:`, `chore:`), on a feature branch.
 ## Design
 
 **Where code goes.** `routes/` wires middleware to handlers · `controllers/` handle HTTP · `services/`
-hold the rules · `repositories/` own the queries · `validations/` own the request shapes. `engine/` is
-the deterministic review logic and `io/` is Excel, both pure and free of HTTP and SQL.
+hold the rules · `repositories/` own the queries (one file per entity) · `validations/` own the request
+shapes · `models/` hold the domain types. `services/review-engine/` is the deterministic review logic and
+`services/excel/` is Excel, both pure and free of HTTP and SQL.
+
+**Kept different from aastrika-ai-service on purpose:** the service lives at the repo root (no
+`backend/`), tests are Jest (`src/**/*.test.ts` next to the code, `test/` for API and data-path tests),
+and the schema is numbered `migrations/` applied by `npm run migrate`.
 
 **Validate at the boundary.** Every request body has a Zod schema in `validations/`. `validateBody`
 drops fields the schema does not declare, so declare every field a handler needs.
 
-**One error shape.** Throw `ApiError` (`utils/api-error.ts`) with a stable code; `errorHandler` writes
+**One error shape.** Throw `ApiError` (`utils/response.ts`) with a stable code; `errorHandler` writes
 `{ error: { code, message, details? } }`. 4xx: do not retry. 5xx: retry shortly. Never swallow an error.
 
 **Config, not literals.** Models, rates, limits and timeouts live in `config/service.json` and are read

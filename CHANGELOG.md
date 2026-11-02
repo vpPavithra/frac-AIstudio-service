@@ -5,6 +5,12 @@ full pre-deploy test checklist passes.
 
 ## Unreleased: aligned with aastrika-ai-service
 
+**Folder layout.** Files moved to the sibling repo's layout with no logic change: `models/` for the domain
+types, one repository file per entity, the review engine, Excel and job runner under `services/`, and the
+middleware and utils renamed to match (`auth`, `errorHandler`, `requestContext`, `requestLogger`, `upload`,
+`response`, `context`). Kept as they were, by decision: the service at the repo root, Jest, and numbered
+migrations.
+
 **Errors.** Before: `{ error: "message" }`, so a client could only match on English text. Now every
 failure is `{ error: { code, message, details? } }` through one `ApiError`, with codes listed in
 ONBOARDING.md. Status codes are deliberate: a locked brief or an unfinished review is 409, not 400.
