@@ -131,6 +131,8 @@ export function applyEdits(frac: Frac, body: Body, now = new Date()): Frac {
     next.roles = roles as Frac["roles"];
     if (changed && next.competencies.length) next.rolesDirty = true;
   }
+  // The team may confirm the mapping by hand; only the server ever sets it back to true
+  if (body.rolesDirty === false && !roles) next.rolesDirty = false;
 
   next.updatedAt = now.toISOString();
   return next;

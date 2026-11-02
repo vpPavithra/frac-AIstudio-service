@@ -15,9 +15,9 @@ export default {
     "!src/**/*.test.ts",
     // Bootstrap / infra wiring with no unit logic
     "!src/server.ts",
+    "!src/migrate.ts",
     "!src/app.ts",
     "!src/config/**",
-    "!src/repositories/pg.ts",
   ],
   coverageDirectory: "coverage",
   moduleNameMapper: {

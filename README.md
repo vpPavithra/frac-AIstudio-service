@@ -7,11 +7,29 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 ## Run
 
 ```bash
-cp .env.example .env      # fill Postgres + ANTHROPIC_API_KEY
+cp .env.example .env      # fill the POSTGRES_* settings
 npm install
-psql "$DATABASE_URL" -f migrations/001_init.sql
+npm run migrate           # applies migrations/*.sql not yet recorded in schema_migrations
 npm run dev               # http://localhost:3005/health
 ```
+
+Without Postgres: `FRAC_STUDIO_STORE=memory npm run dev` (data is lost on restart). For orgportal local
+development, run it on another port (`PORT=3010`) and add the `/apis/protected/v8/fracStudio` rule to
+orgportal's `proxy/localhost.proxy.json`.
+
+## Deploy
+
+Same pipeline as playlist-service (`Jenkinsfile`): `Dockerfile.build` compiles and zips `dist/`, `config/` and
+`migrations/`; `build.sh` builds the runtime image from `Dockerfile` (Node 20 alpine, port 3005, runs as `node`).
+
+- **Migrations:** run `node migrate.js` in the image once per deploy (a job or init container), or set
+  `MIGRATE_ON_START=true`. Each file runs once, in its own transaction, under an advisory lock, so several
+  replicas starting together are safe.
+- **Network:** the service trusts the `x-aastrika-creator` header, so expose it only inside the cluster. The
+  uiproxy reaches it through `FRAC_STUDIO_API_BASE` (default `${KONG_API_BASE}/frac-studio`, so a Kong route
+  `/frac-studio` → this service, or point the variable straight at the service).
+- **Shutdown:** on SIGTERM it stops taking requests and lets running jobs finish before exiting. Give the pod a
+  termination grace period longer than the longest job.
 
 ## Test
 
@@ -19,6 +37,10 @@ npm run dev               # http://localhost:3005/health
 npm test                  # unit tests (src/**/*.test.ts) + acceptance (test/*.test.ts)
 npm run test:coverage
 ```
+
+`test/pg.test.ts` runs the real migration and the API flows through the Postgres repositories on pg-mem (an
+in-memory Postgres), so no database server is needed. It is close to Postgres but not identical; run
+`npm run migrate` against a real database before the first deploy.
 
 `test/sample.test.ts` runs three synthetic workbooks (GNM-, ANM- and Staff-Nurse-style, built in
 `test/support/sample-workbooks.ts`) with every defect planted at a known count. `npm run fixtures:sample`

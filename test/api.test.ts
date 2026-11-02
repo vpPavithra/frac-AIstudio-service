@@ -154,6 +154,12 @@ describe("creator", () => {
     const res = await request(app).patch(`/v1/fracs/${id}`).set(OWNER).send({ roles: edited }).expect(200);
     expect(res.body.frac.rolesDirty).toBe(true);
 
+    // The team can confirm the mapping by hand; true is never accepted from the client
+    const cleared = await request(app).patch(`/v1/fracs/${id}`).set(OWNER).send({ rolesDirty: false }).expect(200);
+    expect(cleared.body.frac.rolesDirty).toBe(false);
+    const ignored = await request(app).patch(`/v1/fracs/${id}`).set(OWNER).send({ rolesDirty: true }).expect(200);
+    expect(ignored.body.frac.rolesDirty).toBe(false);
+
     await request(app).patch(`/v1/fracs/${id}`).set(OWNER).send({ research: { summary: "s" } }).expect(200);
     await request(app).patch(`/v1/fracs/${id}`).set(OWNER).send({ cadre: "GNM" }).expect(400);
     // Re-sending the unchanged brief is fine

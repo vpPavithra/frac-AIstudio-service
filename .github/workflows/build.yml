@@ -1,0 +1,36 @@
+name: Build, Test & Sonar
+
+# Self-hosted SonarQube: needs SONAR_HOST_URL and SONAR_TOKEN repo secrets.
+on:
+  push:
+    branches: [main, production]
+  pull_request:
+    branches: [main, production]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      # Job-level so the scan step can be skipped when the secret is not configured
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - name: Test with coverage
+        run: npm run test:coverage
+
+      - name: SonarQube Scan
+        if: ${{ env.SONAR_TOKEN != '' }}
+        uses: sonarsource/sonarqube-scan-action@v4
+        env:
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
