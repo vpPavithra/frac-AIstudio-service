@@ -1,7 +1,7 @@
-import { buildReport, normaliseAgentReview, summariseChecks } from "./report.ts";
+import { buildReport, computeTriage, computeVerdict, sortFindings, summariseChecks } from "./report.ts";
 import type { Finding } from "../../models/report.model.ts";
 
-const f = (check: Finding["check"], sev: Finding["sev"], fixed?: boolean): Finding => ({
+const f = (check: Finding["check"], sev: Finding["sev"], fixed?: boolean, over: Partial<Finding> = {}): Finding => ({
   check,
   sev,
   title: `${check} ${sev}`,
@@ -10,29 +10,19 @@ const f = (check: Finding["check"], sev: Finding["sev"], fixed?: boolean): Findi
   fix: "",
   source: "computed",
   fixed,
+  ...over,
 });
+const stats = { roles: 2, activities: 4, competencies: 3, indicators: 0, B: 1, F: 1, D: 1, other: 0 };
 
-describe("normaliseAgentReview", () => {
-  it("coerces invalid sev/check/triage and tags source", () => {
-    const r = normaliseAgentReview({
-      verdict: "Needs work",
-      triage: "burn it",
-      findings: [{ check: "nonsense", sev: "X", title: "t", refs: ["C1", 2] }, null],
-      strengths: ["clear roles", ""],
-    });
-    expect(r.triage).toBe("revise");
-    expect(r.findings[0]).toMatchObject({ check: "structure", sev: "m", source: "agent", refs: ["C1", "2"] });
-    expect(r.findings[1]).toMatchObject({ check: "structure", sev: "m", title: "" });
-    expect(r.strengths).toEqual(["clear roles"]);
-  });
-
-  it("survives non-object input", () => {
-    expect(normaliseAgentReview("oops")).toMatchObject({ findings: [], strengths: [], triage: "revise" });
-  });
-
-  it("keeps at most 10 agent findings", () => {
-    const findings = Array.from({ length: 14 }, (_, i) => ({ check: "ladder", sev: "m", title: `t${i}` }));
-    expect(normaliseAgentReview({ findings }).findings).toHaveLength(10);
+describe("sortFindings", () => {
+  it("orders by severity, then check order, then rule-based before AI", () => {
+    const sorted = sortFindings([f("coverage", "M"), f("context", "B", false, { source: "agent" }), f("bloom", "M"), f("context", "B")]);
+    expect(sorted.map((x) => [x.check, x.sev, x.source])).toEqual([
+      ["context", "B", "computed"],
+      ["context", "B", "agent"],
+      ["bloom", "M", "computed"],
+      ["coverage", "M", "computed"],
+    ]);
   });
 });
 
@@ -49,12 +39,53 @@ describe("summariseChecks", () => {
   });
 });
 
+describe("computeTriage (rules r3 §7)", () => {
+  it("rebuilds when activities read as syllabus outcomes or ladders are mostly incomplete", () => {
+    expect(computeTriage({ findings: [f("structure", "m", false, { title: "Activities read as syllabus outcomes" })], laddered: 4, incompleteLadders: 0 })).toBe("rebuild");
+    expect(computeTriage({ findings: [], laddered: 4, incompleteLadders: 3 })).toBe("rebuild");
+  });
+
+  it("revises on any Blocker or 3 Majors, otherwise use", () => {
+    expect(computeTriage({ findings: [f("context", "B")], laddered: 4, incompleteLadders: 0 })).toBe("revise");
+    expect(computeTriage({ findings: [f("bloom", "M"), f("ladder", "M"), f("coverage", "M")], laddered: 4, incompleteLadders: 0 })).toBe("revise");
+    expect(computeTriage({ findings: [f("bloom", "M"), f("coverage", "m")], laddered: 4, incompleteLadders: 0 })).toBe("use");
+  });
+});
+
+describe("computeVerdict", () => {
+  it("counts findings and names what to fix first", () => {
+    const findings = sortFindings([
+      f("context", "B", false, { title: "Beyond ANM scope: Prescribing" }),
+      f("context", "B", false, { title: "Beyond ANM scope: Curative management" }),
+      f("ladder", "M", false, { title: "Level ladders are shifted upward" }),
+      f("coverage", "M", false, { title: "Core ANM areas with no dedicated competency" }),
+      f("bloom", "m"),
+    ]);
+    expect(computeVerdict("revise", findings, "ANM")).toBe(
+      "Revise before use — 2 blockers, 2 major and 1 minor finding. Fix first: 2 kinds of act beyond ANM scope; Level ladders are shifted upward; Core ANM areas with no dedicated competency.",
+    );
+  });
+});
+
 describe("buildReport", () => {
-  it("merges and sorts findings B → M → m and falls back to the agent's cadre", () => {
-    const agent = normaliseAgentReview({ cadre: "GNM", verdict: "v", triage: "rebuild", summary: "s", findings: [{ check: "context", sev: "B" }] });
-    const stats = { roles: 0, activities: 0, competencies: 0, indicators: 0, B: 0, F: 0, D: 0, other: 0 };
-    const report = buildReport({ title: "GNM.xlsx" }, stats, [f("bloom", "m"), f("ladder", "M")], agent, new Date("2026-11-02T00:00:00Z"));
+  it("computes verdict, triage, summary and strengths from the findings", () => {
+    const report = buildReport({
+      title: "ANM.xlsx",
+      cadre: "ANM",
+      state: "Bihar",
+      stats,
+      computed: [f("bloom", "m"), f("ladder", "M")],
+      agent: [f("context", "B", false, { source: "agent", title: "Other acts beyond ANM scope" })],
+      coveredAreas: ["Antenatal care"],
+      laddered: 3,
+      incompleteLadders: 0,
+      engine: "r3",
+      fingerprint: "abc",
+      at: new Date("2026-11-02T00:00:00Z"),
+    });
     expect(report.findings.map((x) => x.sev)).toEqual(["B", "M", "m"]);
-    expect(report).toMatchObject({ cadre: "GNM", state: "", triage: "rebuild", at: "2026-11-02T00:00:00.000Z" });
+    expect(report).toMatchObject({ cadre: "ANM", state: "Bihar", triage: "revise", engine: "r3", fingerprint: "abc", at: "2026-11-02T00:00:00.000Z" });
+    expect(report.summary).toContain("2 findings come from rule-based checks and are the same on every run; 1 comes from AI judgement");
+    expect(report.strengths).toEqual(["Core areas covered: Antenatal care", "FRAC structure: no issues found", "Coverage & sources: no issues found"]);
   });
 });

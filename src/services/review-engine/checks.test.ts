@@ -1,11 +1,11 @@
-import { loadOutdatedPatterns } from "../../config/outdated.ts";
+import { loadReviewRules } from "../../config/review-rules.ts";
 import { computeChecks, computeStats, indicators, stripLead, typeClass } from "./checks.ts";
 import { comp, goodLevels, model } from "../../../test/support/test-data.ts";
 import type { Finding } from "../../models/report.model.ts";
 import type { ReviewModel } from "../../models/review.model.ts";
 
-const OUTDATED = loadOutdatedPatterns();
-const run = (m: ReviewModel) => computeChecks(m, OUTDATED).findings;
+const RULES = loadReviewRules();
+const run = (m: ReviewModel) => computeChecks(m, RULES).findings;
 const byTitle = (findings: Finding[], title: string) => findings.find((f) => f.title.startsWith(title));
 
 describe("computeChecks", () => {
@@ -45,14 +45,14 @@ describe("computeChecks", () => {
       const m = model();
       m.roles[0].activities[0].text = "Describes the cold chain";
       m.roles[0].activities[1].text = "Explains ANC";
-      const f = byTitle(run(m), "Activities read like syllabus");
+      const f = byTitle(run(m), "Activities read as syllabus outcomes");
       expect(f?.sev).toBe("M");
       expect(f?.detail).toContain("2/4");
     });
 
     it("flags untyped dictionaries", () => {
       const m = model({ competencies: [comp("C1", ""), comp("C2", "-"), comp("C3", "")] });
-      expect(byTitle(run(m), "Competencies are not typed")?.sev).toBe("M");
+      expect(byTitle(run(m), "Competency type is missing")?.sev).toBe("M");
     });
 
     it("flags a missing Behavioural or Functional type", () => {
@@ -112,8 +112,8 @@ describe("computeChecks", () => {
       expect(byTitle(run(m), "Activities with no posting")).toBeUndefined();
     });
 
-    it("skips FRAC-sheet checks when there is no FRAC sheet", () => {
-      expect(run(model({ hasFrac: false, roles: [] }))).toEqual([]);
+    it("raises one Major instead of the FRAC-sheet checks when there is no Role–Activity sheet", () => {
+      expect(run(model({ hasFrac: false, roles: [] })).map((f) => [f.title, f.sev])).toEqual([["No Role–Activity sheet", "M"]]);
     });
   });
 
@@ -150,6 +150,6 @@ describe("helpers", () => {
   });
 
   it("computeStats counts types and indicators", () => {
-    expect(computeStats(model())).toEqual({ roles: 2, activities: 4, competencies: 3, indicators: 30, B: 1, F: 1, D: 1, other: 0 });
+    expect(computeStats(model())).toEqual({ roles: 2, activities: 4, competencies: 3, indicators: 30, B: 1, F: 1, D: 1, other: 0, kcm: 0 });
   });
 });

@@ -84,5 +84,15 @@ export const patchFracSchema = z.object({
 });
 export type PatchFracInput = z.infer<typeof patchFracSchema>;
 
+/**
+ * POST /fracs/:id/steps/:step (spec 8): optional team feedback for a revise; ladders also take the
+ * competency codes to rewrite ("Revise {code}", "Fix these competencies").
+ */
+export const stepSchema = z.object({
+  feedback: z.string().trim().max(5000).optional().transform((s) => s || undefined),
+  codes: z.array(shortText(20, "Competency code is required")).max(LIMITS.maxCompetencies).optional(),
+});
+export type StepInput = z.infer<typeof stepSchema>;
+
 /** :versionId in POST /fracs/:id/versions/:versionId/restore. */
 export const versionIdSchema = z.coerce.number({ invalid_type_error: "versionId must be a number" }).int().positive();

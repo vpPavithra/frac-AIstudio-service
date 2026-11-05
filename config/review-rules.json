@@ -1,0 +1,499 @@
+{
+  "_comment": "Review engine r3 rule tables (FRAC_Reviewer_rules_r3.md sections 4.3, 4.4 and 5). Clinical reviewers edit this file; no code change needed. Patterns are JavaScript regular expressions. The review fingerprint includes these tables, so a changed rule never reuses a stored review. The ASHA 'instead' texts are not in the rules file and need clinical confirmation.",
+  "scope": {
+    "anm": [
+      {
+        "id": "iv",
+        "act": "IV drug administration",
+        "pattern": "(?<!(annexure|stage|grade|class|phase|schedule|level|module|part|chapter|type)\\s)\\b(IV|I\\.V\\.)(?![-\\w])|intravenous",
+        "flags": "i",
+        "allow": "refer\\w*[^.;]{0,60}(access|line|cannula)|(access|line|cannula)[^.;]{0,60}refer",
+        "sev": "B",
+        "instead": "Under the SBA guidelines, start an IV line only to stabilise before referral (verify against the current module and state orders)"
+      },
+      {
+        "id": "complications",
+        "act": "Managing complications or complicated deliveries",
+        "pattern": "manag\\w*\\s+(the\\s+|of\\s+)?(obstetric\\s+|labou?r\\s+|delivery\\s+|medication\\s+)?(complications|emergencies)|complicated\\s+(deliver|labou?r|cases)\\w*|high[- ]risk\\s+(or|and|\\/)\\s+complicated",
+        "flags": "i",
+        "sev": "B",
+        "instead": "Identify complications, give the specified pre-referral care (e.g. oxytocin, MgSO4 loading dose, first-dose antibiotics, bimanual compression) and refer; definitive management is at the FRU"
+      },
+      {
+        "id": "curative",
+        "act": "Curative management",
+        "pattern": "curative",
+        "flags": "i",
+        "sev": "B",
+        "instead": "Screen, counsel, support adherence, dispense MO-prescribed refills, refer"
+      },
+      {
+        "id": "debridement",
+        "act": "Wound debridement",
+        "pattern": "debrid\\w*",
+        "flags": "i",
+        "sev": "B",
+        "instead": "First aid and aseptic dressing of minor wounds, recognise infection, refer"
+      },
+      {
+        "id": "severe",
+        "act": "Independent management of severe cases",
+        "pattern": "independent(ly)?\\s+manag\\w*\\s+(of\\s+)?(severe|complex|major|serious)",
+        "flags": "i",
+        "sev": "B",
+        "instead": "Stabilise and refer"
+      },
+      {
+        "id": "resuscitation",
+        "act": "Advanced resuscitation",
+        "pattern": "advanced\\s+(resuscitation|life support)|intubat\\w*",
+        "flags": "i",
+        "sev": "B",
+        "instead": "Basic newborn resuscitation (NSSK / Helping Babies Breathe), then refer"
+      },
+      {
+        "id": "emergency-drugs",
+        "act": "Unspecified emergency drugs",
+        "pattern": "emergency\\s+(meds|medicines|medications|drugs)",
+        "flags": "i",
+        "sev": "B",
+        "instead": "Name only the drugs listed for ANM/SBA pre-referral use (verify the list)"
+      },
+      {
+        "id": "prescribing",
+        "act": "Prescribing",
+        "pattern": "\\bprescrib(es|ing)\\b",
+        "flags": "i",
+        "sev": "B",
+        "instead": "Dispense per protocol or MO prescription"
+      },
+      {
+        "id": "operative",
+        "act": "Operative or MTP procedures",
+        "pattern": "\\b(MVA|manual vacuum aspiration|dilatation and curettage|caesarean|c-section|vacuum extraction|forceps deliver\\w*)\\b",
+        "flags": "i",
+        "sev": "B",
+        "instead": "These are MO or specialist procedures"
+      },
+      {
+        "id": "spraying",
+        "act": "Insecticide spraying or larviciding",
+        "pattern": "\\bspray(ing|s)?\\b|larvicid\\w*|fogging",
+        "flags": "i",
+        "sev": "M",
+        "instead": "RDT testing, treatment per NCVBDC drug policy, LLIN promotion, support for source reduction"
+      }
+    ],
+    "asha": [
+      {
+        "id": "injections",
+        "act": "Giving injections",
+        "pattern": "\\binject(s|ion|ions|ing)?\\b|\\bIM\\b|\\bIV\\b|intravenous",
+        "flags": "i",
+        "allow": "refer\\w*|motivat\\w*|mobili[sz]\\w*|accompan\\w*",
+        "sev": "B",
+        "instead": "Motivate and accompany the person to the ANM or facility for the injection (verify)"
+      },
+      {
+        "id": "deliveries",
+        "act": "Conducting deliveries",
+        "pattern": "conduct\\w*\\s+(normal\\s+|home\\s+)?deliver\\w*",
+        "flags": "i",
+        "sev": "B",
+        "instead": "Birth preparedness, escort to the facility for institutional delivery, HBNC visits (verify)"
+      },
+      {
+        "id": "prescribing",
+        "act": "Prescribing",
+        "pattern": "\\bprescrib(es|ing)\\b",
+        "flags": "i",
+        "sev": "B",
+        "instead": "Give drugs from the ASHA kit as per protocol, refer (verify)"
+      }
+    ]
+  },
+  "ladder": [
+    {
+      "id": "independent-early",
+      "levels": [
+        1,
+        2
+      ],
+      "pattern": "\\bindependent(ly)?\\b|\\bwithout supervision\\b",
+      "flags": "i",
+      "message": "L1–L2 already say the worker acts independently",
+      "frontlineOnly": false
+    },
+    {
+      "id": "supervising-l3",
+      "levels": [
+        3
+      ],
+      "pattern": "\\b(supervis(es|ing)|mentor\\w*|coach(es|ing)?|train(s|ing)?\\s+(other|junior|new|ASHA|AWW|staff|peer)\\w*|guides?\\s+(junior|other|ASHA|new)\\w*)\\b|supervision\\s+(of|to)\\s+(ASHA|junior|other|new|staff|peer|team)",
+      "flags": "i",
+      "message": "L3 includes supervising, mentoring or training others",
+      "frontlineOnly": true
+    },
+    {
+      "id": "policy-l4-l5",
+      "levels": [
+        4,
+        5
+      ],
+      "pattern": "\\b(polic(y|ies)|state[- ]?(level|wide)|national[- ](level|benchmark\\w*|strateg\\w*)|research|represent\\w*|district[- ]?(level|wide))\\b",
+      "flags": "i",
+      "message": "L4–L5 describe policy, research or district/state roles",
+      "frontlineOnly": true
+    }
+  ],
+  "areas": [
+    {
+      "key": "anc",
+      "name": "Antenatal care",
+      "pattern": "antenatal|\\bANC\\b|pregnan|\\bHRP\\b|birth (planning|preparedness)",
+      "flags": "i",
+      "families": [
+        "anm",
+        "cho",
+        "nurse"
+      ],
+      "clinical": true
+    },
+    {
+      "key": "intra",
+      "name": "Intrapartum care and delivery",
+      "pattern": "intrapartum|deliver(y|ies)\\b|labou?r\\b|partograph",
+      "flags": "i",
+      "families": [
+        "anm",
+        "cho",
+        "nurse"
+      ],
+      "clinical": true
+    },
+    {
+      "key": "pnc",
+      "name": "Postnatal and newborn care",
+      "pattern": "postnatal|\\bPNC\\b|newborn|neonat|HBNC|HBYC",
+      "flags": "i",
+      "families": [
+        "anm",
+        "cho",
+        "nurse"
+      ],
+      "clinical": true
+    },
+    {
+      "key": "imm",
+      "name": "Immunisation",
+      "pattern": "immuni[sz]|vaccin|\\bUIP\\b",
+      "flags": "i",
+      "families": [
+        "anm",
+        "cho",
+        "nurse"
+      ],
+      "clinical": true
+    },
+    {
+      "key": "fp",
+      "name": "Family planning",
+      "pattern": "family planning|contracept|IUCD|Antara|Chhaya|\\bOCPs?\\b|condom|spacing method",
+      "flags": "i",
+      "families": [
+        "anm",
+        "cho",
+        "nurse"
+      ],
+      "clinical": true
+    },
+    {
+      "key": "child",
+      "name": "Child health (IMNCI, diarrhoea, pneumonia)",
+      "pattern": "IMNCI|diarrh|pneumonia|\\bORS\\b|zinc|child health|IDCF|paediatric|pediatric|sick (young )?(infant|child)",
+      "flags": "i",
+      "families": [
+        "anm",
+        "cho",
+        "nurse"
+      ],
+      "clinical": true
+    },
+    {
+      "key": "nutr",
+      "name": "Nutrition and anaemia",
+      "pattern": "nutrition|anaemi|anemi|\\bIFA\\b|growth monitor|\\bSAM\\b|malnutri",
+      "flags": "i",
+      "families": [
+        "anm",
+        "cho",
+        "nurse"
+      ],
+      "clinical": true
+    },
+    {
+      "key": "adol",
+      "name": "Adolescent health (RKSK)",
+      "pattern": "adolescen|RKSK|WIFS|menstrual",
+      "flags": "i",
+      "families": [
+        "anm",
+        "cho",
+        "nurse"
+      ],
+      "clinical": true
+    },
+    {
+      "key": "ncd",
+      "name": "NCD and common cancer screening",
+      "pattern": "\\bNCDs?\\b|non-communicable|hypertension|diabet|cancer|NP-NCD|NPCDCS",
+      "flags": "i",
+      "families": [
+        "anm",
+        "cho",
+        "nurse"
+      ],
+      "clinical": true
+    },
+    {
+      "key": "cd",
+      "name": "TB and vector-borne disease",
+      "pattern": "tubercul|\\bTB\\b|NTEP|RNTCP|malaria|dengue|vector|NCVBDC|NVBDCP",
+      "flags": "i",
+      "families": [
+        "anm",
+        "cho",
+        "nurse"
+      ],
+      "clinical": true
+    },
+    {
+      "key": "ipc",
+      "name": "Infection prevention and biomedical waste",
+      "pattern": "infection (prevention|control)|bio-?medical|\\bBMW\\b|waste",
+      "flags": "i",
+      "families": [
+        "anm",
+        "cho",
+        "nurse"
+      ],
+      "clinical": false
+    },
+    {
+      "key": "mh",
+      "name": "Mental health and substance use",
+      "pattern": "mental health|psychiatr|depress|substance|tobacco cessation|alcohol|Tele-?MANAS",
+      "flags": "i",
+      "families": [
+        "anm",
+        "cho",
+        "nurse"
+      ],
+      "clinical": true
+    },
+    {
+      "key": "eld",
+      "name": "Elderly and palliative care",
+      "pattern": "elderly|geriatr|older (people|persons|adults)|palliat|end[- ]of[- ]life",
+      "flags": "i",
+      "families": [
+        "anm",
+        "cho",
+        "nurse"
+      ],
+      "clinical": true
+    },
+    {
+      "key": "emer",
+      "name": "Emergency first aid, burns and trauma",
+      "pattern": "emergenc|first aid|burns?\\b|trauma|injur|\\bBLS\\b|basic life support|\\bCPR\\b|snake ?bite|poison",
+      "flags": "i",
+      "families": [
+        "anm",
+        "cho",
+        "nurse"
+      ],
+      "clinical": true
+    },
+    {
+      "key": "eyeoral",
+      "name": "Eye, ENT and oral health",
+      "pattern": "vision|cataract|refractive|ophthalm|\\bENT\\b|hearing|oral health|dental|oral (hygiene|cancer)",
+      "flags": "i",
+      "families": [
+        "anm",
+        "cho"
+      ],
+      "clinical": true
+    },
+    {
+      "key": "minor",
+      "name": "Common illnesses and minor ailments",
+      "pattern": "minor ailment|common (illness|ailment)|fever|acute simple illness",
+      "flags": "i",
+      "families": [
+        "anm",
+        "cho"
+      ],
+      "clinical": true
+    },
+    {
+      "key": "rec",
+      "name": "Records and digital reporting (RCH portal, U-WIN)",
+      "pattern": "record|register|report|RCH portal|U-WIN|HMIS|digital",
+      "flags": "i",
+      "families": [
+        "anm",
+        "cho",
+        "nurse"
+      ],
+      "clinical": false
+    },
+    {
+      "key": "couns",
+      "name": "Counselling and respectful care",
+      "pattern": "counsel|respectful|SUMAN|dignity|privacy",
+      "flags": "i",
+      "families": [
+        "anm",
+        "cho",
+        "nurse"
+      ],
+      "clinical": false
+    },
+    {
+      "key": "comm",
+      "name": "Community engagement (VHSND, VHSNC, ASHA support)",
+      "pattern": "VHSN|VHND|VHSNC|community|ASHA|Jan Arogya Samiti",
+      "flags": "i",
+      "families": [
+        "anm",
+        "cho"
+      ],
+      "clinical": false
+    },
+    {
+      "key": "med",
+      "name": "Medication administration and safety",
+      "pattern": "medication|drug administration|administ\\w* (of )?(drugs|medicines)|pharmacolog|injectab|fluid therapy",
+      "flags": "i",
+      "families": [
+        "cho",
+        "nurse"
+      ],
+      "clinical": false
+    },
+    {
+      "key": "ward",
+      "name": "Ward management and supervision",
+      "pattern": "ward management|manag\\w* (the )?(ward|unit)|supervis|leadership|team management|roster",
+      "flags": "i",
+      "families": [
+        "nurse"
+      ],
+      "clinical": false
+    },
+    {
+      "key": "qual",
+      "name": "Patient safety and quality (NQAS, Kayakalp)",
+      "pattern": "patient safety|quality|NQAS|LaQshya|Kayakalp|MusQan",
+      "flags": "i",
+      "families": [
+        "nurse"
+      ],
+      "clinical": false
+    },
+    {
+      "key": "legal",
+      "name": "Legal and ethical practice",
+      "pattern": "legal|ethic|consent|medico[- ]legal|\\bMLC\\b|POCSO|PCPNDT|MTP",
+      "flags": "i",
+      "families": [
+        "anm",
+        "cho",
+        "nurse"
+      ],
+      "clinical": false
+    },
+    {
+      "key": "asha-maternal",
+      "name": "Maternal care",
+      "pattern": "antenatal|\\bANC\\b|pregnan|postnatal|\\bPNC\\b",
+      "flags": "i",
+      "families": [
+        "asha"
+      ],
+      "clinical": false
+    },
+    {
+      "key": "asha-newborn",
+      "name": "Newborn and child care (HBNC/HBYC)",
+      "pattern": "newborn|neonat|HBNC|HBYC|child",
+      "flags": "i",
+      "families": [
+        "asha"
+      ],
+      "clinical": false
+    },
+    {
+      "key": "asha-imm",
+      "name": "Immunisation mobilisation",
+      "pattern": "immuni[sz]|vaccin",
+      "flags": "i",
+      "families": [
+        "asha"
+      ],
+      "clinical": false
+    },
+    {
+      "key": "asha-fp",
+      "name": "Family planning",
+      "pattern": "family planning|contracept|condom|spacing",
+      "flags": "i",
+      "families": [
+        "asha"
+      ],
+      "clinical": false
+    },
+    {
+      "key": "asha-nutr",
+      "name": "Nutrition",
+      "pattern": "nutrition|anaemi|anemi|\\bIFA\\b|malnutri",
+      "flags": "i",
+      "families": [
+        "asha"
+      ],
+      "clinical": false
+    },
+    {
+      "key": "asha-cd",
+      "name": "Communicable disease",
+      "pattern": "tubercul|\\bTB\\b|malaria|dengue|vector",
+      "flags": "i",
+      "families": [
+        "asha"
+      ],
+      "clinical": false
+    },
+    {
+      "key": "asha-ncd",
+      "name": "NCD screening support",
+      "pattern": "\\bNCDs?\\b|non-communicable|CBAC|hypertension|diabet",
+      "flags": "i",
+      "families": [
+        "asha"
+      ],
+      "clinical": false
+    },
+    {
+      "key": "asha-mh",
+      "name": "Mental health and elderly care",
+      "pattern": "mental|elderly|palliat",
+      "flags": "i",
+      "families": [
+        "asha"
+      ],
+      "clinical": false
+    }
+  ]
+}

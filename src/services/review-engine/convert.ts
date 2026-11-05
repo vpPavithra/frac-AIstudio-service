@@ -11,6 +11,7 @@ export function fracToModel(f: Frac): ReviewModel {
   return {
     title: `${f.cadre} — ${f.state}`,
     hasFrac: true,
+    hasMapping: true,
     postings: f.postings.map((p) => p.key),
     postingLabels: f.postings.map((p) => p.label),
     roles: f.roles.map((r) => ({

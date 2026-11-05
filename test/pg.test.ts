@@ -6,12 +6,13 @@ import type { Pool } from "pg";
 import request from "supertest";
 import { ComputedOnlyReviewer } from "../src/services/ai-review.service.ts";
 import { createApp } from "../src/app.ts";
-import { loadOutdatedPatterns } from "../src/config/outdated.ts";
+import { loadReviewRules } from "../src/config/review-rules.ts";
 import { loadMigrations, runMigrations } from "../src/db/migrate.ts";
 import { JobRunner } from "../src/services/queue/job-runner.ts";
 import { pgRepositories } from "../src/repositories/index.ts";
 import { FracService } from "../src/services/frac.service.ts";
 import { ReviewService } from "../src/services/review.service.ts";
+import { stubProvider } from "./support/stub-provider.ts";
 import { gnmSample } from "./support/sample-workbooks.ts";
 import { goodLevels } from "./support/test-data.ts";
 
@@ -30,9 +31,10 @@ async function setup() {
 
   const repos = pgRepositories(pool);
   const runner = new JobRunner(repos.jobs);
-  const reviews = new ReviewService(repos, runner, new ComputedOnlyReviewer(), () => loadOutdatedPatterns());
-  const fracs = new FracService(repos, runner, reviews, () => "Method");
-  return { app: createApp({ fracs, reviews, jobs: repos.jobs }), runner, pool, applied };
+  const reviews = new ReviewService(repos, runner, new ComputedOnlyReviewer(), () => loadReviewRules());
+  const provider = stubProvider();
+  const fracs = new FracService(repos, runner, reviews, () => "Method", provider);
+  return { app: createApp({ fracs, reviews, jobs: repos.jobs, provider }), runner, pool, applied };
 }
 
 const roles = [
@@ -50,7 +52,7 @@ const competencies = [
 describe("Postgres path (pg-mem)", () => {
   it("applies every migration once and is a no-op the second time", async () => {
     const { pool, applied } = await setup();
-    expect(applied).toEqual(["001_init.sql", "002_job_error_code.sql"]);
+    expect(applied).toEqual(["001_init.sql", "002_job_error_code.sql", "003_review_fingerprint.sql"]);
     expect(await runMigrations(pool, loadMigrations())).toEqual([]);
   });
 

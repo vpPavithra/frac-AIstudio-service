@@ -1,13 +1,18 @@
 import type { Request, Response } from "express";
 import { parseInput } from "../middleware/validate.ts";
 import { ownerOf } from "../middleware/auth.ts";
-import type { FracService } from "../services/frac.service.ts";
-import { notFound, notImplemented } from "../utils/response.ts";
-import { versionIdSchema, type CreateFracInput, type PatchFracInput } from "../validations/frac.schema.ts";
+import type { FracService, GenerationStep } from "../services/frac.service.ts";
+import { notFound } from "../utils/response.ts";
+import {
+  versionIdSchema,
+  type CreateFracInput,
+  type PatchFracInput,
+  type StepInput,
+} from "../validations/frac.schema.ts";
 import { param, sendXlsx } from "./http.ts";
 
-/** Generation steps that need the LLM layer (spec 5.2–5.5); `check` is live. */
-const PENDING_STEPS = new Set(["research", "roles", "competencies", "ladders"]);
+/** Generation steps 2–5 (spec 5.2–5.5); step 6 is /steps/check. */
+const GENERATION_STEPS = new Set<string>(["research", "roles", "competencies", "ladders"]);
 
 /** HTTP handlers for the Creator (spec 8, /fracs). Bodies arrive validated by the routes. */
 export function fracController(fracs: FracService) {
@@ -34,12 +39,12 @@ export function fracController(fracs: FracService) {
       res.status(202).json({ jobId: job.id });
     },
 
-    /** Steps 2–5 exist in the API contract but answer 501 until the AI layer is built. */
-    async startPendingStep(req: Request, res: Response) {
+    /** Steps 2–5: start the generation job; body { feedback?, codes? } (codes for ladders only). */
+    async startStep(req: Request, res: Response) {
       const step = param(req.params.step);
-      if (!PENDING_STEPS.has(step)) throw notFound("Step");
-      await fracs.get(ownerOf(res), param(req.params.id));
-      throw notImplemented("STEP_NOT_AVAILABLE", `The ${step} step is not available yet`);
+      if (!GENERATION_STEPS.has(step)) throw notFound("Step");
+      const job = await fracs.startStep(ownerOf(res), param(req.params.id), step as GenerationStep, req.body as StepInput);
+      res.status(202).json({ jobId: job.id });
     },
 
     async exportWorkbook(req: Request, res: Response) {

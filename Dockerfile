@@ -9,7 +9,8 @@ ENV LOG_FORMAT=json
 COPY package*.json ./
 RUN npm ci --omit=dev
 
-# dist/ is the compiled service; config/ (outdated.json) and migrations/ are read at runtime
+# dist/ is the compiled service (dist/mocks holds the sample-data provider used when no API key is
+# set); config/ (outdated.json, review-rules.json) and migrations/ are read at runtime
 COPY dist/ .
 COPY config/ ./config/
 COPY migrations/ ./migrations/

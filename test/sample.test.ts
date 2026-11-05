@@ -1,7 +1,7 @@
 // Runs the synthetic sample workbooks through the real xlsx path (write → readWorkbook → parse → checks)
 // and asserts the planted counts exactly. The real dictionaries are covered by acceptance.test.ts.
 import ExcelJS from "exceljs";
-import { loadOutdatedPatterns } from "../src/config/outdated.ts";
+import { loadReviewRules } from "../src/config/review-rules.ts";
 import { computeChecks } from "../src/services/review-engine/checks.ts";
 import { parseWorkbook } from "../src/services/review-engine/parse-workbook.ts";
 import type { SheetData } from "../src/services/review-engine/parse-workbook.ts";
@@ -13,7 +13,7 @@ async function review(sheets: SheetData[]) {
   const wb = new ExcelJS.Workbook();
   for (const s of sheets) wb.addWorksheet(s.name).addRows(s.rows);
   const parsed = parseWorkbook(await readWorkbook(await wb.xlsx.writeBuffer()), "sample.xlsx");
-  return { ...parsed, ...computeChecks(parsed.model, loadOutdatedPatterns()) };
+  return { ...parsed, ...computeChecks(parsed.model, loadReviewRules()) };
 }
 
 const find = (findings: Finding[], title: string) => findings.find((f) => f.title.startsWith(title));
@@ -41,7 +41,7 @@ describe("sample GNM dictionary", () => {
     expect(find(findings, "Incomplete level ladders")?.detail).toMatch(/^12 of 74/);
     expect(find(findings, "Level labels")).toMatchObject({ sev: "M" });
     expect(find(findings, "Level labels")?.detail).toContain(`L1 ${GNM_COUNTS.l1Banned}/${GNM_COUNTS.competencies}`);
-    expect(find(findings, "Activities read like syllabus")?.detail).toMatch(/^92\/136/);
+    expect(find(findings, "Activities read as syllabus")?.detail).toMatch(/^92\/136/);
   });
 
   it("parses every mapping-cell style", async () => {

@@ -1,0 +1,283 @@
+{
+  "//": "SAMPLE DATA used when no ANTHROPIC_API_KEY is set (or AI_PROVIDER=mock). Not clinical guidance and not a reference FRAC. Edit freely; see src/mocks/README.md. Placeholders: {cadre}, {state}.",
+
+  "// postingKeywords": "Words in the brief's 'What should this FRAC cover?' that name a posting. The mock turns each one found into a posting column (first 3, in the order written); none found uses the cadre's own postings.",
+  "postingKeywords": {
+    "sub-centre": "{cadre} at Sub-Centre (outreach)",
+    "sub centre": "{cadre} at Sub-Centre (outreach)",
+    "ayushman arogya mandir": "{cadre} at Ayushman Arogya Mandir",
+    "aam": "{cadre} at Ayushman Arogya Mandir",
+    "delivery point phc": "{cadre} at delivery-point PHC",
+    "delivery-point phc": "{cadre} at delivery-point PHC",
+    "delivery point": "{cadre} at delivery-point PHC",
+    "delivery-point": "{cadre} at delivery-point PHC",
+    "phc": "{cadre} at PHC",
+    "chc": "{cadre} at CHC",
+    "district hospital": "{cadre} at District Hospital",
+    "village": "{cadre} in the village (community outreach)",
+    "urban": "{cadre} at Urban PHC"
+  },
+  "cadres": {
+    "ANM": {
+      "match": ["ANM", "AUXILIARY NURSE MIDWIFE"],
+      "cadreFull": "Auxiliary Nurse Midwife (ANM)",
+      "codePrefix": "ANM",
+      "postings": ["ANM at Sub-Centre / Ayushman Arogya Mandir (outreach)", "ANM at delivery-point PHC"],
+      "summary": "The ANM is the first-level skilled health worker for a sub-centre population of about 5,000. She delivers antenatal, postnatal and newborn care, immunisation and family planning services at the sub-centre and in outreach sessions. She screens adults for common non-communicable diseases and follows up communicable disease cases under national programmes. She supervises and supports ASHAs and works with the Anganwadi Worker and the Village Health Sanitation and Nutrition Committee. At a delivery-point PHC she also assists with normal deliveries and immediate newborn care. She maintains the RCH and programme registers and enters data on the RCH portal and U-WIN. She refers complications to the PHC or FRU using the referral protocols. In {state} she works within the state's programme priorities listed under state context.",
+      "authorised": [
+        "Register pregnant women and provide antenatal check-ups, including blood pressure, haemoglobin and urine tests",
+        "Give Td, and vaccines under the Universal Immunisation Programme",
+        "Conduct normal deliveries at a designated delivery point and give immediate newborn care",
+        "Provide oral contraceptive pills, condoms and emergency contraception; insert IUCD where trained",
+        "Screen adults for hypertension, diabetes and common cancers using programme tools",
+        "Treat minor ailments with drugs on the sub-centre list"
+      ],
+      "notAuthorised": [
+        "Manage eclampsia, obstructed labour or postpartum haemorrhage beyond first aid: stabilise and refer",
+        "Prescribe drugs outside the sub-centre essential medicines list",
+        "Perform MTP procedures: counsel and refer under the MTP (Amendment) Act 2021"
+      ],
+      "stateContext": [
+        "Follow {state}'s programme priorities and IEC languages",
+        "Use the state's name for the sub-centre cadre where it differs",
+        "Note endemic diseases relevant to {state} (vector-borne disease, TB burden) for NCVBDC and NTEP follow-up"
+      ],
+      "assumptions": [
+        "Sub-centre population of about 5,000 (3,000 in hilly and tribal areas)"
+      ],
+      "verify": [
+        "Current state notification of delivery points for ANMs",
+        "Whether IUCD insertion is part of the state's ANM job description"
+      ],
+      "sources": [
+        { "title": "IPHS 2022: Sub-Centre / Ayushman Arogya Mandir guidelines (JD annexure)", "issuer": "MoHFW", "year": "2022", "use": "Job description and services", "tier": "JD" },
+        { "title": "Skilled Birth Attendance guidelines", "issuer": "MoHFW", "year": "2010", "use": "Delivery and newborn care scope", "tier": "Programme guideline" },
+        { "title": "Immunisation Handbook for Health Workers", "issuer": "MoHFW", "year": "2018", "use": "UIP vaccines and cold chain", "tier": "Programme guideline" },
+        { "title": "LaQshya and NQAS standards", "issuer": "NHSRC", "year": "2017", "use": "Quality of care at delivery points", "tier": "Facility standard" }
+      ],
+      "sourceNotes": "Sample sources (mock data). Real research cites documents found by the research step.",
+      "roles": [
+        { "title": "Conduct antenatal care at the sub-centre and in outreach", "source": "IPHS 2022", "activities": [
+          "Register pregnant women within 12 weeks and issue the MCP card",
+          "Measure blood pressure, weight and haemoglobin at each antenatal visit",
+          "Test urine for protein and sugar",
+          "Identify high-risk pregnancies and refer to the PHC",
+          "Give Td doses and iron-folic acid tablets as per schedule",
+          "Counsel on birth preparedness and danger signs",
+          "Follow up women who miss antenatal visits"
+        ]},
+        { "title": "Conduct Village Health Sanitation and Nutrition Days (VHSND)", "source": "NHM guidelines", "activities": [
+          "Plan the VHSND session with the AWW and ASHA",
+          "Set up the session site with privacy and equipment",
+          "Provide antenatal, immunisation and growth monitoring services at the session",
+          "Conduct group counselling on nutrition and sanitation",
+          "Record services given in the VHSND register",
+          "Line-list beneficiaries who did not attend for follow-up",
+          "Report session outcomes to the PHC"
+        ]},
+        { "title": "Provide immunisation services", "source": "Immunisation Handbook", "activities": [
+          "Prepare the due list for each session from U-WIN",
+          "Maintain the cold chain during transport and the session",
+          "Administer vaccines with correct dose, route and site",
+          "Observe children for 30 minutes after vaccination",
+          "Report adverse events following immunisation",
+          "Dispose of sharps and vials as per biomedical waste rules",
+          "Update U-WIN records the same day"
+        ]},
+        { "title": "Support safe delivery and immediate newborn care", "source": "SBA guidelines", "activities": [
+          "Monitor labour using the WHO Labour Care Guide",
+          "Conduct a normal delivery with active management of the third stage",
+          "Resuscitate a newborn who does not breathe at birth",
+          "Initiate breastfeeding within one hour",
+          "Identify maternal and newborn complications and refer",
+          "Maintain the labour room register",
+          "Prepare the labour room as per LaQshya checklists"
+        ]},
+        { "title": "Provide postnatal and home-based newborn care", "source": "HBNC guidelines", "activities": [
+          "Examine the mother within 48 hours of delivery",
+          "Check the newborn for danger signs on scheduled home visits",
+          "Counsel on exclusive breastfeeding and thermal care",
+          "Identify low birth weight babies and plan extra visits",
+          "Refer sick newborns to the SNCU or NBSU",
+          "Support ASHAs during HBNC visits",
+          "Record postnatal visits on the RCH portal"
+        ]},
+        { "title": "Provide family planning counselling and services", "source": "Family planning guidelines", "activities": [
+          "Counsel couples on the full basket of contraceptive choices",
+          "Provide oral pills, condoms and emergency contraception",
+          "Insert and remove IUCD where trained",
+          "Screen clients for contraceptive eligibility",
+          "Follow up clients for side effects",
+          "Maintain the eligible couple register",
+          "Refer clients for sterilisation services"
+        ]},
+        { "title": "Screen and follow up non-communicable diseases", "source": "NP-NCD operational guidelines", "activities": [
+          "Screen adults over 30 for hypertension and diabetes",
+          "Conduct oral, breast and cervical cancer screening as per training",
+          "Refer screen-positive clients to the PHC medical officer",
+          "Dispense monthly medicines to confirmed patients as prescribed",
+          "Counsel on diet, physical activity and tobacco cessation",
+          "Track treatment adherence in the NCD register",
+          "Enter screening data in the NCD portal"
+        ]},
+        { "title": "Manage communicable disease surveillance and follow-up", "source": "IDSP and NTEP guidelines", "activities": [
+          "Report fever and diarrhoea cases on the S form",
+          "Collect blood slides or RDTs for suspected malaria",
+          "Identify presumptive TB cases and refer for testing",
+          "Support treatment adherence for TB patients under NTEP",
+          "Investigate clusters of cases with the PHC team",
+          "Conduct contact tracing for notifiable diseases",
+          "Educate families on prevention of vector-borne diseases"
+        ]},
+        { "title": "Promote child nutrition and growth monitoring", "source": "Poshan guidelines", "activities": [
+          "Weigh and measure children under five",
+          "Plot growth on the MCP card",
+          "Identify children with severe acute malnutrition and refer",
+          "Counsel mothers on complementary feeding",
+          "Distribute vitamin A and deworming tablets as per schedule",
+          "Coordinate with the AWW on supplementary nutrition",
+          "Follow up children discharged from NRC"
+        ]},
+        { "title": "Maintain records, registers and RCH portal entries", "source": "RCH portal guidelines", "activities": [
+          "Maintain the sub-centre registers as prescribed",
+          "Enter beneficiary data on the RCH portal",
+          "Prepare the monthly service delivery report",
+          "Reconcile data with ASHA records",
+          "Correct data errors flagged by the block",
+          "Maintain birth and death records",
+          "Present sub-centre data at monthly meetings"
+        ]},
+        { "title": "Manage drugs, vaccines and supplies", "source": "IPHS 2022", "activities": [
+          "Indent drugs and consumables every month",
+          "Maintain the stock register",
+          "Check expiry dates and remove expired stock",
+          "Store vaccines at correct temperatures",
+          "Report stock-outs to the PHC pharmacist",
+          "Maintain equipment in working order",
+          "Account for supplies used in outreach"
+        ]},
+        { "title": "Supervise and support ASHAs", "source": "ASHA guidelines", "activities": [
+          "Hold monthly review meetings with ASHAs",
+          "Accompany ASHAs on home visits",
+          "Verify ASHA incentive claims",
+          "Identify ASHA training needs and report them",
+          "Support ASHAs in difficult cases",
+          "Review ASHA records for completeness",
+          "Recognise good ASHA performance"
+        ]},
+        { "title": "Mobilise the community and coordinate with local bodies", "source": "NHM guidelines", "activities": [
+          "Attend Village Health Sanitation and Nutrition Committee meetings",
+          "Present local health data to the Panchayat",
+          "Plan health camps with the community",
+          "Conduct awareness sessions in schools",
+          "Engage community leaders to address vaccine hesitancy",
+          "Coordinate with the AWW on joint activities",
+          "Collect community feedback on services"
+        ]},
+        { "title": "Respond to emergencies and refer appropriately", "source": "Referral protocols", "activities": [
+          "Recognise danger signs in mothers, newborns and children",
+          "Give first aid and stabilise before referral",
+          "Arrange transport through the ambulance service",
+          "Fill the referral slip with key findings",
+          "Communicate with the receiving facility",
+          "Follow up referred patients after discharge",
+          "Report maternal and infant deaths for review"
+        ]}
+      ],
+      "competencies": [
+        { "label": "Antenatal assessment", "description": "Assesses pregnant women at each antenatal visit to protocol.", "type": "Domain", "area": "Maternal health", "kcm": "Domain – department-defined" },
+        { "label": "High-risk pregnancy identification", "description": "Identifies and refers high-risk pregnancies early.", "type": "Domain", "area": "Maternal health", "kcm": "Domain – department-defined" },
+        { "label": "Session planning", "description": "Plans outreach and VHSND sessions with partners.", "type": "Functional", "area": "Programme management", "kcm": "Planning and organising" },
+        { "label": "Health counselling", "description": "Counsels individuals and groups on health practices.", "type": "Functional", "area": "Communication", "kcm": "Effective communication" },
+        { "label": "Vaccine administration", "description": "Administers vaccines safely as per the UIP schedule.", "type": "Domain", "area": "Immunisation", "kcm": "Domain – department-defined" },
+        { "label": "Cold chain management", "description": "Maintains vaccine potency through the cold chain.", "type": "Domain", "area": "Immunisation", "kcm": "Domain – department-defined" },
+        { "label": "AEFI management", "description": "Recognises and reports adverse events following immunisation.", "type": "Domain", "area": "Immunisation", "kcm": "Domain – department-defined" },
+        { "label": "Labour monitoring", "description": "Monitors labour progress using the Labour Care Guide.", "type": "Domain", "area": "Maternal health", "kcm": "Domain – department-defined" },
+        { "label": "Normal delivery", "description": "Conducts a normal delivery with active management of the third stage.", "type": "Domain", "area": "Maternal health", "kcm": "Domain – department-defined" },
+        { "label": "Newborn resuscitation", "description": "Resuscitates a newborn who does not breathe at birth.", "type": "Domain", "area": "Newborn health", "kcm": "Domain – department-defined" },
+        { "label": "Postnatal care", "description": "Examines mothers after delivery and manages common problems.", "type": "Domain", "area": "Maternal health", "kcm": "Domain – department-defined" },
+        { "label": "Home-based newborn care", "description": "Checks newborns for danger signs during home visits.", "type": "Domain", "area": "Newborn health", "kcm": "Domain – department-defined" },
+        { "label": "Breastfeeding support", "description": "Supports mothers to start and sustain exclusive breastfeeding.", "type": "Domain", "area": "Newborn health", "kcm": "Domain – department-defined" },
+        { "label": "Contraceptive counselling", "description": "Counsels couples on contraceptive choices.", "type": "Domain", "area": "Family planning", "kcm": "Domain – department-defined" },
+        { "label": "IUCD services", "description": "Inserts and removes IUCD to standard.", "type": "Domain", "area": "Family planning", "kcm": "Domain – department-defined" },
+        { "label": "NCD screening", "description": "Screens adults for hypertension, diabetes and common cancers.", "type": "Domain", "area": "Non-communicable diseases", "kcm": "Domain – department-defined" },
+        { "label": "Treatment adherence support", "description": "Supports patients to continue long-term treatment.", "type": "Domain", "area": "Non-communicable diseases", "kcm": "Domain – department-defined" },
+        { "label": "Disease surveillance", "description": "Reports and investigates notifiable diseases.", "type": "Domain", "area": "Communicable diseases", "kcm": "Domain – department-defined" },
+        { "label": "TB case finding", "description": "Identifies presumptive TB cases and supports treatment.", "type": "Domain", "area": "Communicable diseases", "kcm": "Domain – department-defined" },
+        { "label": "Vector-borne disease control", "description": "Tests suspected malaria and educates on prevention.", "type": "Domain", "area": "Communicable diseases", "kcm": "Domain – department-defined" },
+        { "label": "Growth monitoring", "description": "Measures and plots child growth to detect faltering.", "type": "Domain", "area": "Child health", "kcm": "Domain – department-defined" },
+        { "label": "Malnutrition management", "description": "Identifies and refers children with severe acute malnutrition.", "type": "Domain", "area": "Child health", "kcm": "Domain – department-defined" },
+        { "label": "Health records management", "description": "Maintains accurate registers and reports.", "type": "Functional", "area": "Data literacy", "kcm": "Data-driven decision making" },
+        { "label": "Digital data entry", "description": "Enters and corrects data on RCH portal and U-WIN.", "type": "Functional", "area": "Digital", "kcm": "Digital literacy" },
+        { "label": "Supply chain management", "description": "Indents, stores and accounts for drugs and supplies.", "type": "Functional", "area": "Programme management", "kcm": "Resource management" },
+        { "label": "Equipment care", "description": "Keeps sub-centre equipment in working order.", "type": "Functional", "area": "Programme management", "kcm": "Resource management" },
+        { "label": "Supportive supervision", "description": "Supervises and mentors ASHAs on the job.", "type": "Functional", "area": "Team management", "kcm": "Mentoring and coaching" },
+        { "label": "Community mobilisation", "description": "Engages communities and local bodies for health action.", "type": "Functional", "area": "Community", "kcm": "Stakeholder engagement" },
+        { "label": "Emergency stabilisation", "description": "Stabilises patients with danger signs before referral.", "type": "Domain", "area": "Emergency care", "kcm": "Domain – department-defined" },
+        { "label": "Referral coordination", "description": "Arranges and follows up referrals between facilities.", "type": "Functional", "area": "Programme management", "kcm": "Coordination" },
+        { "label": "Biomedical waste handling", "description": "Segregates and disposes of biomedical waste as per rules.", "type": "Domain", "area": "Infection prevention", "kcm": "Domain – department-defined" },
+        { "label": "Empathy and respectful care", "description": "Treats every client with dignity, privacy and empathy.", "type": "Behavioural", "area": "Patient care", "kcm": "Empathy" },
+        { "label": "Teamwork", "description": "Works with ASHAs, AWWs and the PHC team towards shared goals.", "type": "Behavioural", "area": "Team", "kcm": "Teamwork" },
+        { "label": "Integrity and accountability", "description": "Records and reports truthfully and owns outcomes.", "type": "Behavioural", "area": "Ethics", "kcm": "Integrity" },
+        { "label": "Problem solving", "description": "Resolves service gaps using local resources.", "type": "Behavioural", "area": "Work", "kcm": "Problem solving" },
+        { "label": "Learning orientation", "description": "Seeks feedback and updates practice with new guidelines.", "type": "Behavioural", "area": "Self", "kcm": "Self-development" }
+      ]
+    },
+
+    "DEFAULT": {
+      "match": [],
+      "cadreFull": "{cadre}",
+      "codePrefix": "",
+      "postings": ["{cadre} at a primary health facility", "{cadre} in community outreach"],
+      "summary": "The {cadre} provides frontline health services within the public health system in {state}. The role combines facility-based care with community outreach under national health programmes. The {cadre} identifies health needs, delivers preventive and promotive services, and refers cases beyond their scope. They maintain records, manage supplies and work with community health volunteers. This summary is sample text; real research replaces it.",
+      "authorised": ["Deliver preventive and promotive services within the programme scope", "Screen and refer cases using programme tools", "Counsel individuals and families on health practices"],
+      "notAuthorised": ["Treat conditions beyond the facility's essential medicines list: refer", "Perform procedures not covered by training: refer"],
+      "stateContext": ["Follow {state}'s programme priorities", "Use the state's languages for counselling material"],
+      "assumptions": ["Works under the supervision of the facility medical officer"],
+      "verify": ["The current state job description for the {cadre}"],
+      "sources": [
+        { "title": "IPHS 2022 (JD annexures)", "issuer": "MoHFW", "year": "2022", "use": "Job description", "tier": "JD" },
+        { "title": "National programme operational guidelines", "issuer": "MoHFW", "year": "2023", "use": "Programme duties", "tier": "Programme guideline" }
+      ],
+      "sourceNotes": "Sample sources (mock data).",
+      "roles": [
+        { "title": "Deliver preventive and promotive health services", "source": "IPHS 2022", "activities": ["Conduct health education sessions", "Screen clients using programme checklists", "Counsel clients on healthy behaviours", "Distribute preventive supplies as per programme", "Follow up clients who miss services", "Record services delivered"] },
+        { "title": "Provide clinical care within scope", "source": "IPHS 2022", "activities": ["Assess clients presenting with common complaints", "Measure vital signs", "Treat minor ailments with listed drugs", "Identify danger signs", "Refer cases beyond scope", "Document care given"] },
+        { "title": "Support maternal and child health services", "source": "RMNCH+A guidelines", "activities": ["Register pregnant women", "Track immunisation status of children", "Counsel on breastfeeding", "Monitor child growth", "Refer high-risk mothers and children", "Update MCH registers"] },
+        { "title": "Conduct community outreach", "source": "NHM guidelines", "activities": ["Plan outreach visits", "Conduct household visits", "Organise community health camps", "Engage community leaders", "Collect community feedback", "Report outreach outcomes"] },
+        { "title": "Manage disease surveillance", "source": "IDSP guidelines", "activities": ["Report suspected notifiable diseases", "Collect samples as per protocol", "Support case investigation", "Trace contacts", "Educate families on prevention", "Record surveillance data"] },
+        { "title": "Maintain records and reports", "source": "Programme guidelines", "activities": ["Maintain facility registers", "Enter data on programme portals", "Prepare monthly reports", "Reconcile data with partners", "Correct flagged data errors", "Present data at review meetings"] },
+        { "title": "Manage drugs and supplies", "source": "IPHS 2022", "activities": ["Indent drugs and consumables", "Maintain stock registers", "Remove expired stock", "Report stock-outs", "Store supplies correctly", "Account for supplies used"] },
+        { "title": "Coordinate with the health team", "source": "Programme guidelines", "activities": ["Attend team review meetings", "Share caseload information", "Support colleagues in difficult cases", "Escalate service gaps", "Take part in joint planning", "Follow supervisor guidance"] },
+        { "title": "Prevent and control infection", "source": "Kayakalp guidelines", "activities": ["Practise hand hygiene", "Use personal protective equipment correctly", "Segregate biomedical waste", "Clean and disinfect equipment", "Report needle-stick injuries", "Maintain infection control records"] },
+        { "title": "Respond to emergencies", "source": "Referral protocols", "activities": ["Recognise emergencies", "Give first aid", "Arrange referral transport", "Fill referral slips", "Communicate with receiving facilities", "Follow up referred patients"] },
+        { "title": "Support health volunteers", "source": "Programme guidelines", "activities": ["Hold meetings with volunteers", "Accompany volunteers on visits", "Review volunteer records", "Identify volunteer training needs", "Support volunteers in difficult cases", "Recognise good performance"] },
+        { "title": "Improve service quality", "source": "NQAS", "activities": ["Use quality checklists", "Collect client feedback", "Identify service gaps", "Take part in quality improvement projects", "Audit own practice", "Share good practices"] }
+      ],
+      "competencies": [
+        { "label": "Health promotion", "description": "Promotes healthy behaviours in individuals and communities.", "type": "Domain", "area": "Public health", "kcm": "Domain – department-defined" },
+        { "label": "Clinical assessment", "description": "Assesses clients and identifies danger signs.", "type": "Domain", "area": "Clinical care", "kcm": "Domain – department-defined" },
+        { "label": "Primary care treatment", "description": "Treats minor ailments within the facility's scope.", "type": "Domain", "area": "Clinical care", "kcm": "Domain – department-defined" },
+        { "label": "Maternal and child health care", "description": "Delivers maternal and child health services to protocol.", "type": "Domain", "area": "RMNCH+A", "kcm": "Domain – department-defined" },
+        { "label": "Disease surveillance", "description": "Reports and follows up notifiable diseases.", "type": "Domain", "area": "Public health", "kcm": "Domain – department-defined" },
+        { "label": "Infection prevention and control", "description": "Applies infection prevention practices in all care.", "type": "Domain", "area": "Patient safety", "kcm": "Domain – department-defined" },
+        { "label": "Emergency response", "description": "Stabilises and refers emergencies.", "type": "Domain", "area": "Emergency care", "kcm": "Domain – department-defined" },
+        { "label": "Health counselling", "description": "Counsels clients and families on health choices.", "type": "Functional", "area": "Communication", "kcm": "Effective communication" },
+        { "label": "Records management", "description": "Keeps accurate registers and reports.", "type": "Functional", "area": "Data literacy", "kcm": "Data-driven decision making" },
+        { "label": "Digital reporting", "description": "Enters and corrects data on programme portals.", "type": "Functional", "area": "Digital", "kcm": "Digital literacy" },
+        { "label": "Supply management", "description": "Manages drugs and supplies without stock-outs.", "type": "Functional", "area": "Programme management", "kcm": "Resource management" },
+        { "label": "Outreach planning", "description": "Plans and organises community outreach.", "type": "Functional", "area": "Programme management", "kcm": "Planning and organising" },
+        { "label": "Volunteer supervision", "description": "Supervises and mentors health volunteers.", "type": "Functional", "area": "Team management", "kcm": "Mentoring and coaching" },
+        { "label": "Quality improvement", "description": "Uses data and checklists to improve services.", "type": "Functional", "area": "Quality", "kcm": "Continuous improvement" },
+        { "label": "Empathy", "description": "Treats every client with dignity and empathy.", "type": "Behavioural", "area": "Patient care", "kcm": "Empathy" },
+        { "label": "Teamwork", "description": "Works with colleagues towards shared goals.", "type": "Behavioural", "area": "Team", "kcm": "Teamwork" },
+        { "label": "Integrity", "description": "Records and reports truthfully.", "type": "Behavioural", "area": "Ethics", "kcm": "Integrity" },
+        { "label": "Learning orientation", "description": "Updates practice with new guidelines.", "type": "Behavioural", "area": "Self", "kcm": "Self-development" }
+      ]
+    },
+
+    "GNM": { "match": ["GNM", "GENERAL NURSING"], "base": "DEFAULT", "cadreFull": "General Nursing and Midwifery (GNM) nurse", "codePrefix": "GNM", "postings": ["GNM at a PHC / CHC ward", "GNM in the labour room"] },
+    "ASHA": { "match": ["ASHA"], "base": "DEFAULT", "cadreFull": "Accredited Social Health Activist (ASHA)", "codePrefix": "ASHA", "postings": ["ASHA in her village"] },
+    "STAFF_NURSE": { "match": ["STAFF NURSE"], "base": "DEFAULT", "cadreFull": "Staff Nurse", "codePrefix": "SN", "postings": ["Staff Nurse in a district hospital ward", "Staff Nurse in an emergency department"] }
+  }
+}

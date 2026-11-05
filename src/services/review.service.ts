@@ -1,15 +1,17 @@
 import { randomUUID } from "node:crypto";
 import type { AgentReviewer } from "./ai-review.service.ts";
-import { computeChecks, type OutdatedPattern } from "./review-engine/checks.ts";
+import { computeChecks } from "./review-engine/checks.ts";
 import { modelToFrac } from "./review-engine/convert.ts";
+import { ENGINE_VERSION, reviewFingerprint } from "./review-engine/fingerprint.ts";
 import { parseWorkbook } from "./review-engine/parse-workbook.ts";
 import { buildReport } from "./review-engine/report.ts";
+import type { ReviewRules } from "./review-engine/rules.ts";
 import type { Frac } from "../models/frac.model.ts";
 import type { Report } from "../models/report.model.ts";
 import type { ReviewContext, ReviewKind, ReviewModel, ReviewRecord } from "../models/review.model.ts";
 import { readWorkbook } from "./excel/workbook-reader.ts";
 import { buildReviewWorkbook, reviewWorkbookFilename } from "./excel/workbook-writer.ts";
-import type { JobRunner } from "./queue/job-runner.ts";
+import type { JobRunner, RecordUsage } from "./queue/job-runner.ts";
 import { JOB_MESSAGES } from "./queue/job-messages.ts";
 import { badRequest, conflict, notFound } from "../utils/response.ts";
 import type { Repositories } from "../repositories/index.ts";
@@ -18,6 +20,17 @@ import { describeError, logger } from "../utils/logger.ts";
 export interface UploadedWorkbook {
   name: string;
   buffer: Buffer;
+}
+
+export interface StartedReview {
+  reviewId: string;
+  /** null when a stored review of the same file and context was returned (fromCache). */
+  jobId: string | null;
+  warnings: string[];
+  /** Rules r3 §9: this file and context were reviewed before; the stored review is returned as is. */
+  fromCache: boolean;
+  /** When the stored review was made (fromCache only). */
+  reviewedAt?: string;
 }
 
 export interface ReviewSummary {
@@ -46,21 +59,49 @@ export class ReviewService {
     private readonly repos: Repositories,
     private readonly runner: JobRunner,
     private readonly agent: AgentReviewer,
-    private readonly outdated: () => OutdatedPattern[],
+    /** Re-read per review so clinical reviewers' edits to the rule tables apply without a restart. */
+    private readonly rules: () => ReviewRules,
   ) {}
 
-  /** Computed checks, then the agent, merged into one report (spec 6.3 + 6.4). */
-  async review(model: ReviewModel, ctx: ReviewContext): Promise<Report> {
-    const { findings, stats } = computeChecks(model, this.outdated());
-    const agent = await this.agent.review({ model, computed: findings, stats, ...ctx });
-    return buildReport({ title: model.title, cadre: ctx.cadre, state: ctx.state }, stats, findings, agent);
+  /** Rule-based checks, then the AI checklist, merged into one computed report (rules r3 §4–7). */
+  async review(model: ReviewModel, ctx: ReviewContext, recordUsage?: RecordUsage): Promise<Report> {
+    const rules = this.rules();
+    const checks = computeChecks(model, rules, { cadre: ctx.cadre });
+    const agent = await this.agent.review({ model, cadre: checks.cadre, state: ctx.state, checks, rules, recordUsage });
+    return buildReport({
+      title: model.title,
+      cadre: checks.cadre,
+      state: ctx.state,
+      stats: checks.stats,
+      computed: checks.findings,
+      agent,
+      coveredAreas: checks.coveredAreas,
+      laddered: checks.laddered,
+      incompleteLadders: checks.incompleteLadders,
+      engine: ENGINE_VERSION,
+      fingerprint: reviewFingerprint(model, ctx, rules),
+    });
+  }
+
+  /** Runs the review of a stored upload as a job and replaces its report when done. */
+  private async runReviewJob(ownerId: string, review: ReviewRecord, model: ReviewModel): Promise<string> {
+    const job = await this.runner.start(
+      { ownerId, kind: "review", targetId: review.id, msg: JOB_MESSAGES.review },
+      async (_progress, recordUsage) => {
+        review.report = await this.review(model, review.ctx, recordUsage);
+        review.fingerprint = review.report.fingerprint ?? null;
+        await this.repos.reviews.update(review);
+      },
+    );
+    return job.id;
   }
 
   /**
-   * Parses the upload before answering so a bad file fails fast with 400, then runs the review
-   * as a job. The parsed model is stored with the review so it can reopen in the Creator.
+   * Parses the upload before answering so a bad file fails fast with 400. If the same file and context
+   * were reviewed before (same fingerprint, rules r3 §9) the stored review is returned unless `fresh`;
+   * otherwise the review runs as a job. The parsed model is stored so it can reopen in the Creator.
    */
-  async startUploadReview(ownerId: string, file: UploadedWorkbook, ctx: ReviewContext) {
+  async startUploadReview(ownerId: string, file: UploadedWorkbook, ctx: ReviewContext, fresh = false): Promise<StartedReview> {
     let sheets;
     try {
       sheets = await readWorkbook(file.buffer);
@@ -71,6 +112,12 @@ export class ReviewService {
     }
     const { model, warnings } = parseWorkbook(sheets, titleFromFilename(file.name));
 
+    const fingerprint = reviewFingerprint(model, ctx, this.rules());
+    const stored = fresh ? null : await this.repos.reviews.findByFingerprint(ownerId, fingerprint);
+    if (stored?.report) {
+      return { reviewId: stored.id, jobId: null, warnings, fromCache: true, reviewedAt: stored.report.at };
+    }
+
     const review: ReviewRecord = {
       id: randomUUID(),
       ownerId,
@@ -80,18 +127,19 @@ export class ReviewService {
       ctx,
       sourceModel: model,
       report: null,
+      fingerprint: null,
       createdAt: new Date().toISOString(),
     };
     await this.repos.reviews.insert(review);
+    return { reviewId: review.id, jobId: await this.runReviewJob(ownerId, review, model), warnings, fromCache: false };
+  }
 
-    const job = await this.runner.start(
-      { ownerId, kind: "review", targetId: review.id, msg: JOB_MESSAGES.review },
-      async () => {
-        review.report = await this.review(model, ctx);
-        await this.repos.reviews.update(review);
-      },
-    );
-    return { reviewId: review.id, jobId: job.id, warnings };
+  /** "Run a fresh review" (rules r3 §9): asks the model again and replaces the stored report. */
+  async rerun(ownerId: string, id: string): Promise<StartedReview> {
+    const review = await this.get(ownerId, id);
+    if (!review.sourceModel) throw badRequest("NO_SOURCE_WORKBOOK", "This review has no stored workbook to review again");
+    if (review.kind !== "upload") throw badRequest("NOT_AN_UPLOAD", "Run the expert check again from the FRAC instead");
+    return { reviewId: review.id, jobId: await this.runReviewJob(ownerId, review, review.sourceModel), warnings: [], fromCache: false };
   }
 
   /** Records a Creator expert check as a review too (spec gap 10); My FRACs can filter by kind. */
@@ -105,6 +153,7 @@ export class ReviewService {
       ctx: { cadre: frac.cadre, state: frac.state },
       sourceModel: model,
       report,
+      fingerprint: report.fingerprint ?? null,
       createdAt: report.at,
     });
   }

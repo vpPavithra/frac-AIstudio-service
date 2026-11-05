@@ -23,6 +23,7 @@
     "check": "npm run typecheck && npm run lint && npm run config:check && npm test"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "0.135.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "exceljs": "^4.4.0",

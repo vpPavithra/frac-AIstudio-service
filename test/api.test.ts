@@ -3,13 +3,14 @@ import ExcelJS from "exceljs";
 import request from "supertest";
 import { ComputedOnlyReviewer } from "../src/services/ai-review.service.ts";
 import { createApp } from "../src/app.ts";
-import { loadOutdatedPatterns } from "../src/config/outdated.ts";
+import { loadReviewRules } from "../src/config/review-rules.ts";
 import type { SheetData } from "../src/services/review-engine/parse-workbook.ts";
 import { NO_COMPETENCY_SHEET } from "../src/services/review-engine/parse-workbook.ts";
 import { JobRunner } from "../src/services/queue/job-runner.ts";
 import { memoryRepositories } from "../src/repositories/index.ts";
 import { FracService } from "../src/services/frac.service.ts";
 import { ReviewService } from "../src/services/review.service.ts";
+import { stubProvider } from "./support/stub-provider.ts";
 import { gnmSample } from "./support/sample-workbooks.ts";
 import { goodLevels } from "./support/test-data.ts";
 
@@ -19,9 +20,10 @@ const OTHER = { "x-aastrika-creator": "user-2" };
 function setup() {
   const repos = memoryRepositories();
   const runner = new JobRunner(repos.jobs);
-  const reviews = new ReviewService(repos, runner, new ComputedOnlyReviewer(), () => loadOutdatedPatterns());
-  const fracs = new FracService(repos, runner, reviews, () => "Method text");
-  return { app: createApp({ fracs, reviews, jobs: repos.jobs }), runner };
+  const reviews = new ReviewService(repos, runner, new ComputedOnlyReviewer(), () => loadReviewRules());
+  const provider = stubProvider();
+  const fracs = new FracService(repos, runner, reviews, () => "Method text", provider);
+  return { app: createApp({ fracs, reviews, jobs: repos.jobs, provider }), runner };
 }
 
 async function xlsx(sheets: SheetData[]): Promise<Buffer> {
@@ -189,11 +191,20 @@ describe("creator", () => {
     expect(frac.body.frac.codePrefix).toBe("ANMX");
   });
 
-  it("answers 501 for generation steps not built yet and 404 for unknown steps", async () => {
+  it("runs generation steps in order: 404 for unknown steps, 409 when a step is not ready, 400 for a bad body", async () => {
     const { app } = setup();
-    const id = await createWithCompetencies(app);
-    await request(app).post(`/v1/fracs/${id}/steps/research`).set(OWNER).expect(501);
+    const created = await request(app).post("/v1/fracs").set(OWNER).send({ cadre: "ANM" });
+    const id = created.body.id as string;
     await request(app).post(`/v1/fracs/${id}/steps/publish`).set(OWNER).expect(404);
+    const early = await request(app).post(`/v1/fracs/${id}/steps/roles`).set(OWNER).send({}).expect(409);
+    expect(early.body.error).toEqual({ code: "STEP_NOT_READY", message: "Run job research before building roles" });
+    const ladders = await request(app).post(`/v1/fracs/${id}/steps/ladders`).set(OWNER).send({}).expect(409);
+    expect(ladders.body.error.code).toBe("STEP_NOT_READY");
+    const bad = await request(app).post(`/v1/fracs/${id}/steps/research`).set(OWNER).send({ codes: "C1" }).expect(400);
+    expect(bad.body.error.code).toBe("VALIDATION_FAILED");
+    await request(app).post(`/v1/fracs/${id}/steps/research`).set(OTHER).send({}).expect(404);
+    const info = await request(app).get("/v1/info").set(OWNER).expect(200);
+    expect(info.body).toEqual({ aiProvider: "stub" });
   });
 
   it("runs the expert check, snapshots it, records it as a review and can roll back", async () => {

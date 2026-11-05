@@ -30,6 +30,7 @@ export function model(over: Partial<ReviewModel> = {}): ReviewModel {
   return {
     title: "Test",
     hasFrac: true,
+    hasMapping: true,
     postings: ["P1"],
     postingLabels: ["ANM at Sub-Centre"],
     roles: [

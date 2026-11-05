@@ -11,17 +11,22 @@ export interface SheetData {
 export class WorkbookParseError extends Error {}
 
 export const NO_COMPETENCY_SHEET =
-  'Could not find a competency sheet. It needs a header row with "Competency Code" and "Level 1" columns.';
+  'Could not find a competency sheet. It needs a header row with "Competency Code" and "Level 1" (or "Applicable Level" / "Theme 1") columns.';
 export const NO_FRAC_SHEET_WARNING = "No FRAC sheet found: structure and coverage checks will be limited.";
 
 const HEADER_SCAN_ROWS = 12;
 const HINDI_SHEET = /\(H\)|hindi/i;
 const COMP_CODE = /competenc.*code|^code$/;
-const LEVEL_1 = /level\s*1/;
+// Rules r3 §2: a competency sheet is either laddered (Level 1…) or KCM format (Applicable Level, Theme n)
+const COMP_SHEET = /level\s*1|applicable level|theme\s*1/;
 const ROLE = /^role/;
 const ACTIVITY = /^activit/;
+// The Meghalaya layout: one "Roles/Activities" column of R1/A1 codes plus a "Description" column
+const ROLE_ACTIVITY = /role.*activit/;
+const DESCRIPTION = /^desc/;
 const MAPPING = /compe?t|mapping/;
-const NOT_POSTING = /source|tier|applicab|note/;
+const NOT_POSTING = /source|tier|applicab|note|desc/;
+const POSITION = /^position\s*:\s*(.+)$/i;
 
 interface HeaderHit {
   sheet: SheetData;
@@ -29,15 +34,43 @@ interface HeaderHit {
   headers: string[];
 }
 
-function findHeader(sheets: SheetData[], ...required: RegExp[]): HeaderHit | null {
-  for (const sheet of sheets) {
-    const limit = Math.min(sheet.rows.length, HEADER_SCAN_ROWS);
-    for (let r = 0; r < limit; r++) {
-      const headers = sheet.rows[r].map((c) => (c ?? "").trim().toLowerCase());
-      if (required.every((re) => headers.some((h) => re.test(h)))) return { sheet, headerRow: r, headers };
-    }
+/** The header row of `sheet` (first 12 rows) that has a column matching each of `required`. */
+function headerIn(sheet: SheetData, ...required: RegExp[]): HeaderHit | null {
+  const limit = Math.min(sheet.rows.length, HEADER_SCAN_ROWS);
+  for (let r = 0; r < limit; r++) {
+    const headers = sheet.rows[r].map((c) => (c ?? "").trim().toLowerCase());
+    if (required.every((re) => headers.some((h) => re.test(h)))) return { sheet, headerRow: r, headers };
   }
   return null;
+}
+
+function findHeader(sheets: SheetData[], ...required: RegExp[]): HeaderHit | null {
+  for (const sheet of sheets) {
+    const hit = headerIn(sheet, ...required);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+/** Rules r3 §2: "Position: ANM" in the first 12 rows of any sheet. */
+function findPosition(sheets: SheetData[]): string | undefined {
+  for (const sheet of sheets) {
+    for (const row of sheet.rows.slice(0, HEADER_SCAN_ROWS)) {
+      for (const value of row) {
+        const m = POSITION.exec((value ?? "").trim());
+        if (m) return m[1].trim();
+      }
+    }
+  }
+  return undefined;
+}
+
+/** A blank type cell takes the type from the sheet name (rules r3 §2). */
+function typeFromSheet(name: string): string {
+  if (/behaviou?r/i.test(name)) return "Behavioural";
+  if (/function/i.test(name)) return "Functional";
+  if (/domain/i.test(name)) return "Domain";
+  return "";
 }
 
 /** First column whose header matches `re` and none of `exclude`. */
@@ -70,29 +103,46 @@ function parseCompetencies(hit: HeaderHit): ModelCompetency[] {
     };
   });
 
+  // KCM format: Applicable Level + Theme n columns and no Level n label (rules r3 §2)
+  const applicable = col(h, /applicable level/);
+  const themeCols = h.map((header, i) => (/theme\s*\d/.test(header) ? i : -1)).filter((i) => i >= 0);
+  const kcmFormat = applicable >= 0 && themeCols.length > 0 && levelCols.every((lc) => lc.label < 0);
+  const sheetType = typeFromSheet(hit.sheet.name);
+
   const out: ModelCompetency[] = [];
   for (const row of hit.sheet.rows.slice(hit.headerRow + 1)) {
     const code = cell(row, idx.code);
     if (!code) continue;
-    const levels: Level[] = levelCols.map((lc) => ({ label: cell(row, lc.label), desc: cell(row, lc.desc) }));
-    out.push({
+    const base = {
       code: normalizeCode(code),
       label: cell(row, idx.label),
       description: cell(row, idx.desc),
-      type: cell(row, idx.type),
+      type: cell(row, idx.type) || sheetType,
       area: cell(row, idx.area),
       kcm: cell(row, idx.kcm) || undefined,
-      levels,
-    });
+    };
+    if (kcmFormat) {
+      out.push({
+        ...base,
+        format: "kcm",
+        themes: themeCols.map((i) => cell(row, i)).filter(Boolean),
+        applicableLevel: cell(row, applicable),
+        levels: [],
+      });
+    } else {
+      out.push({ ...base, levels: levelCols.map((lc): Level => ({ label: cell(row, lc.label), desc: cell(row, lc.desc) })) });
+    }
   }
   return out;
 }
 
-function parseFrac(hit: HeaderHit, prefix: string): Pick<ReviewModel, "postings" | "postingLabels" | "roles"> {
+function parseFrac(hit: HeaderHit, prefix: string): Pick<ReviewModel, "postings" | "postingLabels" | "roles" | "hasMapping"> {
   const h = hit.headers;
+  // Either Role + Activity columns, or one Roles/Activities code column with the text under Description
   const roleCol = col(h, ROLE);
-  const actCol = col(h, ACTIVITY);
-  const mapCol = col(h, MAPPING);
+  const activityCol = col(h, ACTIVITY);
+  const actCol = activityCol >= 0 ? activityCol : col(h, DESCRIPTION);
+  const mapCol = col(h, MAPPING, ROLE_ACTIVITY);
   const postingCols: number[] = [];
   h.forEach((header, i) => {
     if (header && i !== roleCol && i !== actCol && i !== mapCol && !NOT_POSTING.test(header)) postingCols.push(i);
@@ -130,7 +180,7 @@ function parseFrac(hit: HeaderHit, prefix: string): Pick<ReviewModel, "postings"
     };
     current.activities.push(activity);
   }
-  return { postings, postingLabels, roles };
+  return { postings, postingLabels, roles, hasMapping: mapCol >= 0 };
 }
 
 export interface ParsedWorkbook {
@@ -141,20 +191,20 @@ export interface ParsedWorkbook {
 /** Spec 6.1. Throws WorkbookParseError when no competency sheet can be found. */
 export function parseWorkbook(sheets: SheetData[], title: string): ParsedWorkbook {
   const usable = sheets.filter((s) => !HINDI_SHEET.test(s.name));
-  const compHit = findHeader(usable, COMP_CODE, LEVEL_1);
-  if (!compHit) throw new WorkbookParseError(NO_COMPETENCY_SHEET);
+  // Every competency sheet, not just the first: files often split Domain, Functional and Behavioural
+  const compHits = usable.map((s) => headerIn(s, COMP_CODE, COMP_SHEET)).filter((x): x is HeaderHit => x !== null);
+  if (!compHits.length) throw new WorkbookParseError(NO_COMPETENCY_SHEET);
 
-  const competencies = parseCompetencies(compHit);
+  const competencies = compHits.flatMap(parseCompetencies);
   const prefix = dominantPrefix(competencies.map((c) => c.code));
-  const fracHit = findHeader(
-    usable.filter((s) => s !== compHit.sheet),
-    ROLE,
-    ACTIVITY,
-  );
+  const others = usable.filter((s) => !compHits.some((c) => c.sheet === s));
+  const fracHit = findHeader(others, ROLE, ACTIVITY) ?? findHeader(others, ROLE_ACTIVITY, DESCRIPTION);
 
   const model: ReviewModel = {
     title,
+    position: findPosition(usable),
     hasFrac: !!fracHit,
+    hasMapping: false,
     postings: [],
     postingLabels: [],
     roles: [],

@@ -43,11 +43,19 @@ function uniqueRoleCompetencyCodes(frac: Frac, activities: Frac["roles"][number]
   return [...new Set(refs.map((ref) => ref.code))].join(", ");
 }
 
+/** Rules r3 §8: how the review was made, with the engine version and the file fingerprint. */
+export function methodText(report: Report): string {
+  const engine = report.engine ? `Review engine ${report.engine}` : "Review engine r1";
+  const fingerprint = report.fingerprint ? ` · file fingerprint ${report.fingerprint.slice(0, 12)}` : "";
+  return `Rule-based checks give the same result on every run. AI judgement covers only a fixed checklist (scope, clinical accuracy, state fit), and each AI finding quotes the file. ${engine}${fingerprint}.`;
+}
+
 function reportRows(report: Report): ExcelJS.CellValue[][] {
   return [
     ["Verdict", report.verdict],
     ["Triage", TRIAGE_LABELS[report.triage]],
     ["Summary", report.summary],
+    ["Method", methodText(report)],
     [],
     REPORT_HEADERS,
     ...report.findings.map((finding) => findingRow(finding)),
@@ -63,7 +71,8 @@ function findingRow(finding: Finding): ExcelJS.CellValue[] {
     finding.detail,
     finding.refs.join(", "),
     finding.fix,
-    finding.source === "computed" ? "Computed check" : "Kaushal & Vidya",
+    // Files go to experts: never internal agent names (rules r3 §8)
+    finding.source === "computed" ? "Rule-based check" : "AI judgement (quoted)",
   ];
 }
 

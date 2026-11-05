@@ -1,7 +1,7 @@
 // Spec 6.6 regression. Needs the real dictionaries in test/fixtures (ask Sarvesh; not committed).
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { loadOutdatedPatterns } from "../src/config/outdated.ts";
+import { loadReviewRules } from "../src/config/review-rules.ts";
 import { computeChecks } from "../src/services/review-engine/checks.ts";
 import { parseWorkbook } from "../src/services/review-engine/parse-workbook.ts";
 import type { Finding } from "../src/models/report.model.ts";
@@ -18,7 +18,7 @@ const itWith = (file: string) => (has(file) ? it : it.skip);
 async function review(file: string) {
   const sheets = await readWorkbook(readFileSync(path.join(FIXTURES, file)));
   const { model } = parseWorkbook(sheets, file);
-  return { model, ...computeChecks(model, loadOutdatedPatterns()) };
+  return { model, ...computeChecks(model, loadReviewRules()) };
 }
 
 const find = (findings: Finding[], title: string) => findings.find((f) => f.title.startsWith(title));
@@ -40,7 +40,7 @@ describe("acceptance fixtures (spec 6.6)", () => {
     const l1 = /L1 (\d+)\/(\d+)/.exec(find(findings, "Level labels")?.detail ?? "");
     expect(Number(l1?.[1])).toBeGreaterThanOrEqual(50);
     // "~92/136" activities start with "Describes"
-    const syl = /^(\d+)\/(\d+)/.exec(find(findings, "Activities read like syllabus")?.detail ?? "");
+    const syl = /^(\d+)\/(\d+)/.exec(find(findings, "Activities read as syllabus")?.detail ?? "");
     expect(Number(syl?.[1])).toBeGreaterThanOrEqual(85);
   });
 

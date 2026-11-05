@@ -1,15 +1,146 @@
 {
-  "_comment": "Outdated laws/programme names (spec 6.3). Clinical reviewers extend this list; no code change needed. 'unlessNear' suppresses a hit when that pattern appears within 80 characters.",
+  "_comment": "Outdated laws/programme names (spec 6.3, rules r3 §4.5). Clinical reviewers extend this list; no code change needed. 'unlessNear' suppresses a hit when that pattern appears within 80 characters; 'onlyIfAbsent' raises it only when that pattern appears nowhere in the file; 'frontlineOnly' limits it to ASHA, ANM, CHO and nurse cadres; 'fix' overrides the default 'Replace with …'.",
   "patterns": [
-    { "id": "lunacy", "pattern": "\\blunacy\\b|\\blunatics?\\b", "flags": "i", "sev": "B", "found": "Lunacy Act / lunatic", "correct": "Mental Healthcare Act 2017" },
-    { "id": "mha1987", "pattern": "mental\\s+health\\s+act,?\\s*(of\\s+)?1987", "flags": "i", "sev": "B", "found": "Mental Health Act 1987", "correct": "Mental Healthcare Act 2017 (MHCA 2017)" },
-    { "id": "ndps1965", "pattern": "\\bNDPS\\b[^.\\n]{0,40}1965", "flags": "i", "sev": "B", "found": "NDPS … 1965", "correct": "NDPS Act 1985" },
-    { "id": "tt", "pattern": "\\bTT\\b|[Tt]etanus\\s+[Tt]oxoid", "flags": "", "sev": "M", "found": "TT / tetanus toxoid", "correct": "Td (2018)" },
-    { "id": "rntcp", "pattern": "\\bRNTCP\\b", "flags": "i", "sev": "m", "found": "RNTCP", "correct": "NTEP (2020)" },
-    { "id": "npcdcs", "pattern": "\\bNPCDCS\\b", "flags": "i", "sev": "m", "found": "NPCDCS", "correct": "NP-NCD (2023)" },
-    { "id": "hwc", "pattern": "\\bHWCs?\\b|health\\s*(&|and)\\s*wellness\\s*cent(re|er)", "flags": "i", "sev": "m", "found": "HWC / Health & Wellness Centre", "correct": "Ayushman Arogya Mandir (2023)" },
-    { "id": "nvbdcp", "pattern": "\\bNVBDCP\\b", "flags": "i", "sev": "m", "found": "NVBDCP", "correct": "NCVBDC" },
-    { "id": "mcts", "pattern": "\\bMCTS\\b", "flags": "i", "sev": "m", "found": "MCTS", "correct": "RCH portal / U-WIN" },
-    { "id": "mtp1971", "pattern": "(\\bMTP\\b|medical\\s+termination\\s+of\\s+pregnancy)\\s*act[^.\\n]{0,20}1971", "flags": "i", "unlessNear": "2021", "sev": "m", "found": "MTP Act 1971", "correct": "MTP (Amendment) Act 2021" }
+    {
+      "id": "lunacy",
+      "pattern": "\\blunacy\\b|\\blunatics?\\b",
+      "flags": "i",
+      "sev": "B",
+      "found": "Lunacy Act / lunatic",
+      "correct": "Mental Healthcare Act 2017"
+    },
+    {
+      "id": "mha1987",
+      "pattern": "mental\\s+health\\s+act,?\\s*(of\\s+)?1987",
+      "flags": "i",
+      "sev": "B",
+      "found": "Mental Health Act 1987",
+      "correct": "Mental Healthcare Act 2017 (MHCA 2017)"
+    },
+    {
+      "id": "ndps1965",
+      "pattern": "(\\bNDPS\\b|narco\\w*\\s+drugs?\\s+and\\s+psychotropic)[^.\\n]{0,40}1965|1965[^.\\n]{0,12}\\bNDPS\\b",
+      "flags": "i",
+      "sev": "B",
+      "found": "NDPS … 1965",
+      "correct": "NDPS Act 1985"
+    },
+    {
+      "id": "tt",
+      "pattern": "\\bTT\\b|[Tt]etanus\\s+[Tt]oxoid",
+      "flags": "",
+      "sev": "M",
+      "found": "TT / tetanus toxoid",
+      "correct": "Td (2018)"
+    },
+    {
+      "id": "rntcp",
+      "pattern": "\\bRNTCP\\b",
+      "flags": "i",
+      "sev": "m",
+      "found": "RNTCP",
+      "correct": "NTEP (2020)"
+    },
+    {
+      "id": "npcdcs",
+      "pattern": "\\bNPCDCS\\b",
+      "flags": "i",
+      "sev": "m",
+      "found": "NPCDCS",
+      "correct": "NP-NCD (2023)"
+    },
+    {
+      "id": "hwc",
+      "pattern": "\\bHWCs?\\b|health\\s*(&|and)\\s*wellness\\s*cent(re|er)",
+      "flags": "i",
+      "sev": "m",
+      "found": "HWC / Health & Wellness Centre",
+      "correct": "Ayushman Arogya Mandir (2023)"
+    },
+    {
+      "id": "nvbdcp",
+      "pattern": "\\bNVBDCP\\b",
+      "flags": "i",
+      "sev": "m",
+      "found": "NVBDCP",
+      "correct": "NCVBDC"
+    },
+    {
+      "id": "mcts",
+      "pattern": "\\bMCTS\\b",
+      "flags": "i",
+      "sev": "m",
+      "found": "MCTS",
+      "correct": "RCH portal / U-WIN"
+    },
+    {
+      "id": "mtp1971",
+      "pattern": "(\\bMTP\\b|medical\\s+termination\\s+of\\s+pregnancy)\\s*act[^.\\n]{0,20}1971",
+      "flags": "i",
+      "unlessNear": "2021",
+      "sev": "m",
+      "found": "MTP Act 1971",
+      "correct": "MTP (Amendment) Act 2021"
+    },
+    {
+      "id": "nrt",
+      "pattern": "\\bNRT\\b",
+      "flags": "",
+      "sev": "m",
+      "found": "NRT",
+      "correct": "NSSK and Helping Babies Breathe"
+    },
+    {
+      "id": "rmncha",
+      "pattern": "\\bRMNCH\\s*\\+\\s*A\\b",
+      "flags": "i",
+      "sev": "m",
+      "found": "RMNCH+A",
+      "correct": "RMNCAH+N"
+    },
+    {
+      "id": "nrhm",
+      "pattern": "\\bNRHM\\b",
+      "flags": "",
+      "sev": "m",
+      "found": "NRHM",
+      "correct": "NHM"
+    },
+    {
+      "id": "vhnd",
+      "pattern": "\\bVHNDs?\\b|village health (and|&) nutrition days?",
+      "flags": "i",
+      "sev": "m",
+      "found": "VHND / Village Health and Nutrition Day",
+      "correct": "VHSND"
+    },
+    {
+      "id": "fiverights",
+      "pattern": "\\b(five|5) rights\\b",
+      "flags": "i",
+      "sev": "m",
+      "found": "Five Rights of medication",
+      "correct": "the current, expanded rights of medication administration"
+    },
+    {
+      "id": "partograph",
+      "pattern": "partograph",
+      "flags": "i",
+      "onlyIfAbsent": "labou?r care guide|\\bLCG\\b",
+      "sev": "m",
+      "found": "partograph with no Labour Care Guide",
+      "correct": "the WHO Labour Care Guide",
+      "fix": "Add the WHO Labour Care Guide (LCG), which replaces the partograph in current WHO and national guidance."
+    },
+    {
+      "id": "devicelaw",
+      "pattern": "\\bISO\\s?\\d{3,5}|drugs? (and|&) cosmetics act|medical devices? (rules|act|law)",
+      "flags": "i",
+      "frontlineOnly": true,
+      "sev": "m",
+      "found": "ISO / Drugs and Cosmetics Act / medical device law",
+      "correct": "BMW Rules 2016 (as amended) and Kayakalp/NQAS",
+      "fix": "Replace with what a frontline worker applies: BMW Rules 2016 (as amended) and the Kayakalp/NQAS checklists."
+    }
   ]
 }

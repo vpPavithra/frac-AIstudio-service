@@ -4,14 +4,14 @@ import type { JobRepository } from "../repositories/job.repository.ts";
 import { notFound } from "../utils/response.ts";
 import { param } from "./http.ts";
 
-/** GET /jobs/:id: what the portal polls while a step runs. */
+/** GET /jobs/:id: what the portal polls while a step runs; `usage` is the model spend so far (spec 9). */
 export function jobController(jobs: JobRepository) {
   return {
     async get(req: Request, res: Response) {
       const job = await jobs.get(param(req.params.id));
       if (!job || job.ownerId !== ownerOf(res)) throw notFound("Job");
-      const { status, msg, done, total, error, errorCode, kind, targetId } = job;
-      res.json({ status, msg, done, total, error, errorCode, kind, targetId });
+      const { status, msg, done, total, error, errorCode, kind, targetId, usage } = job;
+      res.json({ status, msg, done, total, error, errorCode, kind, targetId, usage });
     },
   };
 }

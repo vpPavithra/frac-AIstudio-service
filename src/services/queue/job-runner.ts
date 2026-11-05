@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Job } from "../../models/job.model.ts";
+import type { Job, JobPatch } from "../../models/job.model.ts";
 import type { JobRepository } from "../../repositories/job.repository.ts";
 import { ApiError } from "../../utils/response.ts";
 import { describeError, logger } from "../../utils/logger.ts";
@@ -12,7 +12,20 @@ export interface JobProgress {
   (msg: string, done?: number, total?: number): Promise<void>;
 }
 
-export type JobTask = (progress: JobProgress) => Promise<void>;
+/** Token and cost spend of one model call (spec 9: log tokens and cost per job). */
+export interface UsageDelta {
+  inputTokens: number;
+  outputTokens: number;
+  webSearches?: number;
+  costUsd: number;
+  /** The mock's cost is what the same tokens would cost on Claude, not a bill. */
+  estimated?: boolean;
+}
+
+/** Adds one model call's spend to the job's running total (jobs.usage). */
+export type RecordUsage = (delta: UsageDelta) => Promise<void>;
+
+export type JobTask = (progress: JobProgress, recordUsage: RecordUsage) => Promise<void>;
 
 export interface StartJob {
   ownerId: string;
@@ -51,7 +64,7 @@ export class JobRunner {
     };
     await this.jobs.insert(job);
 
-    const run = this.run(job.id, task).finally(() => this.running.delete(run));
+    const run = this.run(job.id, job.kind, task).finally(() => this.running.delete(run));
     this.running.add(run);
     return job;
   }
@@ -61,17 +74,37 @@ export class JobRunner {
     while (this.running.size) await Promise.allSettled([...this.running]);
   }
 
-  private async run(id: string, task: JobTask): Promise<void> {
-    const progress: JobProgress = (msg, done, total) => this.jobs.update(id, { msg, done, total });
+  private async run(id: string, kind: string, task: JobTask): Promise<void> {
+    // Batches run in parallel and each writes a snapshot of the job; chaining the writes keeps them in
+    // order, so an older snapshot (fewer calls, a lower count) can never land after a newer one
+    let writes: Promise<unknown> = Promise.resolve();
+    const write = (patch: JobPatch): Promise<void> => {
+      const next = writes.then(() => this.jobs.update(id, patch));
+      writes = next.catch(() => undefined);
+      return next.then(() => undefined);
+    };
+    const progress: JobProgress = (msg, done, total) => write({ msg, done, total });
+    // jobs.usage is numbers only, so `estimated` is stored as 1 when any call's cost is an estimate
+    const usage: Record<string, number> = { calls: 0, inputTokens: 0, outputTokens: 0, webSearches: 0, costUsd: 0 };
+    const recordUsage: RecordUsage = (delta) => {
+      usage.calls += 1;
+      usage.inputTokens += delta.inputTokens;
+      usage.outputTokens += delta.outputTokens;
+      usage.webSearches += delta.webSearches ?? 0;
+      usage.costUsd = Math.round((usage.costUsd + delta.costUsd) * 10_000) / 10_000;
+      if (delta.estimated) usage.estimated = 1;
+      return write({ usage: { ...usage } });
+    };
     try {
-      await this.jobs.update(id, { status: "running" });
-      await task(progress);
-      await this.jobs.update(id, { status: "done" });
+      await write({ status: "running" });
+      await task(progress, recordUsage);
+      await write({ status: "done" });
+      if (usage.calls) logger.info("Job spend", { jobId: id, kind, ...usage });
     } catch (err) {
       const message = describeError(err);
       const errorCode = err instanceof ApiError ? err.code : JOB_FAILED;
-      logger.warn("Job failed", { jobId: id, errorCode, error: message });
-      await this.jobs.update(id, { status: "error", error: message, errorCode });
+      logger.warn("Job failed", { jobId: id, kind, errorCode, error: message, ...(usage.calls ? { usage } : {}) });
+      await write({ status: "error", error: message, errorCode });
     }
   }
 }

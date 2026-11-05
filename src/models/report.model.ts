@@ -16,6 +16,8 @@ export interface Stats {
   F: number;
   D: number;
   other: number;
+  /** KCM-format competencies (themes, no L1–L5 ladder), counted separately (rules r3 §2). */
+  kcm?: number;
 }
 
 export interface Finding {
@@ -51,4 +53,7 @@ export interface Report {
   checks: CheckSummary[];
   findings: Finding[];
   strengths: string[];
+  /** Review engine version and file fingerprint (rules r3 §8–9), shown in the Method row. */
+  engine?: string;
+  fingerprint?: string;
 }

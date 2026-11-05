@@ -14,5 +14,10 @@ export const reviewContextSchema = z.object({
   cadre: optionalField(200),
   state: optionalField(200),
   notes: optionalField(5000),
+  /** "true": ignore a stored review of the same file and context and run a fresh one (rules r3 §9). */
+  fresh: z
+    .string()
+    .optional()
+    .transform((s) => s === "true"),
 });
 export type ReviewContextInput = z.infer<typeof reviewContextSchema>;

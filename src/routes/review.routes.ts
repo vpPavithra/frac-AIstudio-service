@@ -14,5 +14,6 @@ export function reviewRoutes(reviews: ReviewService): Router {
   r.get("/:id", c.get);
   r.get("/:id/export.xlsx", c.exportWorkbook);
   r.post("/:id/open-in-creator", c.openInCreator);
+  r.post("/:id/rerun", c.rerun);
   return r;
 }

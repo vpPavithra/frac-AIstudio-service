@@ -13,9 +13,15 @@ export function reviewController(reviews: ReviewService) {
       const file = req.file;
       if (!file) throw badRequest("FILE_REQUIRED", "Attach the FRAC workbook as 'file'");
       if (!/\.xlsx$/i.test(file.originalname)) throw badRequest("FILE_TYPE_NOT_ALLOWED", "Upload an .xlsx workbook");
-      const ctx = req.body as ReviewContextInput;
-      const started = await reviews.startUploadReview(ownerOf(res), { name: file.originalname, buffer: file.buffer }, ctx);
-      res.status(202).json(started);
+      const { fresh, ...ctx } = req.body as ReviewContextInput;
+      const started = await reviews.startUploadReview(ownerOf(res), { name: file.originalname, buffer: file.buffer }, ctx, fresh);
+      // 200 with the stored review when this file and context were reviewed before; 202 with a job otherwise
+      res.status(started.fromCache ? 200 : 202).json(started);
+    },
+
+    /** "Run a fresh review": re-asks the model and replaces the stored report. */
+    async rerun(req: Request, res: Response) {
+      res.status(202).json(await reviews.rerun(ownerOf(res), param(req.params.id)));
     },
 
     async list(_req: Request, res: Response) {

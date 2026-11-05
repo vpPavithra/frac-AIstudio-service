@@ -134,7 +134,7 @@ describe("buildFracWorkbook", () => {
     expect(sheets[0].rows[1]).toEqual(["R1", "Conduct VHSND sessions", "", "", "ANM1, ANM2", "IPHS 2022", ""]);
     expect(sheets[2].rows).toContainEqual(["Method", "Approved method paragraph."]);
     expect(sheets[2].rows).toContainEqual(["Title", "Issuer", "Year", "Use", "Tier"]);
-    expect(sheets[3].rows[4]).toEqual(["Severity", "Check", "Finding", "Detail", "Refs", "Suggested fix", "Found by"]);
+    expect(sheets[3].rows[5]).toEqual(["Severity", "Check", "Finding", "Detail", "Refs", "Suggested fix", "Found by"]);
 
     const { model } = parseWorkbook(sheets, "ANM competencies - Bihar.xlsx");
     expect(model.hasFrac).toBe(true);
@@ -174,15 +174,17 @@ describe("buildReviewWorkbook", () => {
     expect(sheets[0].name).toBe("Review");
     expect(sheets[0].rows[0]).toEqual(["Verdict", "Revise before use."]);
     expect(sheets[0].rows[1]).toEqual(["Triage", "Revise"]);
-    expect(sheets[0].rows[4]).toEqual(["Severity", "Check", "Finding", "Detail", "Refs", "Suggested fix", "Found by"]);
-    expect(sheets[0].rows[5]).toEqual([
+    expect(sheets[0].rows[3][0]).toBe("Method");
+    expect(sheets[0].rows[3][1]).toMatch(/^Rule-based checks give the same result on every run\./);
+    expect(sheets[0].rows[5]).toEqual(["Severity", "Check", "Finding", "Detail", "Refs", "Suggested fix", "Found by"]);
+    expect(sheets[0].rows[6]).toEqual([
       "MAJOR",
       "coverage",
       "Unmapped activities",
       "A3 has no competency mapping.",
       "A3",
       "Map the activity.",
-      "Computed check",
+      "Rule-based check",
     ]);
   });
 });

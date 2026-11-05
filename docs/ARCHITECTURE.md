@@ -28,7 +28,9 @@ handle HTTP, services hold the rules, repositories own the queries, validations 
 ```
 config/service.json    every non-secret setting (models, rates, limits, timeouts, CORS)            ← done
 config/outdated.json   OUTDATED list, read per review (OUTDATED_CONFIG_PATH overrides)             ← done
-migrations/            numbered SQL: 001 schema, 002 jobs.error_code                                 ← done
+config/review-rules.json  r3 rule tables: scope per cadre, ladder rules, job areas (REVIEW_RULES_CONFIG_PATH) ← done
+docs/spec/             the spec, the r3 review rules, and R3_GAP_ANALYSIS.md (what is built against them)
+migrations/            numbered SQL: 001 schema, 002 jobs.error_code, 003 reviews.fingerprint        ← done
 src/config/            settings.ts (service.json → env, refuses secrets), constants.ts, db.ts        ← done
 src/routes/            URL → middleware → controller wiring, under /v1                              ← done
 src/controllers/       HTTP only: frac, review, job                                                  ← done
@@ -36,21 +38,30 @@ src/validations/       Zod request schemas (frac, review)                       
 src/middleware/        auth (x-aastrika-creator), validate, errorHandler, requestContext, requestLogger, upload ← done
 src/models/            frac, review, report, job types (spec 4)                                      ← done
 src/services/          frac.service (Creator, My FRACs), review.service (Reviewer + shared engine),  ← done
-                       job-watchdog.service, ai-review.service (AgentReviewer + computed-only stand-in)
-src/services/review-engine/  deterministic, no I/O: refs, parse-workbook, checks, report, convert     ← done
+                       job-watchdog.service, ai-review.service (r3 checklist: Vidya Q1/Q2/Q3 + quote check)
+src/services/review-engine/  deterministic, no I/O: rules, refs, parse-workbook, checks, report,      ← done
+                       convert, fingerprint (engine r3)
 src/services/excel/    workbook-reader / workbook-writer (exceljs, spec 7)                           ← done
 src/services/queue/    job runner, spec 8 job messages                                               ← done
 src/repositories/      frac / review / job .repository.ts: Postgres + in-memory per entity           ← done
 src/utils/             response (ApiError, one error shape), logger, context (request id)            ← done
-src/prompts/           pure *.prompts.ts builders, verbatim from the prototype, golden snapshots    (with LLM)
-src/providers/         LlmProvider + ClaudeProvider (tiers from config), retry, fixtures replay      (with LLM)
+src/services/ai/       prompt builders, step logic, output schemas, batching                         ← done
+src/providers/         TextProvider seam: Claude (key set) or src/mocks (no key)                      ← done
 ```
 
-Until the LLM layer lands, reviews carry the computed findings only (the verdict says so), and
-`POST /v1/fracs/:id/steps/{research|roles|competencies|ladders}` answer 501. `steps/check` works.
+## Review engine r3 (docs/spec/FRAC_Reviewer_rules_r3.md)
 
-The engine is the "computed counts" half of the design: everything countable is decided there, and
-the agents get its findings as "already computed, do not recount".
+Anything a list or a pattern can decide is decided in code (`review-engine/checks.ts`), so rule-based
+findings are identical on every run. The AI answers only a fixed checklist (`ai-review.service.ts`):
+Vidya's Q1 scope and Q2 accuracy per laddered competency (6 per call, 3 in parallel) and Q3 state fit
+(once, only for a named state). Every AI flag must quote the competency; code keeps a flag only if the
+quote is in that competency's text and no rule already covers it, then merges the rest into at most
+three fixed-title findings. Verdict, triage, summary and strengths are computed (`report.ts`).
+
+Same file, same review: an upload's fingerprint (engine version + rule tables + parsed model + context)
+is stored with the review; the same upload returns the stored review (`fromCache`, HTTP 200, no job)
+until `POST /v1/frac-reviews/:id/rerun` or an upload with `fresh=true` asks again. Sonnet 5.5 rejects
+temperature, so the stored review is what makes results repeatable (the spec's temperature 0 is moot).
 
 ## API (spec 8, mounted under /v1, reached from the portal as /apis/protected/v8/fracStudio/...)
 
@@ -60,6 +71,7 @@ POST   /v1/fracs/:id/steps/{research|roles|competencies|ladders|check}   → {jo
 GET    /v1/fracs/:id/export.xlsx          GET /v1/fracs/:id/versions  POST /v1/fracs/:id/versions/:v/restore
 POST   /v1/frac-reviews (multipart)       GET /v1/frac-reviews    GET /v1/frac-reviews/:id
 GET    /v1/frac-reviews/:id/export.xlsx   POST /v1/frac-reviews/:id/open-in-creator
+POST   /v1/frac-reviews/:id/rerun         (r3 "Run a fresh review")
 GET    /v1/jobs/:id
 ```
 

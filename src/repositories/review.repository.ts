@@ -7,6 +7,8 @@ export interface ReviewRepository {
   update(review: ReviewRecord): Promise<void>;
   get(id: string): Promise<ReviewRecord | null>;
   listByOwner(ownerId: string): Promise<ReviewRecord[]>;
+  /** The owner's newest finished upload review with this fingerprint (rules r3 §9), or null. */
+  findByFingerprint(ownerId: string, fingerprint: string): Promise<ReviewRecord | null>;
 }
 
 interface ReviewRow {
@@ -18,6 +20,7 @@ interface ReviewRow {
   ctx: ReviewRecord["ctx"];
   source_model: ReviewRecord["sourceModel"];
   report: ReviewRecord["report"];
+  fingerprint: string | null;
   created_at: Date;
 }
 
@@ -30,6 +33,7 @@ const toReview = (r: ReviewRow): ReviewRecord => ({
   ctx: r.ctx ?? {},
   sourceModel: r.source_model,
   report: r.report,
+  fingerprint: r.fingerprint,
   createdAt: iso(r.created_at),
 });
 
@@ -38,17 +42,26 @@ export class PgReviewRepository implements ReviewRepository {
 
   async insert(r: ReviewRecord): Promise<void> {
     await this.pool.query(
-      `INSERT INTO reviews (id, owner_id, frac_id, kind, source_name, ctx, source_model, report, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-      [r.id, r.ownerId, r.fracId, r.kind, r.sourceName, r.ctx, r.sourceModel, r.report, r.createdAt],
+      `INSERT INTO reviews (id, owner_id, frac_id, kind, source_name, ctx, source_model, report, fingerprint, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+      [r.id, r.ownerId, r.fracId, r.kind, r.sourceName, r.ctx, r.sourceModel, r.report, r.fingerprint ?? null, r.createdAt],
     );
   }
 
   async update(r: ReviewRecord): Promise<void> {
     await this.pool.query(
-      `UPDATE reviews SET frac_id = $2, ctx = $3, source_model = $4, report = $5 WHERE id = $1`,
-      [r.id, r.fracId, r.ctx, r.sourceModel, r.report],
+      `UPDATE reviews SET frac_id = $2, ctx = $3, source_model = $4, report = $5, fingerprint = $6 WHERE id = $1`,
+      [r.id, r.fracId, r.ctx, r.sourceModel, r.report, r.fingerprint ?? null],
     );
+  }
+
+  async findByFingerprint(ownerId: string, fingerprint: string): Promise<ReviewRecord | null> {
+    const { rows } = await this.pool.query<ReviewRow>(
+      `SELECT * FROM reviews WHERE owner_id = $1 AND fingerprint = $2 AND kind = 'upload' AND report IS NOT NULL
+       ORDER BY created_at DESC LIMIT 1`,
+      [ownerId, fingerprint],
+    );
+    return rows[0] ? toReview(rows[0]) : null;
   }
 
   async get(id: string): Promise<ReviewRecord | null> {
@@ -87,5 +100,10 @@ export class MemoryReviewRepository implements ReviewRepository {
       .map((r) => ({ r, at: r.createdAt }))
       .sort(byNewest)
       .map(({ r }) => clone(r));
+  }
+
+  async findByFingerprint(ownerId: string, fingerprint: string): Promise<ReviewRecord | null> {
+    const hit = (await this.listByOwner(ownerId)).find((r) => r.kind === "upload" && r.fingerprint === fingerprint && r.report);
+    return hit ?? null;
   }
 }

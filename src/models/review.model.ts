@@ -31,12 +31,21 @@ export interface ModelCompetency {
   type: string;
   area: string;
   kcm?: string;
+  /** Empty for KCM-format rows, which carry themes instead of an L1–L5 ladder (rules r3 §2). */
   levels: Level[];
+  /** "kcm": a row copied from the Karmayogi Competency Model (Applicable Level + Theme n columns). */
+  format?: "kcm";
+  themes?: string[];
+  applicableLevel?: string;
 }
 
 export interface ReviewModel {
   title: string;
+  /** From a "Position: ANM" cell near the top of a sheet; used to infer the cadre. */
+  position?: string;
   hasFrac: boolean;
+  /** A mapping column exists on the Role–Activity sheet. False skips the mapping checks. */
+  hasMapping: boolean;
   postings: string[];
   postingLabels: string[];
   roles: ModelRole[];
@@ -60,5 +69,7 @@ export interface ReviewRecord {
   ctx: ReviewContext;
   sourceModel: ReviewModel | null;
   report: Report | null;
+  /** Review fingerprint (rules r3 §9): same file + context + engine version → same stored review. */
+  fingerprint?: string | null;
   createdAt: string;
 }
