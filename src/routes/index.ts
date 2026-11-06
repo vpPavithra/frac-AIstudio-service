@@ -14,7 +14,7 @@ export interface RouteDeps {
   fracs: FracService;
   reviews: ReviewService;
   jobs: JobRepository;
-  /** Only its name is exposed (GET /v1/info: "claude" or "mock"). */
+  /** Only its name is exposed (GET /v1/info: the profile name, e.g. "gemini-free", or "mock"). */
   provider: Pick<TextProvider, "name">;
 }
 
@@ -24,7 +24,7 @@ export function apiRoutes({ fracs, reviews, jobs, provider }: RouteDeps): Router
   r.use("/fracs", fracRoutes(fracs));
   r.use("/frac-reviews", reviewRoutes(reviews));
   r.get("/jobs/:id", jobController(jobs).get);
-  // Which AI provider answers (claude, or mock when no API key is set)
+  // Which AI provider answers (the AI_PROVIDER profile name, or mock)
   r.get("/info", (_req, res) => {
     res.json({ aiProvider: provider.name });
   });

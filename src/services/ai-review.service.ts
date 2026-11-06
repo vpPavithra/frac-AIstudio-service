@@ -19,7 +19,7 @@ import { ApiError } from "../utils/response.ts";
 // "Vidya" is a persona inside the prompts (services/ai/prompts.ts), not a separate service.
 //
 // Flow: ReviewService.review calls ChecklistReviewer.review after computeChecks and before buildReport.
-// Calls go through the TextProvider on the complex tier (Claude Sonnet 5.5, or the mock with no API key).
+// Calls go through the TextProvider on the complex tier (the AI_PROVIDER profile, or the mock).
 // Batch size, parallel calls, max state items and minimum quote words come from REVIEW in
 // config/constants.ts (config/service.json REVIEW_BATCH_SIZE, REVIEW_BATCH_PARALLEL,
 // REVIEW_MAX_STATE_ITEMS, REVIEW_MIN_QUOTE_WORDS).
@@ -87,7 +87,7 @@ const byCodeThenLevel = (a: Flag, b: Flag) => a.code.localeCompare(b.code, undef
 /** Rules §6.2: no state, "national" or "India" means no state-fit call. */
 const isNational = (state?: string) => !state || /national|^india$/i.test(state.trim());
 
-/** Calls the provider (Claude, or the mock without an API key) on the fixed checklist. */
+/** Calls the provider (the AI_PROVIDER profile, or the mock) on the fixed checklist. */
 export class ChecklistReviewer implements AgentReviewer {
   constructor(private readonly provider: TextProvider) {}
 

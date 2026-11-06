@@ -1,5 +1,5 @@
 {
-  "//": "SAMPLE DATA used when no ANTHROPIC_API_KEY is set (or AI_PROVIDER=mock). Not clinical guidance and not a reference FRAC. Edit freely; see src/mocks/README.md. Placeholders: {cadre}, {state}.",
+  "//": "SAMPLE DATA used when AI_PROVIDER=mock (npm run dev:mock). Not clinical guidance and not a reference FRAC. Edit freely; see src/mocks/README.md. Placeholders: {cadre}, {state}.",
 
   "// postingKeywords": "Words in the brief's 'What should this FRAC cover?' that name a posting. The mock turns each one found into a posting column (first 3, in the order written); none found uses the cadre's own postings.",
   "postingKeywords": {

@@ -1,8 +1,10 @@
-// MOCK PROVIDER: sample answers when no ANTHROPIC_API_KEY is set (or AI_PROVIDER=mock); no model, no key.
+// MOCK PROVIDER: sample answers when AI_PROVIDER=mock (`npm run dev:mock`); no model, no key.
 // Content lives in ./content/cadres.json. How to edit or remove the mock: README.md in this folder.
 // It answers every AI task (Creator steps 2-5 and the Reviewer checklist) from the request's structured
 // `input`, ignoring the prompt text, in the same JSON shapes the step schemas validate. Usage is estimated
-// from text length, priced at Claude rates (pricing.ts) and marked `estimated`. Reads MOCK.delayMs.
+// from text length, priced at the MOCK_PRICED_AS profile's list prices (pricing.ts) and marked `estimated`.
+// Reads MOCK.delayMs.
+import type { ProviderRates } from "../config/ai-providers.ts";
 import { MOCK } from "../config/constants.ts";
 import { priceUsd } from "../providers/text/pricing.ts";
 import type { AiTask, CompletionRequest, CompletionResult, TextProvider } from "../providers/text/types.ts";
@@ -70,8 +72,14 @@ export class MockTextProvider implements TextProvider {
   private readonly profiles: Record<string, CadreProfile>;
   private readonly postingKeywords: Record<string, string>;
 
-  /** Resolves `base` once: a profile is its base's fields overlaid with its own. */
-  constructor(file: MockContent) {
+  /**
+   * Resolves `base` once: a profile is its base's fields overlaid with its own.
+   * `rates` prices the estimate (the MOCK_PRICED_AS provider profile).
+   */
+  constructor(
+    file: MockContent,
+    private readonly rates: ProviderRates,
+  ) {
     this.postingKeywords = file.postingKeywords ?? {};
     this.profiles = Object.fromEntries(
       Object.entries(file.cadres).map(([key, p]) => [key, { ...(p.base ? file.cadres[p.base] : {}), ...p } as CadreProfile]),
@@ -82,12 +90,12 @@ export class MockTextProvider implements TextProvider {
     await pause();
     const input = (request.input ?? {}) as Record<string, unknown>;
     const json = this.answer(request.task, input);
-    // Tokens estimated from text length; the cost is what they would cost on Claude (no thinking, no searches)
+    // Tokens estimated from text length; the cost is what they would cost on the MOCK_PRICED_AS provider (no thinking, no searches)
     const usage = {
       inputTokens: Math.ceil(request.prompt.length / CHARS_PER_TOKEN),
       outputTokens: Math.ceil(JSON.stringify(json).length / CHARS_PER_TOKEN),
     };
-    return { json, model: "mock", usage, costUsd: priceUsd(request.tier, usage), estimated: true };
+    return { json, model: "mock", usage, costUsd: priceUsd(this.rates, request.tier, usage), estimated: true };
   }
 
   /** Routes a task to its answer builder; each returns the JSON shape that task's schema expects. */

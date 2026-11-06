@@ -1,6 +1,6 @@
 // The one seam between FRAC Studio's AI steps and a model. Steps build the prompt and validate the
-// JSON; a provider only turns a request into JSON plus its spend. Claude (claude.ts) when an API key
-// is set; the sample-data mock in src/mocks otherwise. See src/providers/registry.ts.
+// JSON; a provider only turns a request into JSON plus its spend. AI_PROVIDER picks a profile in
+// config/ai-providers.json (Gemini, Claude, ...) or the sample-data mock in src/mocks. See src/providers/registry.ts.
 
 /**
  * Which step is calling (spec 5.2–5.5, 6.4). A provider may use it to shape its answer.
@@ -10,7 +10,7 @@ export type AiTask = "research" | "roles" | "activities" | "competencies" | "lad
 
 /**
  * Spec 9: complex tier for research, roles, competencies and review; default for activities and ladders.
- * Both tiers run Claude Sonnet 5.5 today; the complex tier gets higher effort (MODELS, LLM in constants.ts).
+ * Each provider profile (config/ai-providers.json) names a model and thinking level per tier.
  */
 export type ModelTier = "complex" | "default";
 
@@ -20,7 +20,7 @@ export interface CompletionRequest {
   tier: ModelTier;
   /** The full prompt text sent to a real model. */
   prompt: string;
-  /** The structured facts the prompt was built from; the mock answers from these instead of the text. Claude ignores it. */
+  /** The structured facts the prompt was built from; the mock answers from these instead of the text. Real providers ignore it. */
   input: unknown;
 }
 
@@ -43,13 +43,13 @@ export interface CompletionResult {
   model: string;
   usage: CallUsage;
   costUsd: number;
-  /** True when the cost is an estimate at Claude prices rather than a real bill (the mock). */
+  /** True when the cost is an estimate at list prices rather than a real bill (the mock, or a free tier). */
   estimated?: boolean;
 }
 
-/** The provider seam. Implemented by ClaudeTextProvider and src/mocks' MockTextProvider; chosen by registry.ts. */
+/** The provider seam. Implemented by ClaudeTextProvider, GeminiTextProvider and src/mocks' MockTextProvider; chosen by registry.ts. */
 export interface TextProvider {
-  /** "claude" or "mock"; shown by GET /v1/info and in the startup log. */
+  /** The profile name (e.g. "gemini-free", "claude") or "mock"; shown by GET /v1/info and in the startup log. */
   readonly name: string;
   complete(request: CompletionRequest): Promise<CompletionResult>;
 }

@@ -10,9 +10,11 @@ import fs from "node:fs";
 import path from "node:path";
 
 /** Keys that must never appear in a committed config file. Checked at boot, not trusted. */
-export const SECRET_KEYS = ["ANTHROPIC_API_KEY", "POSTGRES_PASSWORD", "DATABASE_URL"] as const;
+export const SECRET_KEYS = ["GEMINI_API_KEY", "ANTHROPIC_API_KEY", "POSTGRES_PASSWORD", "DATABASE_URL"] as const;
 
 const SECRETS = new Set<string>(SECRET_KEYS);
+/** Any provider's key (the `keyEnv` of a profile in ai-providers.json) is a secret too, whatever the provider. */
+const isSecret = (key: string) => SECRETS.has(key) || key.endsWith("_API_KEY");
 const SETTING_NAME = /^[A-Z][A-Z0-9_]*$/;
 
 /** Thrown at boot: a malformed config file must not start half-applied. */
@@ -37,7 +39,7 @@ export function readSettingsFile(file: string): [string, string | number | boole
   }
   const entries = Object.entries(parsed as Record<string, unknown>).filter(([key]) => !key.startsWith("//"));
 
-  const leaked = entries.filter(([key]) => SECRETS.has(key)).map(([key]) => key);
+  const leaked = entries.filter(([key]) => isSecret(key)).map(([key]) => key);
   if (leaked.length) {
     throw new SettingsError(
       `${file} contains secrets: ${leaked.join(", ")}. This file is committed to git; move them to the environment. Nothing was applied.`,

@@ -6,7 +6,7 @@ import type { Frac } from "../../models/frac.model.ts";
 import { SIZE_TARGETS } from "./sizes.ts";
 
 // Prompt builders, structured as spec 5.2–5.5 and rules r3 §6 describe. METHOD, SOURCE_LIBRARY, KAUSHAL,
-// PERSONAS and VIDYA carry the spec's rules (section 3) so the Claude provider works as is. If the prototype file
+// PERSONAS and VIDYA carry the spec's rules (section 3) so any real provider works as is. If the prototype file
 // (frac-studio.html L244–265) turns up, its verbatim wording can replace these constants; the
 // output shapes below must stay as they are, because the step schemas (schemas.ts) validate them.
 // The mock provider ignores prompt text and answers from the structured input instead.
@@ -39,7 +39,7 @@ export const SOURCE_LIBRARY = `SOURCE LIBRARY (where JDs and duties are found)
 - INC syllabi: teaching scope only, never proof of authorisation.
 - KCM, the FRAC Introduction Pack and the Karmayogi Quality Framework.`;
 
-/** Closing line before every output shape; claude.ts also sends a JSON-only system prompt. */
+/** Closing line before every output shape; claude.ts and gemini.ts also send a JSON-only system instruction. */
 const JSON_ONLY = "Answer with this JSON object only, no prose:";
 
 // Shared prompt blocks. `revise` is empty on a first run, so filter(Boolean) drops it.

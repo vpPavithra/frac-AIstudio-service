@@ -17,20 +17,47 @@ Without Postgres: `FRAC_STUDIO_STORE=memory npm run dev` (data is lost on restar
 development, run it on another port (`PORT=3010`) and add the `/apis/protected/v8/fracStudio` rule to
 orgportal's `proxy/localhost.proxy.json`.
 
-Settings live in `config/service.json` (models, rates, limits, timeouts, CORS); the environment overrides
+Settings live in `config/service.json` (provider choice, limits, timeouts, CORS) and `config/ai-providers.json` (models, prices); the environment overrides
 any of them, and `.env` holds secrets and per-deployment values only. After editing config, run
 `npm run config:check`. `npm run check` runs typecheck, lint, config check and tests. New here? Read
 `ONBOARDING.md` and `CLAUDE.md`.
 
-## AI provider: Claude with a key, the mock without
+## AI provider: switchable, mock or a real model
 
-The AI steps call **Claude** (`src/providers/text/claude.ts`) when `ANTHROPIC_API_KEY` is set, and the
-**mock** (`src/mocks/`, editable sample data, no cost) when it is not. Nothing else changes between them.
+The AI steps call whichever provider `AI_PROVIDER` names. Nothing else changes between them: same steps,
+batching, progress, checks, report and export.
 
-- **Where the key goes:** `ANTHROPIC_API_KEY` in the service's `.env` locally; the deployment's secret
-  store on a server. Never `config/service.json` (committed; startup refuses secrets there).
-- Startup logs `"ai":"claude"` or `"ai":"mock"`; `GET /v1/info` returns the same.
-- Run with sample data preloaded: `FRAC_STUDIO_STORE=memory MOCK_SEED=true PORT=3010 npm run dev`.
+| `AI_PROVIDER` | Answers from | Key (environment only) |
+|---|---|---|
+| `mock` | `src/mocks/` sample data, no cost, no network | none |
+| `gemini-free` (the default in `config/service.json`) | Gemini API free tier, `gemini-3.8-flash` on both tiers, no web search | `GEMINI_API_KEY` |
+| `gemini-paid` | Gemini API paid tier, `gemini-4-argon` (complex) + `gemini-3.8-flash`, Google Search for research | `GEMINI_API_KEY` |
+| `claude` | Claude Sonnet 5.5 on both tiers, web search for research | `ANTHROPIC_API_KEY` |
+
+The profiles live in [`config/ai-providers.json`](config/ai-providers.json): model and thinking level per
+tier, list prices, which variable holds the key, web search, free tier and a cap on calls in flight.
+Switching provider means changing `AI_PROVIDER` and setting that profile's key. Changing a model or a
+price means editing the profile. Neither needs a code change.
+
+| Command | What runs |
+|---|---|
+| `npm run dev:mock` | Sample data, whatever `AI_PROVIDER` says |
+| `npm run dev:mock:seed` | Sample data, memory store, one finished FRAC and review preloaded |
+| `npm run dev:ai` (= `npm run dev`) | The provider `AI_PROVIDER` names (`.env` overrides `service.json`); stops if its key is missing |
+| `npm run ai:check` | One tiny real call per tier to prove the key, models and quota; prints tokens and cost |
+| `npm run start:mock` / `start:ai` | The same, from the built `dist/` |
+
+- **Where the key goes:** the service's `.env` locally (`GEMINI_API_KEY=…`); the deployment's secret store
+  on a server. Never a file in `config/` (committed; startup refuses any `*_API_KEY` there).
+- To try another provider for one run: `AI_PROVIDER=claude npm run dev:ai`.
+- Startup logs `"ai":"gemini-free"` (or the name in use); `GET /v1/info` returns the same.
+- **Free tier:** calls are not billed, so the cost on each job is what the same tokens would cost at the
+  paid list price, marked `est.` in the portal. The profile runs one call at a time (`maxConcurrent: 1`)
+  and the SDK waits and retries on a 429, so a full FRAC is slower than on a paid key. When the daily
+  quota runs out, jobs fail with `AI_BUSY` until it resets (midnight Pacific).
+- **Adding another provider** (e.g. OpenAI): write `src/providers/text/<kind>.ts` implementing
+  `TextProvider`, add it to `FACTORIES` in `src/providers/registry.ts` and to `PROVIDER_KINDS` in
+  `src/config/ai-providers.ts`, then add a profile. See `gemini.ts` for a complete example.
 
 What switching affects, how to edit the sample data, and how to delete the mocks: [src/mocks/README.md](src/mocks/README.md).
 
@@ -91,15 +118,18 @@ the service after a change.
 
 | What | Keys | Default |
 |---|---|---|
-| Models and effort | `ANTHROPIC_COMPLEX_MODEL`, `ANTHROPIC_DEFAULT_MODEL`, `LLM_COMPLEX_EFFORT`, `LLM_DEFAULT_EFFORT` | Claude Sonnet 5.5, high / medium |
-| Call limits | `LLM_TIMEOUT_MS`, `LLM_RETRIES`, `LLM_MAX_TOKENS`, `LLM_MAX_RESUMES` | 10 min, 3, 64,000, 3 |
+| Provider | `AI_PROVIDER`, `MOCK_PRICED_AS` (whose prices the mock's estimate uses) | `gemini-free`, `gemini-free` |
+| Call limits (every provider) | `LLM_TIMEOUT_MS`, `LLM_RETRIES`, `LLM_MAX_TOKENS`, `LLM_MAX_RESUMES`, `LLM_MAX_RETRY_DELAY_MS` | 10 min, 3, 64,000, 3, 60 s |
 | Creator batching | `AI_BATCH_SIZE`, `AI_BATCH_PARALLEL` (activities and ladders) | 4 per call, 3 at once |
 | Review checklist | `REVIEW_BATCH_SIZE`, `REVIEW_BATCH_PARALLEL`, `REVIEW_MAX_STATE_ITEMS`, `REVIEW_MIN_QUOTE_WORDS` | 6, 3, 6, 4 |
 | Research web search | `RESEARCH_WEB_SEARCH`, `RESEARCH_SEARCH_DOMAINS`, `RESEARCH_SEARCH_MAX_USES` | on, 4 government domains, 5 |
-| Prices (cost per job) | `RATE_*_USD_PER_1M`, `RATE_WEB_SEARCH_USD_PER_1K`, `RATE_CACHE_WRITE_MULTIPLIER` | Sonnet 5.5 list prices |
 | Jobs | `JOB_STALE_AFTER_MS`, `JOB_SWEEP_EVERY_MS`, `JOB_HEARTBEAT_MS` | 15 min, 1 min, 1 min |
 | Postgres pool | `POSTGRES_POOL_MAX`, `POSTGRES_CONNECT_TIMEOUT_MS`, `POSTGRES_IDLE_TIMEOUT_MS` | 10, 10 s, 30 s |
 | Request limits | `MAX_UPLOAD_MB`, `MAX_JSON_MB`, `MAX_TEXT_CHARS`, `MAX_ROLES`, `MAX_ACTIVITIES_PER_ROLE`, `MAX_COMPETENCIES` | 15, 5, 20,000, 200, 200, 500 |
+
+Models, thinking levels and prices are per provider in `config/ai-providers.json` (override with
+`AI_PROVIDERS_CONFIG_PATH`). Startup stops if a profile is malformed, and `config:check` checks that
+`AI_PROVIDER` and `MOCK_PRICED_AS` name a profile.
 
 Brief sizes (roles, activities per role and competencies for compact, standard and full) are in
 `config/frac-sizes.json` (override with `FRAC_SIZES_CONFIG_PATH`). Startup stops if a size is missing or a

@@ -1,5 +1,5 @@
 // Process entry point (`npm run dev`, `npm start` → dist/server.js). Picks the store (Postgres or
-// memory, FRAC_STUDIO_STORE), the AI provider (Claude or mock), wires repositories → JobRunner →
+// memory, FRAC_STUDIO_STORE), the AI provider (a profile in config/ai-providers.json, or mock), wires repositories → JobRunner →
 // services → app, optionally runs migrations (MIGRATE_ON_START), starts the stuck-job watchdog and
 // listens on PORT. Reads .env (dotenv), config/service.json via constants.ts, and the rule/method files.
 import "dotenv/config";
@@ -27,7 +27,7 @@ const repos = pool ? pgRepositories(pool) : memoryRepositories();
 const runner = new JobRunner(repos.jobs);
 
 async function start(): Promise<void> {
-  // Claude when ANTHROPIC_API_KEY is set, otherwise the sample-data mock (src/mocks); AI_PROVIDER forces one
+  // AI_PROVIDER: a profile in config/ai-providers.json (needs its key) or mock (`npm run dev:mock`)
   const { provider, mocks } = await createAi();
   // The rule tables are re-read per review so reviewers' edits apply without a restart
   const reviews = new ReviewService(repos, runner, new ChecklistReviewer(provider), () => loadReviewRules());

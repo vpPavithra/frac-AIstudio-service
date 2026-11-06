@@ -1,12 +1,13 @@
-// CLAUDE PROVIDER: the real model behind every AI step (spec 2, 9). Selected automatically when
-// ANTHROPIC_API_KEY is set. Steps build the prompt and validate the JSON; this file only sends the
-// prompt, extracts the JSON and prices the call.
-// Both tiers run Claude Sonnet 5.5 by default (MODELS: ANTHROPIC_COMPLEX_MODEL / ANTHROPIC_DEFAULT_MODEL); the
-// complex tier gets LLM.complexEffort (high), the default tier LLM.defaultEffort (medium). Also reads
-// LLM.maxTokens, LLM.maxResumes, LLM.retries, LLM.timeoutMs and the AI.research* web-search settings.
+// CLAUDE PROVIDER (profile kind "claude" in config/ai-providers.json, key in its keyEnv, normally
+// ANTHROPIC_API_KEY). Steps build the prompt and validate the JSON; this file only sends the prompt,
+// extracts the JSON and prices the call. The profile gives the model and thinking level per tier
+// (mapped to Claude's `effort`), web search on or off, and the prices. Also reads LLM.maxTokens,
+// LLM.maxResumes, LLM.retries, LLM.timeoutMs and the AI.research* web-search settings.
 import Anthropic from "@anthropic-ai/sdk";
-import { AI, LLM, MODELS } from "../../config/constants.ts";
+import type { AiProfile } from "../../config/ai-providers.ts";
+import { AI, LLM } from "../../config/constants.ts";
 import { ApiError } from "../../utils/response.ts";
+import { extractJson } from "./json.ts";
 import { priceUsd } from "./pricing.ts";
 import type { CallUsage, CompletionRequest, CompletionResult, ModelTier, TextProvider } from "./types.ts";
 
@@ -15,39 +16,23 @@ type Message = Anthropic.Beta.BetaMessage;
 /** Server-side fallback: on a policy decline the API re-runs the request on its default fallback model. */
 const FALLBACK_BETA = "server-side-fallback-2026-07-01";
 
-/**
- * The JSON object in the model's final text. Tolerates a ```json fence or a sentence before it
- * (web search answers sometimes add one). Returns null when there is none, so the step's schema
- * check fails with AI_OUTPUT_INVALID and the spend is still recorded.
- */
-export function extractJson(text: string): unknown {
-  const fenced = /```(?:json)?\s*([\s\S]*?)```/.exec(text);
-  const body = fenced ? fenced[1] : text;
-  const start = body.indexOf("{");
-  const end = body.lastIndexOf("}");
-  if (start < 0 || end <= start) {
-    return null;
-  }
-  try {
-    return JSON.parse(body.slice(start, end + 1));
-  } catch {
-    return null;
-  }
-}
-
 /** The model's visible text blocks joined; thinking and tool blocks are skipped. */
 const finalText = (message: Message) =>
   message.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("\n");
 
 /**
  * TextProvider backed by the Anthropic Messages API (beta endpoint, for server-side fallback and effort).
- * Created by registry.ts createAi when Claude is selected.
+ * Created by registry.ts createAi for a profile of kind "claude".
  */
 export class ClaudeTextProvider implements TextProvider {
-  readonly name = "claude" as const;
+  readonly name: string;
   private readonly client: Anthropic;
 
-  constructor(apiKey: string) {
+  constructor(
+    private readonly profile: AiProfile,
+    apiKey: string,
+  ) {
+    this.name = profile.name;
     // The SDK retries 408/409/429/5xx and connection errors itself
     this.client = new Anthropic({ apiKey, maxRetries: LLM.retries, timeout: LLM.timeoutMs });
   }
@@ -59,9 +44,9 @@ export class ClaudeTextProvider implements TextProvider {
    * Invalid or missing JSON is not an error here: `json` is null and the step's schema check fails it.
    */
   async complete(request: CompletionRequest): Promise<CompletionResult> {
-    const model = MODELS[request.tier];
+    const model = this.profile.models[request.tier];
     const tools: Anthropic.Beta.BetaToolUnion[] =
-      request.task === "research" && AI.researchWebSearch
+      request.task === "research" && this.profile.webSearch && AI.researchWebSearch
         ? [{ type: "web_search_20260209", name: "web_search", max_uses: AI.researchSearchMaxUses, allowed_domains: AI.researchSearchDomains }]
         : [];
     const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: "user", content: request.prompt }];
@@ -94,7 +79,7 @@ export class ClaudeTextProvider implements TextProvider {
     if (message.stop_reason === "max_tokens") {
       throw new ApiError(502, "AI_OUTPUT_TRUNCATED", "The model's answer was cut off. Try a smaller size or fewer competencies.");
     }
-    return { json: extractJson(finalText(message)), model: message.model, usage, costUsd: priceUsd(request.tier, usage) };
+    return { json: extractJson(finalText(message)), model: message.model, usage, costUsd: priceUsd(this.profile.rates, request.tier, usage), estimated: this.profile.freeTier };
   }
 
   /** Streams (long answers would otherwise hit HTTP timeouts) and returns the finished message. */
@@ -115,7 +100,7 @@ export class ClaudeTextProvider implements TextProvider {
         betas: [FALLBACK_BETA],
         fallbacks: "default",
         // Thinking is always on for these models; effort sets its depth
-        output_config: { effort: tier === "complex" ? LLM.complexEffort : LLM.defaultEffort },
+        output_config: { effort: this.profile.thinking[tier] },
         system: "Answer with one JSON object only, in the shape the prompt asks for. No prose before or after it.",
         messages,
         ...(tools.length ? { tools } : {}),
@@ -127,7 +112,7 @@ export class ClaudeTextProvider implements TextProvider {
 /** SDK errors (after its own retries) as the coded errors the portal shows on the job. */
 function describeApiError(err: unknown): unknown {
   if (err instanceof Anthropic.AuthenticationError || err instanceof Anthropic.PermissionDeniedError) {
-    return new ApiError(502, "AI_AUTH", "The Claude API key was rejected. Check ANTHROPIC_API_KEY.");
+    return new ApiError(502, "AI_AUTH", "The Claude API key was rejected. Check the key in .env or the secret store.");
   }
   if (err instanceof Anthropic.RateLimitError) {
     return new ApiError(503, "AI_BUSY", "The model is busy (rate limit). Try again in a minute.");

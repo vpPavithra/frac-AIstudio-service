@@ -1,23 +1,21 @@
 {
-  "//": "Non-secret settings, reviewed like code. Environment variables override these. Secrets (ANTHROPIC_API_KEY, POSTGRES_PASSWORD) never go here; startup refuses them. Run `npm run config:check` after editing.",
+  "//": "Non-secret settings, reviewed like code. Environment variables override these. Secrets (any *_API_KEY, POSTGRES_PASSWORD) never go here; startup refuses them. Run `npm run config:check` after editing.",
 
   "PORT": 3005,
   "LOG_FORMAT": "pretty",
   "LOG_LEVEL": "info",
 
-  "// ai": "auto = Claude when ANTHROPIC_API_KEY is in the environment (.env locally, the deployment's secret store on a server; never here), otherwise the sample-data mock in src/mocks. claude / mock force one.",
-  "AI_PROVIDER": "auto",
+  "// ai": "AI_PROVIDER is a profile in config/ai-providers.json (gemini-free, gemini-paid, claude, ...) or mock for the sample data in src/mocks. The profile names the key variable (e.g. GEMINI_API_KEY), which goes in .env locally or the secret store on a server, never here. `npm run dev:mock` forces mock; `npm run dev:ai` uses this value. MOCK_PRICED_AS: whose prices the mock's cost estimate uses.",
+  "AI_PROVIDER": "gemini-free",
   "MOCK_DELAY_MS": 1500,
+  "MOCK_PRICED_AS": "gemini-free",
 
-  "// models": "Spec section 9: complex tier for research, roles, competencies and the review; default tier for activities and ladders. Both tiers run on Claude Sonnet 5.5 (team decision, 4 Nov 2026; the spec suggests Opus for complex). The complex tier still gets higher effort.",
-  "ANTHROPIC_COMPLEX_MODEL": "claude-sonnet-5-5",
-  "ANTHROPIC_DEFAULT_MODEL": "claude-sonnet-5-5",
-  "LLM_COMPLEX_EFFORT": "high",
-  "LLM_DEFAULT_EFFORT": "medium",
+  "// llm": "Call policy for every provider. Models, thinking levels and prices are per provider in config/ai-providers.json. LLM_MAX_RETRY_DELAY_MS caps the wait between retries after a rate limit.",
   "LLM_TIMEOUT_MS": 600000,
   "LLM_RETRIES": 3,
   "LLM_MAX_TOKENS": 64000,
   "LLM_MAX_RESUMES": 3,
+  "LLM_MAX_RETRY_DELAY_MS": 60000,
 
   "// batching": "Spec 5.3b / 5.5: roles (activities) or competencies (ladders) per call, and calls in flight. Rules r3 §6: competencies per review checklist call, calls in flight, most state-fit items kept, and the shortest quote (in words) the code will verify.",
   "AI_BATCH_SIZE": 4,
@@ -27,20 +25,10 @@
   "REVIEW_MAX_STATE_ITEMS": 6,
   "REVIEW_MIN_QUOTE_WORDS": 4,
 
-  "// research": "Spec 5.2: the research step searches only these government domains for the JD and cites what it retrieved.",
+  "// research": "Spec 5.2: the research step searches only these government domains for the JD and cites what it retrieved. Applies when the provider profile has webSearch: true; RESEARCH_WEB_SEARCH=false turns search off for every provider.",
   "RESEARCH_WEB_SEARCH": true,
   "RESEARCH_SEARCH_DOMAINS": "nhm.gov.in,mohfw.gov.in,igotkarmayogi.gov.in,cbc.gov.in",
   "RESEARCH_SEARCH_MAX_USES": 5,
-
-  "// rates": "USD list prices used to log cost per job: per million tokens for the complex and default models (both Claude Sonnet 5.5), cache reads at their own rate (writes bill at 1.25x input), and per 1,000 web searches. Checked 4 Nov 2026; update if the models or prices change.",
-  "RATE_COMPLEX_IN_USD_PER_1M": 2,
-  "RATE_COMPLEX_OUT_USD_PER_1M": 10,
-  "RATE_COMPLEX_CACHE_READ_USD_PER_1M": 0.2,
-  "RATE_DEFAULT_IN_USD_PER_1M": 2,
-  "RATE_DEFAULT_OUT_USD_PER_1M": 10,
-  "RATE_DEFAULT_CACHE_READ_USD_PER_1M": 0.2,
-  "RATE_WEB_SEARCH_USD_PER_1K": 10,
-  "RATE_CACHE_WRITE_MULTIPLIER": 1.25,
 
   "MAX_UPLOAD_MB": 15,
   "MAX_JSON_MB": 5,

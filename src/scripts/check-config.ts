@@ -1,8 +1,9 @@
 // `npm run config:check`: fails CI when config/service.json would break or silently mislead.
 // Checks: valid JSON, no secrets, UPPER_SNAKE names (readSettingsFile), every key known to
 // constants.ts (a typo would otherwise be ignored and the code default used), and numbers that
-// parse. Prints the resolved non-secret settings. Reads config/service.json and service.<NODE_ENV>.json;
-// it does not check config/frac-sizes.json, review-rules.json or outdated.json (those are checked when loaded).
+// parse. Also loads config/ai-providers.json and checks that AI_PROVIDER and MOCK_PRICED_AS name a profile.
+// Prints the resolved non-secret settings. Reads config/service.json and service.<NODE_ENV>.json; it does
+// not check config/frac-sizes.json, review-rules.json or outdated.json (those are checked when loaded).
 import path from "node:path";
 import { readSettingsFile, SettingsError } from "../config/settings.ts";
 
@@ -15,6 +16,8 @@ async function main(): Promise<number> {
   const files = ["service.json", ...(process.env.NODE_ENV ? [`service.${process.env.NODE_ENV}.json`] : [])];
   // Imported lazily: loading constants.ts applies service.json, which would throw before we could report on it
   const { KNOWN_SETTINGS, ...groups } = await import("../config/constants.ts");
+  const { loadAiProfiles } = await import("../config/ai-providers.ts");
+  const profiles = loadAiProfiles();
   const known = new Set<string>(KNOWN_SETTINGS);
   const problems: string[] = [];
 
@@ -24,11 +27,15 @@ async function main(): Promise<number> {
       if (NUMERIC.test(key) && !Number.isFinite(Number(value))) problems.push(`${name}: ${key} must be a number, got "${value}"`);
     }
   }
+  if (groups.AI.provider !== "mock" && !profiles[groups.AI.provider]) {
+    problems.push(`AI_PROVIDER "${groups.AI.provider}" is not "mock" or a profile in ai-providers.json (${Object.keys(profiles).join(", ")})`);
+  }
+  if (!profiles[groups.MOCK.pricedAs]) problems.push(`MOCK_PRICED_AS "${groups.MOCK.pricedAs}" is not a profile in ai-providers.json`);
   if (problems.length) {
     problems.forEach((p) => process.stderr.write(`✗ ${p}\n`));
     return 1;
   }
-  process.stdout.write(`✓ config OK\n${JSON.stringify(groups, null, 2)}\n`);
+  process.stdout.write(`✓ config OK\n${JSON.stringify({ ...groups, providerProfiles: Object.keys(profiles) }, null, 2)}\n`);
   return 0;
 }
 

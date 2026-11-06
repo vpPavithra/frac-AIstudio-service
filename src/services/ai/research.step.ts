@@ -1,6 +1,6 @@
 // CREATOR STEP 2, job research (spec 5.2). Runs as a job started by FracService.startStep("research").
-// One complex-tier call (Kaushal); with Claude it may also search the government domains in
-// RESEARCH_SEARCH_DOMAINS (see providers/text/claude.ts). The answer is validated against researchOutput,
+// One complex-tier call (Kaushal); when the provider profile has webSearch it may also search the
+// government domains in RESEARCH_SEARCH_DOMAINS (see providers/text/claude.ts, gemini.ts). The answer is validated against researchOutput,
 // then researchPatch turns it into the FRAC's research, postings, cadreFull and codePrefix.
 // Flow: brief -> research -> roles & activities -> competencies -> ladders -> expert check.
 import type { z } from "zod";
@@ -43,7 +43,7 @@ export function researchPatch(frac: Frac, out: z.infer<typeof researchOutput>): 
 
 /**
  * Step 2, job research (Kaushal), complex tier, one call. `input` is what the mock answers from;
- * Claude reads only the prompt. Throws AI_OUTPUT_INVALID (via callModel) when the answer has the wrong shape.
+ * Real providers read only the prompt. Throws AI_OUTPUT_INVALID (via callModel) when the answer has the wrong shape.
  */
 export async function runResearch(ctx: StepContext): Promise<Partial<Frac>> {
   const { frac, feedback } = ctx;

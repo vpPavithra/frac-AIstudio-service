@@ -21,6 +21,11 @@ describe("settings", () => {
     expect(() => readSettingsFile(path.join(dir, "service.json"))).toThrow(/ANTHROPIC_API_KEY/);
   });
 
+  it("refuses any provider's key, whatever its name, as long as it ends in _API_KEY", () => {
+    const dir = tempConfig({ "service.json": { GEMINI_API_KEY: "g-x", SOMEAI_API_KEY: "s-x" } });
+    expect(() => readSettingsFile(path.join(dir, "service.json"))).toThrow(/GEMINI_API_KEY, SOMEAI_API_KEY/);
+  });
+
   it("rejects bad names and nested values, skips comments and nulls", () => {
     const bad = tempConfig({ "service.json": { lowerCase: 1 } });
     expect(() => readSettingsFile(path.join(bad, "service.json"))).toThrow(/invalid setting name/);

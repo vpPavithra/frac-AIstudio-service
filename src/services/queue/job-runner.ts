@@ -23,7 +23,7 @@ export interface UsageDelta {
   outputTokens: number;
   webSearches?: number;
   costUsd: number;
-  /** The mock's cost is what the same tokens would cost on Claude, not a bill. */
+  /** The cost is an estimate at list prices, not a bill (the mock, or a free-tier key). */
   estimated?: boolean;
 }
 

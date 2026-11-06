@@ -30,7 +30,7 @@ flowchart LR
   controllers --> svc[services/<br/>FracService, ReviewService]
   svc --> runner[queue/job-runner<br/>background jobs]
   runner --> ai[services/ai steps<br/>ai-review.service]
-  ai --> provider[providers/text<br/>Claude or mock]
+  ai --> provider[providers/text<br/>Gemini, Claude or mock]
   runner --> engine[review-engine/<br/>rules, checks, report]
   svc --> repos[repositories/<br/>Postgres or memory]
   svc --> excel[excel/<br/>read and write .xlsx]
@@ -56,19 +56,21 @@ flowchart LR
 
 | File | Purpose |
 |---|---|
-| `server.ts` | Process entry. Picks the store (Postgres or memory) and the AI provider (Claude or mock), wires repositories → JobRunner → ReviewService / FracService → app, checks the database, optionally migrates, starts the job watchdog, listens, optionally seeds mock data, and drains jobs on SIGTERM. |
+| `server.ts` | Process entry. Picks the store (Postgres or memory) and the AI provider (`AI_PROVIDER`: a profile in `config/ai-providers.json`, or mock), wires repositories → JobRunner → ReviewService / FracService → app, checks the database, optionally migrates, starts the job watchdog, listens, optionally seeds mock data, and drains jobs on SIGTERM. |
 | `app.ts` | Builds the Express app: request id, access log, helmet, CORS, JSON body, `/health` (no auth), `/v1` behind `requireOwner`, then the error handler. Does not listen, so tests use it directly. |
 | `migrate.ts` | `npm run migrate` / `node migrate.js` in the image: applies pending migrations and exits (1 on failure). |
-| `scripts/check-config.ts` | `npm run config:check`: rejects bad JSON, secrets, unknown keys and non-numbers in `config/service*.json`, then prints the resolved settings. |
+| `scripts/check-config.ts` | `npm run config:check`: rejects bad JSON, secrets, unknown keys and non-numbers in `config/service*.json`, checks `AI_PROVIDER` and `MOCK_PRICED_AS` name a profile, then prints the resolved settings. |
+| `scripts/ai-check.ts` | `npm run ai:check`: one tiny real call per tier to the `AI_PROVIDER` profile, printing model, tokens and cost. |
 
 ### `config/` (code that reads configuration)
 
 | File | Purpose | Reads |
 |---|---|---|
-| `settings.ts` | Merges `config/service.json` and `service.<NODE_ENV>.json` into `process.env` without overriding values already set; refuses secrets and bad names. | `config/service*.json` |
+| `settings.ts` | Merges `config/service.json` and `service.<NODE_ENV>.json` into `process.env` without overriding values already set; refuses secrets (any `*_API_KEY`) and bad names. | `config/service*.json` |
 | `constants.ts` | Every tunable as a frozen group (`SERVER`, `MODELS`, `RATES`, `LLM`, `LIMITS`, `JOBS`, `DB`, `CORS`, `LOG`, `PATHS`, `AI`, `REVIEW`, `MOCK`) plus `KNOWN_SETTINGS`. Importing it loads the settings. The only place that reads `process.env`, apart from `db.ts`. | `process.env` |
 | `db.ts` | The Postgres pool and the `host:port/db` string used in messages. | `POSTGRES_*` (env only), `DB` pool sizing |
 | `frac-sizes.ts` | Loads and validates the per-size targets; stops startup on a bad entry. | `config/frac-sizes.json` |
+| `ai-providers.ts` | Loads and validates the provider profiles with Zod (kind, key variable, models, thinking, prices, web search, free tier, concurrency); stops startup naming the profile and field at fault. | `config/ai-providers.json` |
 | `review-rules.ts` | Loads the r3 rule tables plus the OUTDATED list. Called on every review, so rule edits apply without a restart. | `config/review-rules.json`, `config/outdated.json` |
 | `outdated.ts` | Loads the OUTDATED list (superseded laws, programmes, terms). | `config/outdated.json` |
 | `method.ts` | Loads the method paragraph for the Excel "Method & Sources" sheet; empty when the file is missing (it does not exist yet). | `config/method.txt` |
@@ -151,7 +153,7 @@ a version.
 | Level ladders | default | competencies ÷ `AI_BATCH_SIZE` |
 | Expert check | complex | laddered competencies ÷ `REVIEW_BATCH_SIZE`, + 1 state call |
 
-Both tiers run Claude Sonnet 5.5 today; they differ in effort.
+Each provider profile in `config/ai-providers.json` sets the model and thinking level per tier.
 
 ### Reviewer: `services/review.service.ts`, `services/ai-review.service.ts`, `services/review-engine/`
 
@@ -183,10 +185,13 @@ record, list, export and "Open in Creator".
 | File | Purpose |
 |---|---|
 | `providers/text/types.ts` | The `TextProvider` seam: task, tier, prompt in; JSON, usage and cost out. |
-| `providers/text/claude.ts` | The real model: streaming, effort per tier, web search for research, `pause_turn` resume, refusals and truncation mapped to coded errors. |
-| `providers/text/pricing.ts` | USD per call from tokens, cache reads and writes, and web searches (`RATES`). |
-| `providers/registry.ts` | Picks Claude when `ANTHROPIC_API_KEY` is set (or `AI_PROVIDER` forces one), otherwise loads `src/mocks` dynamically. |
-| `mocks/mock-text-provider.ts` | Answers every task with sample data in the real shapes; estimates tokens and prices them at Claude rates, marked `estimated`. |
+| `providers/text/claude.ts` | Claude (profile kind `claude`): streaming, the profile's thinking level as `effort`, web search for research, `pause_turn` resume, refusals and truncation mapped to coded errors. |
+| `providers/text/gemini.ts` | Gemini (profile kind `gemini`, free or paid): JSON mode, `thinkingLevel` per tier, Google Search for research when the profile allows it, SDK retries with a 5 s first wait, usage incl. thinking and search queries, errors mapped to the same codes. |
+| `providers/text/json.ts` | `extractJson`: the one JSON object in a model's final text; shared by every provider. |
+| `providers/text/limit.ts` | `limitConcurrency`: caps calls in flight for a profile's `maxConcurrent` (1 on the Gemini free tier). |
+| `providers/text/pricing.ts` | USD per call from tokens, cache reads and writes, and web searches, at the given profile's `rates`. |
+| `providers/registry.ts` | Builds the provider `AI_PROVIDER` names: `mock` loads `src/mocks` dynamically; anything else is a profile whose `kind` picks a factory and whose `keyEnv` names the key. Stops startup with what to set otherwise. |
+| `mocks/mock-text-provider.ts` | Answers every task with sample data in the real shapes; estimates tokens and prices them at the `MOCK_PRICED_AS` profile's rates, marked `estimated`. |
 | `mocks/content/cadres.json` | The sample roles, activities and competencies per cadre. Demo data, not clinical guidance. |
 | `mocks/seed.ts`, `mocks/index.ts` | One finished FRAC and review per owner at startup (`MOCK_SEED`, memory store); the folder's entry point. |
 
@@ -267,7 +272,8 @@ ladders are incomplete; **revise** on any Blocker or 3+ Majors; otherwise **use*
 
 | To change | Edit | Takes effect |
 |---|---|---|
-| Models, effort, call limits, batching, prices, request limits, jobs, Postgres pool | `config/service.json` (an env var of the same name wins) | Restart |
+| Provider choice, call limits, batching, request limits, jobs, Postgres pool | `config/service.json` (an env var of the same name wins) | Restart |
+| Models, thinking levels, prices, key variable, web search, free tier per provider | `config/ai-providers.json` | Restart |
 | Roles, activities and competencies per brief size | `config/frac-sizes.json` | Restart |
 | Scope rules, ladder-shift rules, core areas | `config/review-rules.json` | Next review |
 | Outdated laws, programmes and terms | `config/outdated.json` | Next review |
@@ -309,3 +315,10 @@ patterns, the five state categories, `ENGINE_VERSION`, and the Excel layout.
 - **Rule flags:** `allow`, `onlyIfAbsent` and `unlessNear` patterns are always case-insensitive; there is no
   per-pattern flag for them yet.
 - **Lint scope:** `test/`, `scripts/` and the `*.config.js` files are not linted or type-checked.
+- **Gemini web search:** Gemini cannot limit Google Search to named sites, so `RESEARCH_SEARCH_DOMAINS` is
+  asked for in the instructions rather than enforced (Claude's tool enforces it). The Gemini free tier has no
+  search at all, so research there relies on the model's own knowledge plus the team's notes.
+- **Free-tier quota:** a full FRAC is several dozen calls. On the Gemini free tier they run one at a time with
+  retries on 429; when the daily quota is gone, jobs fail with `AI_BUSY` until it resets.
+- **Prompts were written against Claude.** They ask for JSON in a fixed shape and every answer is validated, so
+  they work on Gemini, but answer quality per provider should be compared on the acceptance fixtures.
