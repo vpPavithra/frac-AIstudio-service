@@ -1,6 +1,6 @@
 # Review engine r3: gap analysis and build status
 
-**Checked on:** 4 November 2026 · **Built:** 4 November 2026 (frac-studio-service and orgportal, both uncommitted)
+**Checked on:** 4 November 2026 · **Built:** 4 November 2026 · **Committed:** 6 November 2026 (service `127ddc7`, orgportal `110c8e94`)
 **Sources:** `FRAC_Creator_and_Reviewer_spec.md` (updated revision) and `FRAC_Reviewer_rules_r3.md` (3 Nov 2026), both in this folder.
 **Checked against:** frac-studio-service `src/services/review-engine/*`, `ai-review.service.ts`, `review.service.ts`,
 `excel/workbook-writer.ts`, `config/outdated.json`, and the orgportal `frac-studio` review report.
@@ -83,7 +83,7 @@ Status key: ✅ built · 🟡 partly · ❌ not built · ⚠️ deviation (with 
 | Quote check (normalised, 4+ words, in that competency's text) | ✅ |
 | Drop flags covered by OUTDATED, ladder rules 2–3, or a code scope hit at the same code and level | ✅ |
 | Merge into ≤ 3 fixed-title findings (B / M / m) | ✅ |
-| Reviewer temperature 0 | ⚠️ Opus 5.5 / Sonnet 5.5 reject sampling parameters. The spec says the fingerprint store is what guarantees repeatability, and that is built. |
+| Reviewer temperature 0 | ⚠️ No temperature is sent to any provider (Claude Sonnet 5.5 rejects it; the Gemini profiles leave it unset). The spec says the fingerprint store is what guarantees repeatability, and that is built. |
 
 ## 5. Report (rules §7) — `review-engine/report.ts`
 
@@ -147,4 +147,6 @@ one onto the review model (name → label, levels → L1–L5 label/desc). Run t
 ## Open items carried from the rules file (§11)
 
 CHO and Staff Nurse scope lists; optional state rule packs; a cadre-subject rule for GNM-style dictionaries;
-confirm the r3 repeatability numbers on Claude (measured with Gemini).
+confirm the r3 repeatability numbers on the provider in use. The service now runs on Gemini (`gemini-free`
+by default) or Claude (`AI_PROVIDER`); the rules file measured them with Gemini, so a first run on the free
+tier is a like-for-like check.

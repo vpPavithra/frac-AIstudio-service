@@ -7,6 +7,8 @@ registry (`src/providers/registry.ts`) imports `index.ts` at runtime only when i
 
 **This is sample data, not clinical guidance and not a reference FRAC.**
 
+Providers, pricing and run commands for every mode: [docs/FRAC_STUDIO_GUIDE.md](../../docs/FRAC_STUDIO_GUIDE.md).
+
 | File | What it is |
 |---|---|
 | `content/cadres.json` | The sample data you edit: one profile per cadre, plus the posting keywords |

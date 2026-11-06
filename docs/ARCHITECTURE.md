@@ -18,7 +18,7 @@ app/frac-studio                  /protected/v8/fracStudio/*        /v1/...
 |---|---|---|
 | UI | `sunbird-cb-orgportal`, `project/ws/app/src/lib/routes/frac-studio/` | NgModule, `*ngIf`, constructor DI, `_ws-design-system-v2` mixins, native `<select>`. Route `app/frac-studio` gated by a lowercase role. |
 | Proxy | `sunbird-cb-uiproxy`, `src/protectedApi_v8/fracStudio/fracStudio.ts` | `protectedApiV8.use('/fracStudio', …)` → `CONSTANTS.FRAC_STUDIO_API_BASE` (default `${KONG_API_BASE}/frac-studio`) + `/v1`. Built on the AI Studio helpers (`forwardAny`): owner as `x-aastrika-creator` from the session, multipart rebuilt, downloads streamed, upstream errors relayed. |
-| Service | this repo | Holds the Anthropic key, runs the long jobs, owns the Postgres tables. |
+| Service | this repo | Holds the AI provider key (Gemini or Claude), runs the long jobs, owns the Postgres tables. |
 
 ## Service layout
 
@@ -26,12 +26,16 @@ Layered like [aastrika-ai-service](https://github.com/Sphere/aastrika-ai-service
 handle HTTP, services hold the rules, repositories own the queries, validations own the shapes.
 
 ```
-config/service.json    every non-secret setting (models, rates, limits, timeouts, CORS)            ← done
+config/service.json    every non-secret setting (AI_PROVIDER, limits, timeouts, batching, CORS)    ← done
+config/ai-providers.json  one profile per AI provider: models, thinking, prices, key name, search   ← done
+config/frac-sizes.json roles / activities / competencies per brief size                           ← done
 config/outdated.json   OUTDATED list, read per review (OUTDATED_CONFIG_PATH overrides)             ← done
 config/review-rules.json  r3 rule tables: scope per cadre, ladder rules, job areas (REVIEW_RULES_CONFIG_PATH) ← done
 docs/spec/             the spec, the r3 review rules, and R3_GAP_ANALYSIS.md (what is built against them)
-migrations/            numbered SQL: 001 schema, 002 jobs.error_code, 003 reviews.fingerprint        ← done
-src/config/            settings.ts (service.json → env, refuses secrets), constants.ts, db.ts        ← done
+migrations/            numbered SQL: 001 schema, 002 jobs.error_code, 003 reviews.fingerprint,      ← done
+                       004 ai_calls (per-call AI log)
+src/config/            settings.ts (service.json → env, refuses secrets), constants.ts, db.ts,       ← done
+                       ai-providers.ts, frac-sizes.ts
 src/routes/            URL → middleware → controller wiring, under /v1                              ← done
 src/controllers/       HTTP only: frac, review, job                                                  ← done
 src/validations/       Zod request schemas (frac, review)                                            ← done
@@ -46,7 +50,9 @@ src/services/queue/    job runner, spec 8 job messages                          
 src/repositories/      frac / review / job .repository.ts: Postgres + in-memory per entity           ← done
 src/utils/             response (ApiError, one error shape), logger, context (request id)            ← done
 src/services/ai/       prompt builders, step logic, output schemas, batching                         ← done
-src/providers/         TextProvider seam: Claude (key set) or src/mocks (no key)                      ← done
+src/providers/         TextProvider seam: AI_PROVIDER picks a profile (gemini.ts, claude.ts) or mock ← done
+src/mocks/             sample-data provider for `npm run dev:mock`; deletable                      ← done
+src/scripts/           config:check, ai:check, ai:report                                                     ← done
 ```
 
 ## Review engine r3 (docs/spec/FRAC_Reviewer_rules_r3.md)
@@ -60,8 +66,9 @@ three fixed-title findings. Verdict, triage, summary and strengths are computed 
 
 Same file, same review: an upload's fingerprint (engine version + rule tables + parsed model + context)
 is stored with the review; the same upload returns the stored review (`fromCache`, HTTP 200, no job)
-until `POST /v1/frac-reviews/:id/rerun` or an upload with `fresh=true` asks again. Sonnet 5.5 rejects
-temperature, so the stored review is what makes results repeatable (the spec's temperature 0 is moot).
+until `POST /v1/frac-reviews/:id/rerun` or an upload with `fresh=true` asks again. Neither Claude
+Sonnet 5.5 nor the profiles' Gemini models are given a temperature, so the stored review is what makes
+results repeatable (the spec's temperature 0 is moot).
 
 ## API (spec 8, mounted under /v1, reached from the portal as /apis/protected/v8/fracStudio/...)
 
@@ -85,7 +92,7 @@ header and would let a browser act as another user.
 
 | # | Gap | Handling |
 |---|---|---|
-| 1 | No retries / JSON repair | `src/llm` retry + repair; jobs keep finished batches and retry only failed ones |
+| 1 | No retries / JSON repair | Each provider's SDK retries 408/429/5xx (`LLM_RETRIES`); a bad answer fails the job with `AI_OUTPUT_INVALID` and its spend is kept; ladder batches are saved as they finish. No JSON repair yet. |
 | 2 | Revising roles wipes competencies | roles step keeps competencies, re-runs mapping only; UI confirms before discarding |
 | 3 | Fix clears the review | finding gets `fixed: true`; `summariseChecks` ignores fixed findings; "Re-run check" |
 | 4 | Fix only rewrites ladders | non-ladder findings route to step 3/4 with pre-filled feedback |
@@ -102,4 +109,7 @@ header and would let a browser act as another user.
 - `frac-studio.html` for the verbatim METHOD / SOURCE_LIBRARY / method-paragraph text.
 - Mount the workbook writer from the export API routes once route/repository wiring is implemented.
 - Product questions in spec 11 (assessment type per level, authorisation source, Hindi sheet, multi-reviewer).
-- Web search domains for the research step need confirming before production.
+- Web search domains for the research step need confirming before production. Gemini cannot enforce them (asked for in the instructions); the Gemini free tier has no search.
+- First real runs (Gemini free tier, then Claude): cost per FRAC, repeatability, answer quality per provider.
+
+Running, providers, pricing and configuration: [FRAC_STUDIO_GUIDE.md](FRAC_STUDIO_GUIDE.md).

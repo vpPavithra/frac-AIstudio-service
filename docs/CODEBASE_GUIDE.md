@@ -7,6 +7,8 @@ the product must do). Every source file also opens with a header comment saying 
 
 Last checked against the code: 5 November 2026.
 
+For what each step does for the user, running modes, providers and pricing, see [FRAC_STUDIO_GUIDE.md](FRAC_STUDIO_GUIDE.md).
+
 ## 1. What the service does
 
 FRAC Studio builds and reviews FRAC competency dictionaries (Functions, Roles, Activities, Competencies)
@@ -60,6 +62,7 @@ flowchart LR
 | `app.ts` | Builds the Express app: request id, access log, helmet, CORS, JSON body, `/health` (no auth), `/v1` behind `requireOwner`, then the error handler. Does not listen, so tests use it directly. |
 | `migrate.ts` | `npm run migrate` / `node migrate.js` in the image: applies pending migrations and exits (1 on failure). |
 | `scripts/check-config.ts` | `npm run config:check`: rejects bad JSON, secrets, unknown keys and non-numbers in `config/service*.json`, checks `AI_PROVIDER` and `MOCK_PRICED_AS` name a profile, then prints the resolved settings. |
+| `scripts/ai-report.ts` | `npm run ai:report`: reads `ai_calls`, jobs and reviews from Postgres for a period and writes the AI response report to `reports/`. |
 | `scripts/ai-check.ts` | `npm run ai:check`: one tiny real call per tier to the `AI_PROVIDER` profile, printing model, tokens and cost. |
 
 ### `config/` (code that reads configuration)
@@ -187,6 +190,9 @@ record, list, export and "Open in Creator".
 | `providers/text/types.ts` | The `TextProvider` seam: task, tier, prompt in; JSON, usage and cost out. |
 | `providers/text/claude.ts` | Claude (profile kind `claude`): streaming, the profile's thinking level as `effort`, web search for research, `pause_turn` resume, refusals and truncation mapped to coded errors. |
 | `providers/text/gemini.ts` | Gemini (profile kind `gemini`, free or paid): JSON mode, `thinkingLevel` per tier, Google Search for research when the profile allows it, SDK retries with a 5 s first wait, usage incl. thinking and search queries, errors mapped to the same codes. |
+| `services/ai/ask-model.ts` | `askModel`: the one call path for Creator steps and the review checklist. Times the call, validates the answer, and reports it once (tokens, cost, outcome) so the job total and `ai_calls` both see it. |
+| `services/reports/ai-report.ts` | Builds the AI response report (Markdown) from calls, jobs and reviews. Pure. |
+| `repositories/ai-call.repository.ts` | The `ai_calls` per-call log: Postgres and memory. Insert-only. |
 | `providers/text/json.ts` | `extractJson`: the one JSON object in a model's final text; shared by every provider. |
 | `providers/text/limit.ts` | `limitConcurrency`: caps calls in flight for a profile's `maxConcurrent` (1 on the Gemini free tier). |
 | `providers/text/pricing.ts` | USD per call from tokens, cache reads and writes, and web searches, at the given profile's `rates`. |

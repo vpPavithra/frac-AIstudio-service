@@ -3,6 +3,8 @@
 Backend for FRAC Studio (FRAC Creator, FRAC Reviewer, My FRACs). The UI lives in `sunbird-cb-orgportal`
 at `app/frac-studio`, and calls this service through `sunbird-cb-uiproxy` at `/apis/protected/v8/fracStudio/*`.
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design and [docs/CODEBASE_GUIDE.md](docs/CODEBASE_GUIDE.md) for what every folder and file does.
+[docs/FRAC_STUDIO_GUIDE.md](docs/FRAC_STUDIO_GUIDE.md) explains each Creator step and the Reviewer, how to run mock, Gemini or
+Claude, the pricing and the configuration.
 
 ## Run
 
@@ -30,9 +32,10 @@ batching, progress, checks, report and export.
 | `AI_PROVIDER` | Answers from | Key (environment only) |
 |---|---|---|
 | `mock` | `src/mocks/` sample data, no cost, no network | none |
-| `gemini-free` (the default in `config/service.json`) | Gemini API free tier, `gemini-3.8-flash` on both tiers, no web search | `GEMINI_API_KEY` |
+| `gemini-free` (the default in `config/service.json`) | Gemini API free tier, `gemini-3.6-flash` on both tiers (switch to `gemini-3.8-flash` once Google's overload clears), no web search | `GEMINI_API_KEY` |
 | `gemini-paid` | Gemini API paid tier, `gemini-4-argon` (complex) + `gemini-3.8-flash`, Google Search for research | `GEMINI_API_KEY` |
-| `claude` | Claude Sonnet 5.5 on both tiers, web search for research | `ANTHROPIC_API_KEY` |
+| `claude` | Claude Sonnet 5.5 on both tiers (high / medium thinking), web search for research | `ANTHROPIC_API_KEY` |
+| `claude-fast` | The same model with less thinking (medium / low): faster and cheaper, for the effort comparison | `ANTHROPIC_API_KEY` |
 
 The profiles live in [`config/ai-providers.json`](config/ai-providers.json): model and thinking level per
 tier, list prices, which variable holds the key, web search, free tier and a cap on calls in flight.
@@ -43,9 +46,20 @@ price means editing the profile. Neither needs a code change.
 |---|---|
 | `npm run dev:mock` | Sample data, whatever `AI_PROVIDER` says |
 | `npm run dev:mock:seed` | Sample data, memory store, one finished FRAC and review preloaded |
-| `npm run dev:ai` (= `npm run dev`) | The provider `AI_PROVIDER` names (`.env` overrides `service.json`); stops if its key is missing |
+| `npm run dev:ai` | The provider `AI_PROVIDER` names (`.env` overrides `service.json`); refuses to start on the mock, and stops if the key is missing |
+| `npm run dev` | Whatever `AI_PROVIDER` says, mock included |
 | `npm run ai:check` | One tiny real call per tier to prove the key, models and quota; prints tokens and cost |
+| `npm run ai:report` | Writes `reports/ai-report-<date>.md`: how the AI answered (per provider, model and task), failures, jobs, review checklist flags kept and dropped. `-- --days 7` or `-- --since 2026-11-01` |
 | `npm run start:mock` / `start:ai` | The same, from the built `dist/` |
+
+**Make sure a run uses the AI, not the mock:**
+
+1. Start it with `npm run dev:ai` (or `start:ai`). These set `AI_REQUIRE_REAL=true`, so the service refuses to start on the mock and says why. `npm run dev` does not: it follows whatever `AI_PROVIDER` says.
+2. The startup log names the provider: `"ai":"gemini-free"` (or `claude`), never `"ai":"mock"`.
+3. `curl -H 'x-aastrika-creator: me' localhost:3010/v1/info` returns `{"aiProvider":"gemini-free"}`.
+4. After a step, `npm run ai:report -- --days 1` lists the calls under `gemini-free · gemini-3.6-flash`; mock calls show as `mock · mock`.
+
+The cost in the portal reads "est." on both the mock and the Gemini free tier (no bill either way), so it does not tell them apart; the checks above do.
 
 - **Where the key goes:** the service's `.env` locally (`GEMINI_API_KEY=…`); the deployment's secret store
   on a server. Never a file in `config/` (committed; startup refuses any `*_API_KEY` there).
@@ -60,6 +74,14 @@ price means editing the profile. Neither needs a code change.
   `src/config/ai-providers.ts`, then add a profile. See `gemini.ts` for a complete example.
 
 What switching affects, how to edit the sample data, and how to delete the mocks: [src/mocks/README.md](src/mocks/README.md).
+
+## Releases and the AI response report
+
+Every model call is logged to `ai_calls` (provider, model, task, time, tokens, cost, outcome; no prompt or
+answer text), and every review stores how many AI flags it raised, kept and dropped.
+`npm run ai:report` turns that into a Markdown report. Release notes live in `RELEASE_NOTES/`: copy
+[TEMPLATE.md](RELEASE_NOTES/TEMPLATE.md) per release, and keep updates, blockers and AI quality over time in
+[AI_SERVICE_TRACKER.md](RELEASE_NOTES/AI_SERVICE_TRACKER.md).
 
 ## Deploy
 
@@ -119,10 +141,10 @@ the service after a change.
 | What | Keys | Default |
 |---|---|---|
 | Provider | `AI_PROVIDER`, `MOCK_PRICED_AS` (whose prices the mock's estimate uses) | `gemini-free`, `gemini-free` |
-| Call limits (every provider) | `LLM_TIMEOUT_MS`, `LLM_RETRIES`, `LLM_MAX_TOKENS`, `LLM_MAX_RESUMES`, `LLM_MAX_RETRY_DELAY_MS` | 10 min, 3, 64,000, 3, 60 s |
-| Creator batching | `AI_BATCH_SIZE`, `AI_BATCH_PARALLEL` (activities and ladders) | 4 per call, 3 at once |
-| Review checklist | `REVIEW_BATCH_SIZE`, `REVIEW_BATCH_PARALLEL`, `REVIEW_MAX_STATE_ITEMS`, `REVIEW_MIN_QUOTE_WORDS` | 6, 3, 6, 4 |
-| Research web search | `RESEARCH_WEB_SEARCH`, `RESEARCH_SEARCH_DOMAINS`, `RESEARCH_SEARCH_MAX_USES` | on, 4 government domains, 5 |
+| Call limits (every provider) | `LLM_TIMEOUT_MS`, `LLM_RETRIES`, `LLM_MAX_TOKENS`, `LLM_MAX_RESUMES`, `LLM_MAX_RETRY_DELAY_MS`, `LLM_INVALID_RETRIES` | 10 min, 3, 64,000, 3, 60 s, 1 |
+| Creator batching | `AI_BATCH_SIZE`, `AI_BATCH_PARALLEL` (activities and ladders) | 4 per call, 6 at once |
+| Review checklist | `REVIEW_BATCH_SIZE`, `REVIEW_BATCH_PARALLEL`, `REVIEW_MAX_STATE_ITEMS`, `REVIEW_MIN_QUOTE_WORDS` | 6, 6, 6, 4 |
+| Research web search | `RESEARCH_WEB_SEARCH`, `RESEARCH_SEARCH_DOMAINS`, `RESEARCH_SEARCH_MAX_USES` | on, 4 government domains, 3 |
 | Jobs | `JOB_STALE_AFTER_MS`, `JOB_SWEEP_EVERY_MS`, `JOB_HEARTBEAT_MS` | 15 min, 1 min, 1 min |
 | Postgres pool | `POSTGRES_POOL_MAX`, `POSTGRES_CONNECT_TIMEOUT_MS`, `POSTGRES_IDLE_TIMEOUT_MS` | 10, 10 s, 30 s |
 | Request limits | `MAX_UPLOAD_MB`, `MAX_JSON_MB`, `MAX_TEXT_CHARS`, `MAX_ROLES`, `MAX_ACTIVITIES_PER_ROLE`, `MAX_COMPETENCIES` | 15, 5, 20,000, 200, 200, 500 |
