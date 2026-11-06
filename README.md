@@ -50,6 +50,9 @@ price means editing the profile. Neither needs a code change.
 | `npm run dev` | Whatever `AI_PROVIDER` says, mock included |
 | `npm run ai:check` | One tiny real call per tier to prove the key, models and quota; prints tokens and cost |
 | `npm run ai:report` | Writes `reports/ai-report-<date>.md`: by day (cost and billed), tokens, cost, model and wall time and thinking share per step, per FRAC / review, revisions and what they added, cost per user, by provider and task, slowest calls, failures, jobs, review checklist flags, and a warning when a day's billed spend passes `REPORT_DAILY_BUDGET_USD` ($5). `-- --days 7`, `-- --since 2026-11-01`, `-- --calls` to list every call |
+| `npm run ai:report -- --frac <id>` | The complete flow of one FRAC: every step, revision and expert check, with totals and every call, in `reports/fracs/` |
+| `npm run review:report -- <id>` | Review analysis for one target, in `reports/reviews/`: a Reviewer upload (review id) or a FRAC's expert checks (FRAC id). Verdict and why, checks, every finding with severity and who found it (rule or AI), the AI checklist raised / kept / dropped, the review's cost call by call, and a history table when a FRAC was checked more than once |
+| `npm run ai:report:run` | One server run, from start to stop (or now): every call, totals, per step and per FRAC, in `reports/runs/`. The latest run by default; `-- --run 12` for another (the run id is in the startup log). Runs are recorded in `server_runs` when the service starts and closed on Ctrl+C or SIGTERM |
 | `npm run ai:report:daily` | One day's report, compared with the day before, with every call (start, finish, job, task, model, outcome, tokens, cost) in `reports/daily/ai-daily-<date>.md`. Today so far by default; `-- --yesterday` for a cron job after midnight, `-- --day 2026-11-06` for any day. Times in IST (`REPORT_UTC_OFFSET_MINUTES`) |
 | `npm run start:mock` / `start:ai` | The same, from the built `dist/` |
 
@@ -80,7 +83,7 @@ What switching affects, how to edit the sample data, and how to delete the mocks
 
 Every model call is logged to `ai_calls` (provider, model, task, time, tokens, cost, outcome; no prompt or
 answer text), and every review stores how many AI flags it raised, kept and dropped.
-`npm run ai:report` turns that into a Markdown report and `npm run ai:report:daily` writes one per day. The server log also prints an "AI call started" and an "AI call finished" line for every call, with its job, task, model, time, tokens and cost. To keep daily reports, schedule `npm run ai:report:daily -- --yesterday` after midnight IST (cron or a Jenkins job), on a machine that can reach the database. Release notes live in `RELEASE_NOTES/`: copy
+Reports keep only the providers in `REPORT_PROVIDERS` (`claude` by default; `-- --provider all` for every provider). `npm run ai:report` turns that into a Markdown report and `npm run ai:report:daily` writes one per day. The server log also prints an "AI call started" and an "AI call finished" line for every call, with its job, task, model, time, tokens and cost. To keep daily reports, schedule `npm run ai:report:daily -- --yesterday` after midnight IST (cron or a Jenkins job), on a machine that can reach the database. Release notes live in `RELEASE_NOTES/`: copy
 [TEMPLATE.md](RELEASE_NOTES/TEMPLATE.md) per release, and keep updates, blockers and AI quality over time in
 [AI_SERVICE_TRACKER.md](RELEASE_NOTES/AI_SERVICE_TRACKER.md).
 

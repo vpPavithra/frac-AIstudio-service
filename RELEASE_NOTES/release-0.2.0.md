@@ -55,7 +55,7 @@ real model. The first `gemini-free` run (B-4) fills the "This release" column.
 | Wrong-shape answers (`AI_OUTPUT_INVALID`) | – | 0 (mock) | – |
 | Failed calls (by code) | – | 0 (mock) | – |
 | Average / p95 time per call | – | not measured | – |
-| Cost of one standard FRAC, research to expert check | – | about $0.35 at `gemini-3.6-flash` paid prices, about 21 calls (measured through 7 of 8 ladder calls: $0.24; last ladder call and the expert check estimated). $0 billed on the free tier | – |
+| Cost of one standard FRAC, research to expert check | – | Claude: **$0.84 measured** (21 calls, 184,130 tokens, 6 Nov 2026). Gemini: about $0.35 at `gemini-3.6-flash` paid prices, about 21 calls (measured through 7 of 8 ladder calls: $0.24; last ladder call and the expert check estimated). $0 billed on the free tier | – |
 | Cost of one review upload | – | not measured | – |
 | Checklist flags kept after the quote check | – | 23 of 23 (mock) | – |
 | Checklist flags dropped as "quote not in the file" | – | 0% (mock) | – |

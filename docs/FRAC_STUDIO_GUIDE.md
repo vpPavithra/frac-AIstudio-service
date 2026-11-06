@@ -241,6 +241,8 @@ One service, three ways to run it. Run every command in `~/SonarRepos/frac-studi
 | Claude | `ANTHROPIC_API_KEY` | `AI_PROVIDER=claude npm run ai:check`, then `AI_PROVIDER=claude npm run dev:ai` |
 | A built server (`dist/`) | as above | `npm run start:mock` or `npm run start:ai` |
 
+- **One review, analysed:** `npm run review:report -- <id>` explains a Reviewer upload (review id) or a FRAC's expert checks (FRAC id): the verdict and the rule that set the triage, each check, every finding (severity, rule-based or AI, competencies cited), what the AI checklist raised, kept and dropped, and the cost call by call.
+- **One server run:** `npm run ai:report:run` reports a single run of the service, from start to stop (or now), with totals, cost per step and every call. `npm run ai:report -- --frac <id>` costs one FRAC's complete flow. Every report keeps only Claude calls by default (`REPORT_PROVIDERS`); add `-- --provider all` to include Gemini and the mock.
 - **Every call, as it happens:** the server log prints "AI call started" and "AI call finished" for each call (job, task, provider, model, time, tokens, cost, outcome). `npm run ai:report:daily` writes one day's report listing every call with its start and finish time (IST), plus tokens, cost, wall time and thinking share per step, the comparison with the day before, cost per FRAC, what revisions added, cost per user, and a warning when a day's billed spend passes `REPORT_DAILY_BUDGET_USD` ($5 by default; estimates do not count).
 - **See how the AI answered:** `npm run ai:report` writes `reports/ai-report-<date>.md` from the per-call log: answered-OK rate, wrong-shape and failed calls, time, tokens and cost per provider and task, and how many review flags were kept or dropped. Release notes are in `RELEASE_NOTES/` (template, tracker of updates and blockers).
 - **Make sure a run uses the AI, not the mock:**
@@ -326,6 +328,8 @@ The Gemini free tier and the mock bill nothing. Gemini paid costs about the same
     | Level ladders | 8 | 17,000 / 33,200 (7 measured, 1 estimated) | $0.137 |
     | Expert check | 7 | about 27,600 / 18,000 (estimated) | about $0.09 |
     | **Whole FRAC** | **21** | **about 56,500 / 80,500** | **about $0.35** ($0 billed on the free tier) |
+
+    **Measured on Claude (6 Nov 2026, same FRAC size):** $0.84 for research → expert check, 21 calls, 184,130 tokens: research $0.13, roles and activities $0.13, competencies $0.11, ladders $0.31, expert check $0.16.
 
     Output tokens are mostly thinking. On the same token counts the `gemini-paid` profile would cost about $0.61 and `claude` about $0.92; those models think differently, so measure before relying on it.
 - **Cost per FRAC is not measured yet.** The first compact FRAC on `gemini-free` gives the real token counts per step; until then any per-FRAC figure is a guess.

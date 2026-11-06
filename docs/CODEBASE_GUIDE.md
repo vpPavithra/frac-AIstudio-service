@@ -191,6 +191,8 @@ record, list, export and "Open in Creator".
 | `providers/text/claude.ts` | Claude (profile kind `claude`): streaming, the profile's thinking level as `effort`, web search for research, `pause_turn` resume, refusals and truncation mapped to coded errors. |
 | `providers/text/gemini.ts` | Gemini (profile kind `gemini`, free or paid): JSON mode, `thinkingLevel` per tier, Google Search for research when the profile allows it, SDK retries with a 5 s first wait, usage incl. thinking and search queries, errors mapped to the same codes. |
 | `services/ai/ask-model.ts` | `askModel`: the one call path for Creator steps and the review checklist. Times the call, validates the answer, and reports it once (tokens, cost, outcome) so the job total and `ai_calls` both see it. |
+| `services/reports/review-report.ts` | Builds the review analysis report for one upload or one FRAC's expert checks. Pure. |
+| `scripts/review-report.ts` | `npm run review:report -- <id>`: loads a review or a FRAC's expert checks and their calls, writes `reports/reviews/review-<id>.md`. |
 | `services/reports/ai-report.ts` | Builds the AI response report (Markdown) from calls, jobs and reviews. Pure. |
 | `repositories/ai-call.repository.ts` | The `ai_calls` per-call log: Postgres and memory. Insert-only. |
 | `providers/text/json.ts` | `extractJson`: the one JSON object in a model's final text; shared by every provider. |
