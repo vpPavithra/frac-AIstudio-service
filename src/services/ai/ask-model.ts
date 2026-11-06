@@ -5,10 +5,12 @@
 // fails with AI_OUTPUT_INVALID; each attempt is billed and logged, and the reason goes to the log.
 // A provider error (AI_BUSY, AI_AUTH, ...) is reported with no tokens and rethrown, never retried here:
 // the SDKs already retry transport errors.
+// Every attempt writes an "AI call started" and an "AI call finished" log line, tagged with its job.
 import type { ZodType } from "zod/v4";
 import { LLM } from "../../config/constants.ts";
 import { jsonProblem } from "../../providers/text/json.ts";
 import type { AiTask, CompletionResult, ModelTier, TextProvider } from "../../providers/text/types.ts";
+import { currentJob } from "../../utils/context.ts";
 import { logger } from "../../utils/logger.ts";
 import { ApiError } from "../../utils/response.ts";
 import type { RecordUsage } from "../queue/job-runner.ts";
@@ -34,22 +36,43 @@ function rejection(result: CompletionResult, issue: { path: PropertyKey[]; messa
  */
 export async function askModel<T>(req: AskRequest, schema: ZodType<T>, recordUsage?: RecordUsage): Promise<T> {
   const base = { provider: req.provider.name, task: req.task, tier: req.tier };
+  const job = currentJob();
+  const tags = { ...base, ...(job ? { jobId: job.jobId, job: job.kind } : {}) };
   for (let attempt = 0; ; attempt++) {
     const started = Date.now();
+    logger.info("AI call started", { ...tags, attempt: attempt + 1 });
     let result: CompletionResult;
     try {
       result = await req.provider.complete({ task: req.task, tier: req.tier, prompt: req.prompt, input: req.input, schema });
     } catch (err) {
       const outcome = err instanceof ApiError ? err.code : "ERROR";
+      const latencyMs = Date.now() - started;
+      logger.warn("AI call finished", { ...tags, attempt: attempt + 1, outcome, ms: latencyMs });
       await recordUsage?.({
         inputTokens: 0,
         outputTokens: 0,
         costUsd: 0,
-        call: { ...base, model: "", outcome, latencyMs: Date.now() - started, cacheReadTokens: 0 },
+        call: { ...base, model: "", outcome, latencyMs, cacheReadTokens: 0, thinkingTokens: null, startedAt: new Date(started).toISOString() },
       });
       throw err;
     }
     const parsed = schema.safeParse(result.json);
+    // The model's own time: a wait for a free slot (limitConcurrency) is not counted
+    const queuedMs = result.queuedMs ?? 0;
+    const latencyMs = Math.max(0, Date.now() - started - queuedMs);
+    const outcome = parsed.success ? "ok" : "invalid";
+    logger.info("AI call finished", {
+      ...tags,
+      attempt: attempt + 1,
+      model: result.model,
+      outcome,
+      ms: latencyMs,
+      ...(queuedMs ? { queuedMs } : {}),
+      tokensIn: result.usage.inputTokens,
+      tokensOut: result.usage.outputTokens,
+      ...(result.usage.thinkingTokens !== undefined ? { thinking: result.usage.thinkingTokens } : {}),
+      costUsd: Number(result.costUsd.toFixed(5)),
+    });
     await recordUsage?.({
       ...result.usage,
       costUsd: result.costUsd,
@@ -57,10 +80,11 @@ export async function askModel<T>(req: AskRequest, schema: ZodType<T>, recordUsa
       call: {
         ...base,
         model: result.model,
-        outcome: parsed.success ? "ok" : "invalid",
-        // The model's own time: a wait for a free slot (limitConcurrency) is not counted
-        latencyMs: Math.max(0, Date.now() - started - (result.queuedMs ?? 0)),
+        outcome,
+        latencyMs,
         cacheReadTokens: result.usage.cacheReadTokens ?? 0,
+        thinkingTokens: result.usage.thinkingTokens ?? null,
+        startedAt: new Date(started + queuedMs).toISOString(),
       },
     });
     if (parsed.success) return parsed.data;

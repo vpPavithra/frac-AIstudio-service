@@ -10,11 +10,11 @@ describe("Gemini provider helpers", () => {
       usageMetadata: { promptTokenCount: 1000, toolUsePromptTokenCount: 200, candidatesTokenCount: 300, thoughtsTokenCount: 700, cachedContentTokenCount: 400 },
       candidates: [{ groundingMetadata: { webSearchQueries: ["ANM job description", " "] } }],
     });
-    expect(usage).toEqual({ inputTokens: 1200, outputTokens: 1000, cacheReadTokens: 400, webSearches: 1 });
+    expect(usage).toEqual({ inputTokens: 1200, outputTokens: 1000, thinkingTokens: 700, cacheReadTokens: 400, webSearches: 1 });
   });
 
   it("treats a missing usage block as zero", () => {
-    expect(geminiUsage({})).toEqual({ inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, webSearches: 0 });
+    expect(geminiUsage({})).toEqual({ inputTokens: 0, outputTokens: 0, thinkingTokens: 0, cacheReadTokens: 0, webSearches: 0 });
   });
 
   it("maps API errors to the codes the portal shows", () => {

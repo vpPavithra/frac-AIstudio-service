@@ -8,7 +8,7 @@ import path from "node:path";
 import { readSettingsFile, SettingsError } from "../config/settings.ts";
 
 /** Setting names whose value must parse as a number, recognised by suffix/prefix (e.g. LLM_TIMEOUT_MS, MAX_ROLES). */
-const NUMERIC = /(_MS|_MB|_CHARS|_RETRIES|_USD_PER_1M|_USD_PER_1K|_MULTIPLIER|_TOKENS|_RESUMES|_USES|_SIZE|_PARALLEL|_ITEMS|_WORDS|^MAX_|^PORT$|_TEMPERATURE$)/;
+const NUMERIC = /(_MS|_MB|_CHARS|_RETRIES|_USD_PER_1M|_USD_PER_1K|_MULTIPLIER|_TOKENS|_RESUMES|_USES|_SIZE|_PARALLEL|_ITEMS|_WORDS|_MINUTES|_USD|^MAX_|^PORT$|_TEMPERATURE$)/;
 
 /** Runs every check and returns the exit code (0 OK, 1 problems), so all problems print in one run. */
 async function main(): Promise<number> {

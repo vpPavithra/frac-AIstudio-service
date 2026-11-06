@@ -27,6 +27,7 @@
     "config:check": "node --loader ts-node/esm src/scripts/check-config.ts",
     "ai:check": "node --loader ts-node/esm src/scripts/ai-check.ts",
     "ai:report": "node --loader ts-node/esm src/scripts/ai-report.ts",
+    "ai:report:daily": "node --loader ts-node/esm src/scripts/ai-report.ts --daily",
     "check": "npm run typecheck && npm run lint && npm run config:check && npm test"
   },
   "dependencies": {

@@ -39,6 +39,7 @@ export function geminiUsage(response: Pick<GenerateContentResponse, "usageMetada
   return {
     inputTokens: (u.promptTokenCount ?? 0) + (u.toolUsePromptTokenCount ?? 0),
     outputTokens: (u.candidatesTokenCount ?? 0) + (u.thoughtsTokenCount ?? 0),
+    thinkingTokens: u.thoughtsTokenCount ?? 0,
     cacheReadTokens: u.cachedContentTokenCount ?? 0,
     webSearches: queries.filter((q) => q.trim()).length,
   };

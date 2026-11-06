@@ -14,3 +14,17 @@ export const requestContext = new AsyncLocalStorage<RequestContext>();
 export function currentReqId(): string | undefined {
   return requestContext.getStore()?.reqId;
 }
+
+/** The job a piece of work belongs to. Set by services/queue/job-runner.ts around each job's task. */
+export interface JobContext {
+  jobId: string;
+  kind: string;
+}
+
+/** The store itself. Only the job runner should call `run`; everyone else uses currentJob. */
+export const jobContext = new AsyncLocalStorage<JobContext>();
+
+/** The running job, or undefined outside one (e.g. npm run ai:check). Used to tag AI call log lines. */
+export function currentJob(): JobContext | undefined {
+  return jobContext.getStore();
+}

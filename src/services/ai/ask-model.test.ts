@@ -43,6 +43,7 @@ describe("askModel and the per-call AI log", () => {
       estimated: true,
     });
     expect(calls[0].latencyMs).toBeGreaterThanOrEqual(0);
+    expect(Date.parse(calls[0].startedAt ?? "")).toBeLessThanOrEqual(Date.parse(calls[0].createdAt));
   });
 
   it("logs wrong-shape answers as invalid, still billed, retries once, then fails the job with AI_OUTPUT_INVALID", async () => {

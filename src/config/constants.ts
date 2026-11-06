@@ -140,6 +140,16 @@ export const REVIEW = Object.freeze({
   minQuoteWords: int("REVIEW_MIN_QUOTE_WORDS", 4),
 });
 
+/** The AI response report (scripts/ai-report.ts): which clock its days and times are in. */
+export const REPORTS = Object.freeze({
+  /** Minutes ahead of UTC; 330 = IST. A "day" in the daily report runs midnight to midnight on this clock. */
+  utcOffsetMinutes: num("REPORT_UTC_OFFSET_MINUTES", 330),
+  /** Billed USD per day above which the report warns (estimates from the mock or a free tier do not count). 0 = off. */
+  dailyBudgetUsd: num("REPORT_DAILY_BUDGET_USD", 0),
+  /** Where `npm run ai:report` writes, relative to the working directory; daily reports go in <dir>/daily. */
+  dir: text("REPORT_DIR", "reports"),
+});
+
 /** Mock-only settings (src/mocks). Unused when a real provider answers. */
 export const MOCK = Object.freeze({
   /** Pause per mock call so progress is visible; 0 in tests. */
@@ -161,5 +171,5 @@ export const KNOWN_SETTINGS = [
   "OUTDATED_CONFIG_PATH", "REVIEW_RULES_CONFIG_PATH", "FRAC_SIZES_CONFIG_PATH", "AI_PROVIDERS_CONFIG_PATH", "METHOD_PARAGRAPH_PATH",
   "AI_PROVIDER", "AI_REQUIRE_REAL", "RESEARCH_WEB_SEARCH", "RESEARCH_SEARCH_DOMAINS", "RESEARCH_SEARCH_MAX_USES", "AI_BATCH_SIZE", "AI_BATCH_PARALLEL",
   "REVIEW_BATCH_SIZE", "REVIEW_BATCH_PARALLEL", "REVIEW_MAX_STATE_ITEMS", "REVIEW_MIN_QUOTE_WORDS",
-  "MOCK_DELAY_MS", "MOCK_SEED", "MOCK_SEED_OWNERS", "MOCK_PRICED_AS",
+  "MOCK_DELAY_MS", "MOCK_SEED", "MOCK_SEED_OWNERS", "MOCK_PRICED_AS", "REPORT_UTC_OFFSET_MINUTES", "REPORT_DAILY_BUDGET_USD", "REPORT_DIR",
 ] as const;

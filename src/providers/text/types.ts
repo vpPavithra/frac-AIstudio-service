@@ -33,6 +33,8 @@ export interface CallUsage {
   inputTokens: number;
   /** Visible answer plus thinking. */
   outputTokens: number;
+  /** The thinking part of outputTokens, when the API reports it. */
+  thinkingTokens?: number;
   cacheReadTokens?: number;
   cacheWriteTokens?: number;
   /** Web searches the research step ran (billed per search). */

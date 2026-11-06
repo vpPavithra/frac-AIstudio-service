@@ -20,8 +20,13 @@ export interface AiCall {
   inputTokens: number;
   outputTokens: number;
   cacheReadTokens: number;
+  /** The thinking part of outputTokens; null when the provider did not report it (the mock, older rows). */
+  thinkingTokens: number | null;
   webSearches: number;
   costUsd: number;
   estimated: boolean;
+  /** When the call was sent to the model (after any wait for a free slot); null on rows logged before 005. */
+  startedAt: string | null;
+  /** When the call finished and was logged. */
   createdAt: string;
 }

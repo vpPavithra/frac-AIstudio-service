@@ -8,6 +8,7 @@ import type { AiCall } from "../../models/ai-call.model.ts";
 import type { Job, JobPatch } from "../../models/job.model.ts";
 import type { AiCallRepository } from "../../repositories/ai-call.repository.ts";
 import type { JobRepository } from "../../repositories/job.repository.ts";
+import { jobContext } from "../../utils/context.ts";
 import { ApiError } from "../../utils/response.ts";
 import { describeError, logger } from "../../utils/logger.ts";
 
@@ -28,7 +29,7 @@ export interface UsageDelta {
   /** The cost is an estimate at list prices, not a bill (the mock, or a free-tier key). */
   estimated?: boolean;
   /** Who answered and how, for the per-call AI log (ai_calls). Set by services/ai/ask-model.ts. */
-  call?: Pick<AiCall, "provider" | "model" | "task" | "tier" | "outcome" | "latencyMs" | "cacheReadTokens">;
+  call?: Pick<AiCall, "provider" | "model" | "task" | "tier" | "outcome" | "latencyMs" | "cacheReadTokens" | "thinkingTokens" | "startedAt">;
 }
 
 /** Adds one model call's spend to the job's running total (jobs.usage). */
@@ -142,7 +143,8 @@ export class JobRunner {
     };
     try {
       await write({ status: "running" });
-      await task(progress, recordUsage);
+      // The job context lets askModel tag its "AI call started / finished" log lines with this job
+      await jobContext.run({ jobId: id, kind }, () => task(progress, recordUsage));
       clearInterval(heartbeat);
       await write({ status: "done" });
       // One log line per job with its total tokens and cost (spec 9); also logged on failure below

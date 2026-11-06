@@ -22,9 +22,11 @@ interface AiCallRow {
   input_tokens: number;
   output_tokens: number;
   cache_read_tokens: number;
+  thinking_tokens: number | null;
   web_searches: number;
   cost_usd: string;
   estimated: boolean;
+  started_at: Date | null;
   created_at: Date;
 }
 
@@ -40,10 +42,12 @@ const fromRow = (r: AiCallRow): AiCall => ({
   inputTokens: r.input_tokens,
   outputTokens: r.output_tokens,
   cacheReadTokens: r.cache_read_tokens,
+  thinkingTokens: r.thinking_tokens,
   webSearches: r.web_searches,
   // NUMERIC comes back from pg as a string
   costUsd: Number(r.cost_usd),
   estimated: r.estimated,
+  startedAt: r.started_at ? iso(r.started_at) : null,
   createdAt: iso(r.created_at),
 });
 
@@ -53,10 +57,10 @@ export class PgAiCallRepository implements AiCallRepository {
   async insert(c: AiCall): Promise<void> {
     await this.pool.query(
       `INSERT INTO ai_calls (job_id, job_kind, provider, model, task, tier, outcome, latency_ms, input_tokens, output_tokens,
-         cache_read_tokens, web_searches, cost_usd, estimated, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
+         cache_read_tokens, thinking_tokens, web_searches, cost_usd, estimated, started_at, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`,
       [c.jobId, c.jobKind, c.provider, c.model, c.task, c.tier, c.outcome, c.latencyMs, c.inputTokens, c.outputTokens,
-        c.cacheReadTokens, c.webSearches, c.costUsd, c.estimated, c.createdAt],
+        c.cacheReadTokens, c.thinkingTokens, c.webSearches, c.costUsd, c.estimated, c.startedAt, c.createdAt],
     );
   }
 

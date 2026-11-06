@@ -70,7 +70,7 @@ export class ClaudeTextProvider implements TextProvider {
         : [];
     const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: "user", content: request.prompt }];
     const format = structuredFormat(request.task, request.schema);
-    const usage: Required<CallUsage> = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, webSearches: 0 };
+    const usage: Required<CallUsage> = { inputTokens: 0, outputTokens: 0, thinkingTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, webSearches: 0 };
 
     let message: Message | null = null;
     for (let turn = 0; turn <= LLM.maxResumes; turn++) {
@@ -81,6 +81,7 @@ export class ClaudeTextProvider implements TextProvider {
       usage.cacheWriteTokens += u.cache_creation_input_tokens ?? 0;
       usage.inputTokens += u.input_tokens + (u.cache_read_input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0);
       usage.outputTokens += u.output_tokens;
+      usage.thinkingTokens += u.output_tokens_details?.thinking_tokens ?? 0;
       usage.webSearches += u.server_tool_use?.web_search_requests ?? 0;
       if (message.stop_reason !== "pause_turn") {
         break;
