@@ -5,6 +5,7 @@ import { MemoryAiCallRepository, PgAiCallRepository, type AiCallRepository } fro
 import { MemoryFracRepository, PgFracRepository, type FracRepository } from "./frac.repository.ts";
 import { MemoryJobRepository, PgJobRepository, type JobRepository } from "./job.repository.ts";
 import { MemoryReviewRepository, PgReviewRepository, type ReviewRepository } from "./review.repository.ts";
+import { MemoryServerRunRepository, PgServerRunRepository, type ServerRunRepository } from "./server-run.repository.ts";
 
 /** One repository per entity, passed to the services as a bundle. */
 export interface Repositories {
@@ -13,6 +14,8 @@ export interface Repositories {
   jobs: JobRepository;
   /** The per-call AI log, for the AI response report. */
   aiCalls: AiCallRepository;
+  /** Server starts and stops, for the per-run report. */
+  serverRuns: ServerRunRepository;
 }
 
 export function pgRepositories(pool: Pool): Repositories {
@@ -21,6 +24,7 @@ export function pgRepositories(pool: Pool): Repositories {
     reviews: new PgReviewRepository(pool),
     jobs: new PgJobRepository(pool),
     aiCalls: new PgAiCallRepository(pool),
+    serverRuns: new PgServerRunRepository(pool),
   };
 }
 
@@ -30,5 +34,6 @@ export function memoryRepositories(): Repositories {
     reviews: new MemoryReviewRepository(),
     jobs: new MemoryJobRepository(),
     aiCalls: new MemoryAiCallRepository(),
+    serverRuns: new MemoryServerRunRepository(),
   };
 }

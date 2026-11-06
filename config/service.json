@@ -47,10 +47,11 @@
   "POSTGRES_CONNECT_TIMEOUT_MS": 10000,
   "POSTGRES_IDLE_TIMEOUT_MS": 30000,
 
-  "// reports": "npm run ai:report / ai:report:daily: the clock days and times are shown in (minutes ahead of UTC; 330 = IST), the billed USD per day above which the report warns (0 = off; estimates do not count), and the output folder.",
+  "// reports": "npm run ai:report / ai:report:daily: the clock days and times are shown in (minutes ahead of UTC; 330 = IST), the billed USD per day above which the report warns (0 = off; estimates do not count), the output folder, and the providers the reports keep by default (comma list; empty = all; --provider all overrides).",
   "REPORT_UTC_OFFSET_MINUTES": 330,
   "REPORT_DAILY_BUDGET_USD": 5,
   "REPORT_DIR": "reports",
+  "REPORT_PROVIDERS": "claude",
 
   "// cors": "Comma-separated browser origins. Empty: only the uiproxy calls this service.",
   "CORS_ORIGINS": ""

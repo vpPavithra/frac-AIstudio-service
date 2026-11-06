@@ -146,6 +146,8 @@ export const REPORTS = Object.freeze({
   utcOffsetMinutes: num("REPORT_UTC_OFFSET_MINUTES", 330),
   /** Billed USD per day above which the report warns (estimates from the mock or a free tier do not count). 0 = off. */
   dailyBudgetUsd: num("REPORT_DAILY_BUDGET_USD", 0),
+  /** Providers the reports keep by default (comma list; empty = all). `--provider all` overrides it per run. */
+  providers: list("REPORT_PROVIDERS"),
   /** Where `npm run ai:report` writes, relative to the working directory; daily reports go in <dir>/daily. */
   dir: text("REPORT_DIR", "reports"),
 });
@@ -171,5 +173,5 @@ export const KNOWN_SETTINGS = [
   "OUTDATED_CONFIG_PATH", "REVIEW_RULES_CONFIG_PATH", "FRAC_SIZES_CONFIG_PATH", "AI_PROVIDERS_CONFIG_PATH", "METHOD_PARAGRAPH_PATH",
   "AI_PROVIDER", "AI_REQUIRE_REAL", "RESEARCH_WEB_SEARCH", "RESEARCH_SEARCH_DOMAINS", "RESEARCH_SEARCH_MAX_USES", "AI_BATCH_SIZE", "AI_BATCH_PARALLEL",
   "REVIEW_BATCH_SIZE", "REVIEW_BATCH_PARALLEL", "REVIEW_MAX_STATE_ITEMS", "REVIEW_MIN_QUOTE_WORDS",
-  "MOCK_DELAY_MS", "MOCK_SEED", "MOCK_SEED_OWNERS", "MOCK_PRICED_AS", "REPORT_UTC_OFFSET_MINUTES", "REPORT_DAILY_BUDGET_USD", "REPORT_DIR",
+  "MOCK_DELAY_MS", "MOCK_SEED", "MOCK_SEED_OWNERS", "MOCK_PRICED_AS", "REPORT_UTC_OFFSET_MINUTES", "REPORT_DAILY_BUDGET_USD", "REPORT_DIR", "REPORT_PROVIDERS",
 ] as const;

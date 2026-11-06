@@ -85,6 +85,10 @@ describe("AI response report", () => {
     expect(md).toContain("| Dropped: quote not in the file | 3 (30%) |");
     expect(md).toContain("| AI judgement (quoted) | 0 | 1 | 0 |");
     expect(md).toContain("Triage across 1 reviews: revise 1.");
+    expect(md).toContain("| Total tokens | 4,200 |");
+    expect(md).toContain("| Billed (real spend) | $0.0000 |");
+    expect(md).toContain("| Estimated (mock or free tier, not billed) | $0.0060 |");
+    expect(md).toMatch(/\| of which thinking \| 1,200 \(100% of measured output\) \|/);
   });
 
   it("totals tokens and cost per step and per FRAC, lists the slowest calls, and (daily) every call in IST", () => {

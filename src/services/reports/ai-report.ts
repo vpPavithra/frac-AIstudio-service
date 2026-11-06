@@ -26,6 +26,8 @@ export interface AiReportInput {
   targets?: Record<string, string>;
   /** Billed USD per day above which the report warns; 0 or absent = no warning. */
   dailyBudgetUsd?: number;
+  /** Set when the report covers only some providers (npm run ai:report -- --provider claude); shown under the title. */
+  providers?: string[];
   /** The period before, for the "Compared with" table (the daily report passes the previous day). */
   previous?: { label: string; calls: AiCall[]; jobs: Job[] };
 }
@@ -287,6 +289,30 @@ function slowestSection(calls: AiCall[], offset: number): string {
   return table(["Time", "Started", "Task", "Provider · model", "Tokens out", "Outcome"], rows);
 }
 
+/** One table with the period's totals: calls, tokens (in, out, thinking, all), web searches, cost and the billed part. */
+function totalsSection(calls: AiCall[]): string {
+  if (!calls.length) return "No calls.";
+  const tin = sum(calls.map((c) => c.inputTokens));
+  const tout = sum(calls.map((c) => c.outputTokens));
+  const measured = calls.filter((c) => c.thinkingTokens !== null && c.thinkingTokens !== undefined);
+  const thinking = sum(measured.map((c) => c.thinkingTokens ?? 0));
+  const cost = sum(calls.map((c) => c.costUsd));
+  const real = billed(calls);
+  const rows = [
+    ["AI calls", int(calls.length)],
+    ["Answered OK", `${int(calls.filter((c) => c.outcome === "ok").length)} (${pct(calls.filter((c) => c.outcome === "ok").length, calls.length)})`],
+    ["Tokens in", int(tin)],
+    ["Tokens out", int(tout)],
+    ["of which thinking", measured.length ? `${int(thinking)} (${pct(thinking, sum(measured.map((c) => c.outputTokens)))} of measured output)` : "not measured"],
+    ["Total tokens", int(tin + tout)],
+    ["Web searches", int(sum(calls.map((c) => c.webSearches)))],
+    ["Total cost", `$${cost.toFixed(4)}`],
+    ["Billed (real spend)", `$${real.toFixed(4)}`],
+    ["Estimated (mock or free tier, not billed)", `$${(cost - real).toFixed(4)}`],
+  ];
+  return table(["Total", "Value"], rows);
+}
+
 /** Real spend only: estimates (the mock, a free-tier key) are not a bill. */
 const billed = (calls: AiCall[]) => sum(calls.filter((c) => !c.estimated).map((c) => c.costUsd));
 
@@ -469,11 +495,16 @@ export function buildAiReport(input: AiReportInput): string {
     `# ${input.title ?? `AI response report, ${localDay(input.from)} to ${localDay(new Date(input.to.getTime() - 1))}`}`,
     "",
     `Generated ${shift(input.generatedAt.toISOString(), offset).toISOString().replace("T", " ").slice(0, 16)} ${clock} by \`npm run ai:report\`. Times are ${clock}. No prompt or answer text is stored or shown.`,
+    ...(input.providers?.length ? ["", `**Providers in this report:** ${input.providers.join(", ")} only. Calls, jobs and reviews from other providers are left out.`] : []),
     "",
     "## Summary",
     "",
     summary(calls, jobs),
     ...budgetWarnings(calls, offset, input.dailyBudgetUsd ?? 0).flatMap((w) => ["", w]),
+    "",
+    "## Totals",
+    "",
+    totalsSection(calls),
     ...(estimated ? ["", "Costs marked est. are estimates at list prices (the mock, or a free-tier key), not a bill."] : []),
     ...(calls.some((c) => c.provider === "mock") ? ["", "Calls from `mock` are sample data: their tokens and times say nothing about a real model."] : []),
     "",
