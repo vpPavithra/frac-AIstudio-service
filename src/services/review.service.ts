@@ -71,7 +71,8 @@ export class ReviewService {
   ) {}
 
   /** Rule-based checks, then the AI checklist, merged into one computed report (rules r3 §4–7). */
-  async review(model: ReviewModel, ctx: ReviewContext, recordUsage?: RecordUsage): Promise<Report> {
+  /** `fresh`: ask the model about every competency ("Run a fresh review"), not reusing stored answers. */
+  async review(model: ReviewModel, ctx: ReviewContext, recordUsage?: RecordUsage, fresh = false): Promise<Report> {
     const rules = this.rules();
     const checks = computeChecks(model, rules, { cadre: ctx.cadre });
     let aiChecklist: AiChecklistStats | undefined;
@@ -83,6 +84,7 @@ export class ReviewService {
       rules,
       recordUsage,
       onStats: (stats) => (aiChecklist = stats),
+      fresh,
     });
     const report = buildReport({
       title: model.title,
@@ -101,11 +103,11 @@ export class ReviewService {
   }
 
   /** Runs the review of a stored upload as a job and replaces its report when done. */
-  private async runReviewJob(ownerId: string, review: ReviewRecord, model: ReviewModel): Promise<string> {
+  private async runReviewJob(ownerId: string, review: ReviewRecord, model: ReviewModel, fresh = false): Promise<string> {
     const job = await this.runner.start(
       { ownerId, kind: "review", targetId: review.id, msg: JOB_MESSAGES.review },
       async (_progress, recordUsage) => {
-        review.report = await this.review(model, review.ctx, recordUsage);
+        review.report = await this.review(model, review.ctx, recordUsage, fresh);
         review.fingerprint = review.report.fingerprint ?? null;
         await this.repos.reviews.update(review);
       },
@@ -148,7 +150,7 @@ export class ReviewService {
       createdAt: new Date().toISOString(),
     };
     await this.repos.reviews.insert(review);
-    return { reviewId: review.id, jobId: await this.runReviewJob(ownerId, review, model), warnings, fromCache: false };
+    return { reviewId: review.id, jobId: await this.runReviewJob(ownerId, review, model, fresh), warnings, fromCache: false };
   }
 
   /** "Run a fresh review" (rules r3 §9): asks the model again and replaces the stored report. */
@@ -156,7 +158,7 @@ export class ReviewService {
     const review = await this.get(ownerId, id);
     if (!review.sourceModel) throw badRequest("NO_SOURCE_WORKBOOK", "This review has no stored workbook to review again");
     if (review.kind !== "upload") throw badRequest("NOT_AN_UPLOAD", "Run the expert check again from the FRAC instead");
-    return { reviewId: review.id, jobId: await this.runReviewJob(ownerId, review, review.sourceModel), warnings: [], fromCache: false };
+    return { reviewId: review.id, jobId: await this.runReviewJob(ownerId, review, review.sourceModel, true), warnings: [], fromCache: false };
   }
 
   /** Records a Creator expert check as a review too (spec gap 10); My FRACs can filter by kind. */

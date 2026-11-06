@@ -35,6 +35,22 @@
     }
   },
 
+  "claude-mixed": {
+    "kind": "claude",
+    "keyEnv": "ANTHROPIC_API_KEY",
+    "//": "Cost-saving option to compare before go-live: Sonnet 5.5 for the complex tier (research, roles, competencies, review) and Haiku 5.5 for the default tier (activities, ladders), about half the cost of `claude` per FRAC. Haiku 5.5 prices from the model list (6 Nov 2026): $0.10 / $0.50 per million tokens for prompts up to 100K tokens; its tokenizer counts about 30% more tokens. Its cache-read price is assumed at 10% of input (no caching is used yet). Haiku has no server-side fallback.",
+    "models": { "complex": "claude-sonnet-5-5", "default": "claude-haiku-5-5" },
+    "thinking": { "complex": "high", "default": "medium" },
+    "webSearch": true,
+    "serverFallback": { "complex": true, "default": false },
+    "rates": {
+      "complex": { "inUsdPer1M": 2, "outUsdPer1M": 10, "cacheReadUsdPer1M": 0.2 },
+      "default": { "inUsdPer1M": 0.1, "outUsdPer1M": 0.5, "cacheReadUsdPer1M": 0.01 },
+      "cacheWriteMultiplier": 1.25,
+      "webSearchUsdPer1K": 10
+    }
+  },
+
   "claude-fast": {
     "kind": "claude",
     "keyEnv": "ANTHROPIC_API_KEY",

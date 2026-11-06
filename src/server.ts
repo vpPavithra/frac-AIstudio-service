@@ -32,7 +32,7 @@ async function start(): Promise<void> {
   // AI_PROVIDER: a profile in config/ai-providers.json (needs its key) or mock (`npm run dev:mock`)
   const { provider, mocks } = await createAi();
   // The rule tables are re-read per review so reviewers' edits apply without a restart
-  const reviews = new ReviewService(repos, runner, new ChecklistReviewer(provider), () => loadReviewRules());
+  const reviews = new ReviewService(repos, runner, new ChecklistReviewer(provider, repos.reviewAnswers), () => loadReviewRules());
   // The method paragraph (config/method.txt) is also re-read per export, for the same reason
   const fracs = new FracService(repos, runner, reviews, () => loadMethodParagraph(), provider);
   // Refuse to start when Postgres is unreachable, rather than failing every request later

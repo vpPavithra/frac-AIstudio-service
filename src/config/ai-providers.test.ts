@@ -21,7 +21,7 @@ const valid = {
 describe("AI provider profiles", () => {
   it("reads the committed profiles: Gemini free and paid, and Claude", () => {
     const profiles = loadAiProfiles();
-    expect(Object.keys(profiles)).toEqual(["gemini-free", "gemini-paid", "claude-fast", "claude"]);
+    expect(Object.keys(profiles)).toEqual(["gemini-free", "gemini-paid", "claude-mixed", "claude-fast", "claude"]);
     expect(profiles["gemini-free"]).toMatchObject({ kind: "gemini", keyEnv: "GEMINI_API_KEY", freeTier: true, webSearch: false, maxConcurrent: 1 });
     expect(profiles.claude).toMatchObject({ kind: "claude", keyEnv: "ANTHROPIC_API_KEY", freeTier: false });
   });

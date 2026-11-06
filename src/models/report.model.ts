@@ -55,6 +55,10 @@ export interface CheckSummary {
 export interface AiChecklistStats {
   /** Laddered competencies sent to the Q1/Q2 checklist. */
   competenciesAsked: number;
+  /** Of those, how many reused a stored answer instead of a model call (their text had not changed). */
+  reusedCompetencies?: number;
+  /** True when the state-fit answer was reused (the FRAC had not changed). */
+  stateReused?: boolean;
   scopeRaised: number;
   accuracyRaised: number;
   /** Q1 and Q2 flags that passed the quote check and became finding lines. */

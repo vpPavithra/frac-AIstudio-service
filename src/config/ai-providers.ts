@@ -30,6 +30,8 @@ const profileSchema = z.object({
   models: z.object({ complex: z.string().min(1), default: z.string().min(1) }),
   thinking: z.object({ complex: level, default: level }),
   webSearch: z.boolean().default(false),
+  /** Claude only: ask the API to re-run a declined request on its fallback model. Off for models without one (Haiku 5.5). */
+  serverFallback: z.object({ complex: z.boolean(), default: z.boolean() }).default({ complex: true, default: true }),
   rates: z.object({ complex: tierRates, default: tierRates, cacheWriteMultiplier: usd.default(1), webSearchUsdPer1K: usd.default(0) }),
 });
 

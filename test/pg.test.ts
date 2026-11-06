@@ -52,7 +52,7 @@ const competencies = [
 describe("Postgres path (pg-mem)", () => {
   it("applies every migration once and is a no-op the second time", async () => {
     const { pool, applied } = await setup();
-    expect(applied).toEqual(["001_init.sql", "002_job_error_code.sql", "003_review_fingerprint.sql", "004_ai_calls.sql", "005_ai_call_started_at.sql", "006_ai_call_thinking_tokens.sql", "007_server_runs.sql"]);
+    expect(applied).toEqual(["001_init.sql", "002_job_error_code.sql", "003_review_fingerprint.sql", "004_ai_calls.sql", "005_ai_call_started_at.sql", "006_ai_call_thinking_tokens.sql", "007_server_runs.sql", "008_review_answer_cache.sql"]);
     expect(await runMigrations(pool, loadMigrations())).toEqual([]);
   });
 

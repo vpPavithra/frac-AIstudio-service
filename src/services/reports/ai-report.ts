@@ -159,11 +159,13 @@ function jobsSection(jobs: Job[]): string {
 function checklistSection(reviews: ReviewRecord[]): string {
   const stats = reviews.map((r) => r.report?.aiChecklist).filter((s): s is AiChecklistStats => !!s);
   if (!stats.length) return "No review in this period recorded checklist counts.";
-  const total = (k: keyof AiChecklistStats) => sum(stats.map((s) => s[k]));
+  type Counted = Exclude<keyof AiChecklistStats, "stateReused" | "reusedCompetencies">;
+  const total = (k: Counted) => sum(stats.map((s) => s[k]));
   const raised = total("scopeRaised") + total("accuracyRaised");
   const rows = [
     ["Reviews with checklist counts", String(stats.length)],
     ["Competencies sent to the checklist", int(total("competenciesAsked"))],
+    ["of which reused a stored answer (unchanged)", int(sum(stats.map((s) => s.reusedCompetencies ?? 0)))],
     ["Scope flags raised (Q1)", int(total("scopeRaised"))],
     ["Accuracy flags raised (Q2)", int(total("accuracyRaised"))],
     ["Kept after the quote check", `${int(total("kept"))} (${pct(total("kept"), raised)})`],

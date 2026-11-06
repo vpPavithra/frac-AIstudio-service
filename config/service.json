@@ -25,6 +25,7 @@
   "REVIEW_BATCH_PARALLEL": 6,
   "REVIEW_MAX_STATE_ITEMS": 6,
   "REVIEW_MIN_QUOTE_WORDS": 4,
+  "REVIEW_REUSE_ANSWERS": true,
 
   "// research": "Spec 5.2: the research step searches only these government domains for the JD and cites what it retrieved. At most 3 searches (was 5): each adds tens of thousands of input tokens and about 15 s. Applies when the provider profile has webSearch: true; RESEARCH_WEB_SEARCH=false turns search off for every provider.",
   "RESEARCH_WEB_SEARCH": true,

@@ -1,9 +1,11 @@
+import { createHash } from "node:crypto";
 import { REVIEW } from "../config/constants.ts";
 import type { TextProvider } from "../providers/text/types.ts";
 import { askModel } from "./ai/ask-model.ts";
 import { reviewChecklistPrompt, reviewStatePrompt, STATE_CATEGORIES, type ChecklistCompetency } from "./ai/prompts.ts";
 import { reviewChecklistOutput, reviewStateOutput } from "./ai/schemas.ts";
 import { runInBatches } from "./ai/batching.ts";
+import type { ReviewAnswerCacheRepository } from "../repositories/review-answer-cache.repository.ts";
 import type { RecordUsage } from "./queue/job-runner.ts";
 import { competencyTexts, levelName, type CheckResult } from "./review-engine/checks.ts";
 import { serializeModel } from "./review-engine/convert.ts";
@@ -35,7 +37,15 @@ export interface AgentReviewInput {
   recordUsage?: RecordUsage;
   /** Receives how many flags the AI raised and why the dropped ones were dropped (the AI response report). */
   onStats?: (stats: AiChecklistStats) => void;
+  /** "Run a fresh review": ask the model about every competency, ignoring stored answers. */
+  fresh?: boolean;
 }
+
+/** One checklist answer for a competency, as reviewChecklistOutput returns it. */
+type ChecklistItem = { code: string; scope: { quote: string; act: string; basis: string }[]; accuracy: { quote: string; issue: string; correct: string }[] };
+type StateAnswer = { category: string; item: string; refs: string[] }[];
+
+const sha256 = (parts: unknown[]) => createHash("sha256").update(JSON.stringify(parts)).digest("hex");
 
 /** The AI judgement of a review: at most three findings, all tagged `source: "agent"`. */
 export interface AgentReviewer {
@@ -88,9 +98,16 @@ const byCodeThenLevel = (a: Flag, b: Flag) => a.code.localeCompare(b.code, undef
 /** Rules §6.2: no state, "national" or "India" means no state-fit call. */
 const isNational = (state?: string) => !state || /national|^india$/i.test(state.trim());
 
-/** Calls the provider (the AI_PROVIDER profile, or the mock) on the fixed checklist. */
+/**
+ * Calls the provider (the AI_PROVIDER profile, or the mock) on the fixed checklist. With `answers`, a
+ * competency whose text, rule hits, cadre, state, provider and prompt wording are unchanged reuses its stored
+ * answer instead of a new call (REVIEW_REUSE_ANSWERS), so an expert check after a fix pays only for what changed.
+ */
 export class ChecklistReviewer implements AgentReviewer {
-  constructor(private readonly provider: TextProvider) {}
+  constructor(
+    private readonly provider: TextProvider,
+    private readonly answers?: ReviewAnswerCacheRepository,
+  ) {}
 
   async review(input: AgentReviewInput): Promise<Finding[]> {
     const { model, cadre, state, checks, rules } = input;
@@ -100,30 +117,44 @@ export class ChecklistReviewer implements AgentReviewer {
 
     // Q1 + Q2 per laddered competency (rules §6.1), REVIEW.checklistBatchSize per call and
     // REVIEW.checklistParallel calls at once. Each prompt lists that batch's code scope hits as "do NOT repeat".
-    const items = await runInBatches(
-      laddered,
+    // Each competency's answer is stored under a key of everything it depends on; unchanged ones are reused.
+    const reuse = !!this.answers && REVIEW.reuseAnswers && !input.fresh;
+    const template = reviewChecklistPrompt(cadre, state ?? "", [], []);
+    const prepared = laddered.map((c) => {
+      const comp: ChecklistCompetency = {
+        code: c.code,
+        text: competencyTexts(c).map((t) => `${t.level === 0 ? "Definition" : levelName(t.level)}: ${t.text}`).join("\n"),
+      };
+      const hits = scopeHitText([c.code]);
+      return { comp, hits, key: sha256(["competency", this.provider.name, template, comp.code, comp.text, hits]) };
+    });
+    const stored = reuse ? await (this.answers as ReviewAnswerCacheRepository).getMany(prepared.map((p) => p.key)) : new Map<string, unknown>();
+    const todo = prepared.filter((p) => !stored.has(p.key));
+    const asked = await runInBatches(
+      todo,
       REVIEW.checklistBatchSize,
       REVIEW.checklistParallel,
       async (batch) => {
-        const comps: ChecklistCompetency[] = batch.map((c) => ({
-          code: c.code,
-          text: competencyTexts(c).map((t) => `${t.level === 0 ? "Definition" : levelName(t.level)}: ${t.text}`).join("\n"),
-        }));
+        const comps = batch.map((p) => p.comp);
         const out = await askModel(
           {
             provider: this.provider,
             task: "review-competencies",
             tier: "complex",
-            prompt: reviewChecklistPrompt(cadre, state ?? "", comps, scopeHitText(batch.map((c) => c.code))),
+            prompt: reviewChecklistPrompt(cadre, state ?? "", comps, batch.flatMap((p) => p.hits)),
             input: { cadre, state, competencies: comps },
           },
           reviewChecklistOutput,
           input.recordUsage,
         );
-        return out.items;
+        // A competency the model returned nothing for has no flags; store that too, so it is not asked again
+        return batch.map((p) => ({ key: p.key, item: out.items.find((i) => i.code === p.comp.code) ?? { code: p.comp.code, scope: [], accuracy: [] } }));
       },
       async () => undefined,
     );
+    if (this.answers && asked.length) await this.answers.putMany(asked.map((a) => ({ key: a.key, kind: "competency" as const, answer: a.item })));
+    const answerOf = new Map<string, unknown>([...stored, ...asked.map((a) => [a.key, a.item] as const)]);
+    const items = prepared.map((p) => answerOf.get(p.key) as ChecklistItem);
 
     // Verification in code (rules §6.3): the quote must be in that competency, and not already covered by a rule.
     // overlapsRule: the quote matches an OUTDATED pattern or a ladder rule marked `suppressesAiFlags` in config
@@ -143,6 +174,7 @@ export class ChecklistReviewer implements AgentReviewer {
     // Counted for the AI response report: what the model raised, and why each dropped flag was dropped
     const stats: AiChecklistStats = {
       competenciesAsked: laddered.length,
+      reusedCompetencies: prepared.length - todo.length,
       scopeRaised: 0,
       accuracyRaised: 0,
       kept: 0,
@@ -180,17 +212,29 @@ export class ChecklistReviewer implements AgentReviewer {
     // Unknown categories are dropped, the first REVIEW.maxStateItems are kept, then sorted by category and text
     let stateItems: StateItem[] = [];
     if (!isNational(state)) {
-      const out = await askModel(
-        {
-          provider: this.provider,
-          task: "review-state",
-          tier: "complex",
-          prompt: reviewStatePrompt(cadre, state ?? "", serializeModel(model)),
-          input: { cadre, state, competencyCodes: model.competencies.map((c) => c.code) },
-        },
-        reviewStateOutput,
-        input.recordUsage,
-      );
+      const serialized = serializeModel(model);
+      const stateKey = sha256(["state", this.provider.name, reviewStatePrompt(cadre, state ?? "", ""), serialized]);
+      const reusedState = reuse ? (await (this.answers as ReviewAnswerCacheRepository).getMany([stateKey])).get(stateKey) : undefined;
+      let raw: StateAnswer;
+      if (reusedState) {
+        raw = reusedState as StateAnswer;
+        stats.stateReused = true;
+      } else {
+        const out = await askModel(
+          {
+            provider: this.provider,
+            task: "review-state",
+            tier: "complex",
+            prompt: reviewStatePrompt(cadre, state ?? "", serialized),
+            input: { cadre, state, competencyCodes: model.competencies.map((c) => c.code) },
+          },
+          reviewStateOutput,
+          input.recordUsage,
+        );
+        raw = out.items;
+        await this.answers?.putMany([{ key: stateKey, kind: "state", answer: raw }]);
+      }
+      const out = { items: raw };
       stats.stateRaised = out.items.length;
       const order = (category: string) => STATE_CATEGORIES.indexOf(category as (typeof STATE_CATEGORIES)[number]);
       stateItems = out.items

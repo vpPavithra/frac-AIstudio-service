@@ -32,6 +32,6 @@ describe("AI provider registry", () => {
   });
 
   it("lists the valid names when AI_PROVIDER is unknown", async () => {
-    await expect(createAi("openai", profiles, {})).rejects.toThrow(/Use one of: mock, gemini-free, gemini-paid, claude-fast, claude/);
+    await expect(createAi("openai", profiles, {})).rejects.toThrow(/Use one of: mock, gemini-free, gemini-paid, claude-mixed, claude-fast, claude/);
   });
 });

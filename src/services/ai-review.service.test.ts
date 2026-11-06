@@ -1,4 +1,5 @@
 import { ChecklistReviewer, locateQuote, normaliseQuote } from "./ai-review.service.ts";
+import { MemoryReviewAnswerCacheRepository } from "../repositories/review-answer-cache.repository.ts";
 import { loadReviewRules } from "../config/review-rules.ts";
 import { computeChecks } from "./review-engine/checks.ts";
 import { comp, model } from "../../test/support/test-data.ts";
@@ -68,6 +69,7 @@ describe("ChecklistReviewer", () => {
     // For the AI response report: 3 flags raised, 1 kept, 1 not in the file, 1 already hit by a scope rule
     expect(stats).toEqual({
       competenciesAsked: 3,
+      reusedCompetencies: 0,
       scopeRaised: 2,
       accuracyRaised: 1,
       kept: 1,
@@ -109,5 +111,43 @@ describe("ChecklistReviewer", () => {
     const m = model();
     const p = provider({ "review-competencies": { items: "nope" } });
     await expect(new ChecklistReviewer(p).review({ model: m, cadre: "ANM", checks: computeChecks(m, RULES), rules: RULES })).rejects.toMatchObject({ code: "AI_OUTPUT_INVALID" });
+  });
+});
+
+describe("ChecklistReviewer reuses stored answers", () => {
+  const review = (r: ChecklistReviewer, m: ReturnType<typeof model>, fresh = false) =>
+    r.review({ model: m, cadre: "ANM", state: "Bihar", checks: computeChecks(m, RULES, { cadre: "ANM" }), rules: RULES, fresh });
+
+  it("asks only about competencies whose text changed, and reuses the state-fit answer for an unchanged FRAC", async () => {
+    const comps = Array.from({ length: 7 }, (_, i) => comp(`C${i + 1}`, "Domain"));
+    const p = provider({ "review-competencies": { items: [] }, "review-state": { items: [{ category: "State schemes", item: "Add a scheme (verify).", refs: [] }] } });
+    const cache = new MemoryReviewAnswerCacheRepository();
+    const reviewer = new ChecklistReviewer(p, cache);
+
+    await review(reviewer, model({ competencies: comps }));
+    expect(p.calls.map((c) => c.task)).toEqual(["review-competencies", "review-competencies", "review-state"]);
+
+    // Same FRAC again: nothing to ask
+    p.calls.length = 0;
+    const again = await review(reviewer, model({ competencies: comps }));
+    expect(p.calls).toEqual([]);
+    expect(again.map((f) => f.title)).toEqual(["Does not reflect Bihar"]);
+
+    // One competency edited: one checklist call for it alone, and the state call again (the FRAC changed)
+    p.calls.length = 0;
+    const edited = comps.map((c) => (c.code === "C4" ? { ...c, levels: c.levels.map((l, i) => (i === 2 ? { ...l, desc: "Conducts ANC to protocol" } : l)) } : c));
+    await review(reviewer, model({ competencies: edited }));
+    expect(p.calls.map((c) => c.task)).toEqual(["review-competencies", "review-state"]);
+    expect((p.calls[0].input as { competencies: { code: string }[] }).competencies.map((c) => c.code)).toEqual(["C4"]);
+  });
+
+  it("asks everything again for a fresh review", async () => {
+    const comps = [comp("C1", "Domain")];
+    const p = provider({ "review-competencies": { items: [] }, "review-state": { items: [] } });
+    const reviewer = new ChecklistReviewer(p, new MemoryReviewAnswerCacheRepository());
+    await review(reviewer, model({ competencies: comps }));
+    p.calls.length = 0;
+    await review(reviewer, model({ competencies: comps }), true);
+    expect(p.calls.map((c) => c.task)).toEqual(["review-competencies", "review-state"]);
   });
 });

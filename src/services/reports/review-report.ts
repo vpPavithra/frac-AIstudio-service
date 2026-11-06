@@ -83,13 +83,14 @@ function checklistTable(report: Report): string {
     ["Measure", "Value"],
     [
       ["Competencies sent to the checklist", int(s.competenciesAsked)],
+      ["of which reused a stored answer (unchanged)", int(s.reusedCompetencies ?? 0)],
       ["Scope flags raised (Q1)", int(s.scopeRaised)],
       ["Accuracy flags raised (Q2)", int(s.accuracyRaised)],
       ["Kept after the quote check", `${int(s.kept)} (${pct(s.kept, raised)})`],
       ["Dropped: quote not in the file", `${int(s.droppedQuoteNotFound)} (${pct(s.droppedQuoteNotFound, raised)})`],
       ["Dropped: a rule already covers it", int(s.droppedCoveredByRule)],
       ["Dropped: duplicate of a scope rule hit", int(s.droppedDuplicateScope)],
-      ["State-fit items raised / kept (Q3)", `${int(s.stateRaised)} / ${int(s.stateKept)}`],
+      ["State-fit items raised / kept (Q3)", `${int(s.stateRaised)} / ${int(s.stateKept)}${s.stateReused ? " (reused: the FRAC had not changed)" : ""}`],
     ],
   );
 }

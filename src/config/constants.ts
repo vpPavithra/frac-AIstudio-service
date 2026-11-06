@@ -138,6 +138,8 @@ export const REVIEW = Object.freeze({
   maxStateItems: int("REVIEW_MAX_STATE_ITEMS", 6),
   /** A quote shorter than this many words is too weak to verify and is dropped (rules §6.3: 4). */
   minQuoteWords: int("REVIEW_MIN_QUOTE_WORDS", 4),
+  /** Reuse stored checklist answers for unchanged competencies (a repeat expert check pays only for changes). */
+  reuseAnswers: env.REVIEW_REUSE_ANSWERS !== "false",
 });
 
 /** The AI response report (scripts/ai-report.ts): which clock its days and times are in. */
@@ -172,6 +174,6 @@ export const KNOWN_SETTINGS = [
   "POSTGRES_POOL_MAX", "POSTGRES_CONNECT_TIMEOUT_MS", "POSTGRES_IDLE_TIMEOUT_MS", "CORS_ORIGINS", "LOG_FORMAT", "LOG_LEVEL",
   "OUTDATED_CONFIG_PATH", "REVIEW_RULES_CONFIG_PATH", "FRAC_SIZES_CONFIG_PATH", "AI_PROVIDERS_CONFIG_PATH", "METHOD_PARAGRAPH_PATH",
   "AI_PROVIDER", "AI_REQUIRE_REAL", "RESEARCH_WEB_SEARCH", "RESEARCH_SEARCH_DOMAINS", "RESEARCH_SEARCH_MAX_USES", "AI_BATCH_SIZE", "AI_BATCH_PARALLEL",
-  "REVIEW_BATCH_SIZE", "REVIEW_BATCH_PARALLEL", "REVIEW_MAX_STATE_ITEMS", "REVIEW_MIN_QUOTE_WORDS",
+  "REVIEW_BATCH_SIZE", "REVIEW_BATCH_PARALLEL", "REVIEW_MAX_STATE_ITEMS", "REVIEW_MIN_QUOTE_WORDS", "REVIEW_REUSE_ANSWERS",
   "MOCK_DELAY_MS", "MOCK_SEED", "MOCK_SEED_OWNERS", "MOCK_PRICED_AS", "REPORT_UTC_OFFSET_MINUTES", "REPORT_DAILY_BUDGET_USD", "REPORT_DIR", "REPORT_PROVIDERS",
 ] as const;

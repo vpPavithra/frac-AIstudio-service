@@ -131,8 +131,8 @@ export class ClaudeTextProvider implements TextProvider {
       .stream({
         model,
         max_tokens: LLM.maxTokens,
-        betas: [FALLBACK_BETA],
-        fallbacks: "default",
+        // Server-side fallback only where the model has one (the profile's serverFallback; Haiku 5.5 has none)
+        ...(this.profile.serverFallback[tier] ? { betas: [FALLBACK_BETA], fallbacks: "default" as const } : {}),
         // Thinking is always on for these models; effort sets its depth. `format` enforces the step's JSON shape
         output_config: { effort: this.profile.thinking[tier], ...(format ? { format } : {}) },
         system: "Answer with one JSON object only, in the shape the prompt asks for. No prose before or after it.",
