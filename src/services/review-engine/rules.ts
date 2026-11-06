@@ -15,15 +15,26 @@ import type { ModelCompetency } from "../../models/review.model.ts";
 //
 // Changed in r3 (from r1): BANNED gains "knowledge of" / "has knowledge"; OutdatedPattern gains
 // onlyIfAbsent / frontlineOnly / fix; everything else in this file is new. checks.ts applies the rules.
+//
+// Flow: config/review-rules.ts (loadReviewRules) fills a ReviewRules object on every review; ReviewService
+// passes it to computeChecks (checks.ts), to the AI checklist (ai-review.service.ts, to drop flags a rule
+// already covers) and to reviewFingerprint (fingerprint.ts, so a rule edit forces a fresh review).
 
+/**
+ * Rules §4.5: one outdated law, programme or term, from config/outdated.json. checks.ts raises one
+ * "Outdated reference: {found}" finding per pattern that hits; the AI checklist drops any flag whose
+ * quote matches one, so the model never repeats it (rules §6.3).
+ */
 export interface OutdatedPattern {
   id: string;
   pattern: string;
   flags: string;
   sev: Severity;
+  /** The outdated name as shown in the finding title. */
   found: string;
+  /** The current reference the finding tells the author to use. */
   correct: string;
-  /** Suppress the hit when this pattern occurs within 80 chars of it. */
+  /** Suppress the hit when this pattern occurs within 80 chars of it (NEAR_WINDOW in checks.ts). */
   unlessNear?: string;
   /** Raise only when this pattern appears nowhere in the file (e.g. partograph with no LCG). */
   onlyIfAbsent?: string;
@@ -33,7 +44,10 @@ export interface OutdatedPattern {
   fix?: string;
 }
 
-/** Rules §4.4: one act beyond a cadre's scope. */
+/**
+ * Rules §4.4: one act beyond a cadre's scope, from config/review-rules.json `scope.<family>`. checks.ts tests
+ * it sentence by sentence and raises one "Beyond {cadre} scope: {act}" finding per rule that hits.
+ */
 export interface ScopeRule {
   id: string;
   act: string;
@@ -46,27 +60,45 @@ export interface ScopeRule {
   instead: string;
 }
 
-/** Rules §4.3 LADDER_RULES. */
+/**
+ * Rules §4.3 LADDER_RULES, from config/review-rules.json `ladder`: a pattern that, found in the label or
+ * description of the given levels, shows the ladder is pitched too high. All hits merge into one
+ * "Level ladders are shifted upward" finding. Rules at L3 or above also drop matching AI flags (rules §6.3).
+ */
 export interface LadderRule {
   id: string;
+  /** 1-based levels the pattern is tested on. */
   levels: number[];
   pattern: string;
   flags?: string;
+  /** One line of the finding's detail, e.g. "L3 includes supervising, mentoring or training others". */
   message: string;
   frontlineOnly: boolean;
+  /**
+   * When true, an AI scope or accuracy flag whose quote this rule matches is dropped as a duplicate of the
+   * rule-based "Level ladders are shifted upward" finding (rules §6.3: ladder rules 2 and 3). Set in config,
+   * so a new ladder rule never starts dropping AI flags unless it says so.
+   */
+  suppressesAiFlags?: boolean;
 }
 
-/** Rules §5 AREAS: one job area, matched on competency label + description. */
+/**
+ * Rules §5 AREAS, from config/review-rules.json `areas`: one job area, matched on competency label +
+ * description. Used for the "Core {cadre} areas with no dedicated competency" check (rules §4.6), the
+ * strengths list, and (clinical areas only) the breadth test (rules §4.2.1 b).
+ */
 export interface AreaRule {
   key: string;
   name: string;
   pattern: string;
   flags?: string;
+  /** Cadre families whose FRAC must cover this area. */
   families: CadreFamily[];
   /** Counts for the broad/overlap test (rules §4.2.1 b). */
   clinical: boolean;
 }
 
+/** Every config-driven rule table one review runs on, as loaded by config/review-rules.ts. */
 export interface ReviewRules {
   scope: Partial<Record<CadreFamily, ScopeRule[]>>;
   ladder: LadderRule[];
@@ -74,9 +106,10 @@ export interface ReviewRules {
   outdated: OutdatedPattern[];
 }
 
+/** Rules §3: the frontline cadre families. A cadre outside these gets no cadre-specific rules. */
 export type CadreFamily = "asha" | "anm" | "cho" | "nurse";
 
-// Rules §3, tested in this order
+// Rules §3, tested in this order. The first match wins, so "Auxiliary Nurse Midwife" is anm, not nurse.
 const FAMILIES: [CadreFamily, RegExp][] = [
   ["asha", /asha/i],
   ["anm", /\banm\b|auxiliary nurse|multi[- ]?purpose|\bmpw\b|\blhv\b|lady health/i],
@@ -89,6 +122,7 @@ export function cadreFamily(cadre: string): CadreFamily | null {
   return FAMILIES.find(([, re]) => re.test(cadre))?.[0] ?? null;
 }
 
+/** Builds a RegExp from a pattern string stored in config (rule tables keep patterns as JSON strings). */
 export const regex = (pattern: string, flags = "") => new RegExp(pattern, flags);
 
 /** Rules §2: Bloom and ladder counts use only competencies with an L1–L5 ladder, not KCM-format rows. */

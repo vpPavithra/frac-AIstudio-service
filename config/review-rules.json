@@ -132,7 +132,7 @@
       "pattern": "\\b(supervis(es|ing)|mentor\\w*|coach(es|ing)?|train(s|ing)?\\s+(other|junior|new|ASHA|AWW|staff|peer)\\w*|guides?\\s+(junior|other|ASHA|new)\\w*)\\b|supervision\\s+(of|to)\\s+(ASHA|junior|other|new|staff|peer|team)",
       "flags": "i",
       "message": "L3 includes supervising, mentoring or training others",
-      "frontlineOnly": true
+      "frontlineOnly": true, "suppressesAiFlags": true
     },
     {
       "id": "policy-l4-l5",
@@ -143,7 +143,7 @@
       "pattern": "\\b(polic(y|ies)|state[- ]?(level|wide)|national[- ](level|benchmark\\w*|strateg\\w*)|research|represent\\w*|district[- ]?(level|wide))\\b",
       "flags": "i",
       "message": "L4–L5 describe policy, research or district/state roles",
-      "frontlineOnly": true
+      "frontlineOnly": true, "suppressesAiFlags": true
     }
   ],
   "areas": [

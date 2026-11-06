@@ -1,6 +1,9 @@
 // CLAUDE PROVIDER: the real model behind every AI step (spec 2, 9). Selected automatically when
 // ANTHROPIC_API_KEY is set. Steps build the prompt and validate the JSON; this file only sends the
 // prompt, extracts the JSON and prices the call.
+// Both tiers run Claude Sonnet 5.5 by default (MODELS: ANTHROPIC_COMPLEX_MODEL / ANTHROPIC_DEFAULT_MODEL); the
+// complex tier gets LLM.complexEffort (high), the default tier LLM.defaultEffort (medium). Also reads
+// LLM.maxTokens, LLM.maxResumes, LLM.retries, LLM.timeoutMs and the AI.research* web-search settings.
 import Anthropic from "@anthropic-ai/sdk";
 import { AI, LLM, MODELS } from "../../config/constants.ts";
 import { ApiError } from "../../utils/response.ts";
@@ -11,9 +14,6 @@ type Message = Anthropic.Beta.BetaMessage;
 
 /** Server-side fallback: on a policy decline the API re-runs the request on its default fallback model. */
 const FALLBACK_BETA = "server-side-fallback-2026-07-01";
-/** A web-search turn can pause; resume it this many times before giving up. */
-const MAX_RESUMES = 3;
-const MAX_TOKENS = 64_000;
 
 /**
  * The JSON object in the model's final text. Tolerates a ```json fence or a sentence before it
@@ -35,9 +35,14 @@ export function extractJson(text: string): unknown {
   }
 }
 
+/** The model's visible text blocks joined; thinking and tool blocks are skipped. */
 const finalText = (message: Message) =>
   message.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("\n");
 
+/**
+ * TextProvider backed by the Anthropic Messages API (beta endpoint, for server-side fallback and effort).
+ * Created by registry.ts createAi when Claude is selected.
+ */
 export class ClaudeTextProvider implements TextProvider {
   readonly name = "claude" as const;
   private readonly client: Anthropic;
@@ -47,6 +52,12 @@ export class ClaudeTextProvider implements TextProvider {
     this.client = new Anthropic({ apiKey, maxRetries: LLM.retries, timeout: LLM.timeoutMs });
   }
 
+  /**
+   * One step's call. Only the research task gets the web_search tool (spec 5.2), limited to
+   * AI.researchSearchDomains and AI.researchSearchMaxUses. Usage is summed across pause_turn resumes.
+   * Throws AI_REFUSED or AI_OUTPUT_TRUNCATED on those stop reasons, and the codes from describeApiError.
+   * Invalid or missing JSON is not an error here: `json` is null and the step's schema check fails it.
+   */
   async complete(request: CompletionRequest): Promise<CompletionResult> {
     const model = MODELS[request.tier];
     const tools: Anthropic.Beta.BetaToolUnion[] =
@@ -57,7 +68,7 @@ export class ClaudeTextProvider implements TextProvider {
     const usage: Required<CallUsage> = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, webSearches: 0 };
 
     let message: Message | null = null;
-    for (let turn = 0; turn <= MAX_RESUMES; turn++) {
+    for (let turn = 0; turn <= LLM.maxResumes; turn++) {
       message = await this.send(model, request.tier, messages, tools);
       // Summed over resumed turns: each pause_turn resend is billed again
       const u = message.usage;
@@ -72,6 +83,8 @@ export class ClaudeTextProvider implements TextProvider {
       // A long web search paused the turn; send the partial answer back so the model continues
       messages.push({ role: "assistant", content: message.content });
     }
+    // Still paused after LLM.maxResumes: the partial text is parsed as is and usually fails AI_OUTPUT_INVALID.
+    // `message` is only null if LLM_MAX_RESUMES were negative, which constants.ts rejects; kept as a type guard.
     if (!message) {
       throw new ApiError(502, "AI_UNAVAILABLE", "The model returned no answer.");
     }
@@ -93,11 +106,12 @@ export class ClaudeTextProvider implements TextProvider {
     }
   }
 
+  /** The raw streaming call; `send` wraps it to translate SDK errors. */
   private request(model: string, tier: ModelTier, messages: Anthropic.Beta.BetaMessageParam[], tools: Anthropic.Beta.BetaToolUnion[]) {
     return this.client.beta.messages
       .stream({
         model,
-        max_tokens: MAX_TOKENS,
+        max_tokens: LLM.maxTokens,
         betas: [FALLBACK_BETA],
         fallbacks: "default",
         // Thinking is always on for these models; effort sets its depth

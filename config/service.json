@@ -16,6 +16,16 @@
   "LLM_DEFAULT_EFFORT": "medium",
   "LLM_TIMEOUT_MS": 600000,
   "LLM_RETRIES": 3,
+  "LLM_MAX_TOKENS": 64000,
+  "LLM_MAX_RESUMES": 3,
+
+  "// batching": "Spec 5.3b / 5.5: roles (activities) or competencies (ladders) per call, and calls in flight. Rules r3 §6: competencies per review checklist call, calls in flight, most state-fit items kept, and the shortest quote (in words) the code will verify.",
+  "AI_BATCH_SIZE": 4,
+  "AI_BATCH_PARALLEL": 3,
+  "REVIEW_BATCH_SIZE": 6,
+  "REVIEW_BATCH_PARALLEL": 3,
+  "REVIEW_MAX_STATE_ITEMS": 6,
+  "REVIEW_MIN_QUOTE_WORDS": 4,
 
   "// research": "Spec 5.2: the research step searches only these government domains for the JD and cites what it retrieved.",
   "RESEARCH_WEB_SEARCH": true,
@@ -30,6 +40,7 @@
   "RATE_DEFAULT_OUT_USD_PER_1M": 10,
   "RATE_DEFAULT_CACHE_READ_USD_PER_1M": 0.2,
   "RATE_WEB_SEARCH_USD_PER_1K": 10,
+  "RATE_CACHE_WRITE_MULTIPLIER": 1.25,
 
   "MAX_UPLOAD_MB": 15,
   "MAX_JSON_MB": 5,
@@ -40,6 +51,12 @@
 
   "JOB_STALE_AFTER_MS": 900000,
   "JOB_SWEEP_EVERY_MS": 60000,
+  "JOB_HEARTBEAT_MS": 60000,
+
+  "// postgres": "Pool sizing only; the connection (host, user, password) stays in .env or the secret store.",
+  "POSTGRES_POOL_MAX": 10,
+  "POSTGRES_CONNECT_TIMEOUT_MS": 10000,
+  "POSTGRES_IDLE_TIMEOUT_MS": 30000,
 
   "// cors": "Comma-separated browser origins. Empty: only the uiproxy calls this service.",
   "CORS_ORIGINS": ""

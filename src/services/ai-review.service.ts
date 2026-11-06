@@ -1,4 +1,5 @@
 import type { ZodType, ZodTypeDef } from "zod";
+import { REVIEW } from "../config/constants.ts";
 import type { AiTask, TextProvider } from "../providers/text/types.ts";
 import { reviewChecklistPrompt, reviewStatePrompt, STATE_CATEGORIES, type ChecklistCompetency } from "./ai/prompts.ts";
 import { reviewChecklistOutput, reviewStateOutput } from "./ai/schemas.ts";
@@ -15,12 +16,13 @@ import { ApiError } from "../utils/response.ts";
 // accuracy per competency, Q3 state fit once. Every flag must quote the file; code checks the quote,
 // drops what the rule-based checks already cover, and merges the rest into at most three findings
 // with fixed titles. The model never writes titles, severities, fixes, the verdict or the summary.
-
-/** Rules §6.1: 6 competencies per call, 3 calls in parallel. */
-const CHECKLIST_BATCH = 6;
-const CHECKLIST_PARALLEL = 3;
-const MAX_STATE_ITEMS = 6;
-const MIN_QUOTE_WORDS = 4;
+// "Vidya" is a persona inside the prompts (services/ai/prompts.ts), not a separate service.
+//
+// Flow: ReviewService.review calls ChecklistReviewer.review after computeChecks and before buildReport.
+// Calls go through the TextProvider on the complex tier (Claude Sonnet 5.5, or the mock with no API key).
+// Batch size, parallel calls, max state items and minimum quote words come from REVIEW in
+// config/constants.ts (config/service.json REVIEW_BATCH_SIZE, REVIEW_BATCH_PARALLEL,
+// REVIEW_MAX_STATE_ITEMS, REVIEW_MIN_QUOTE_WORDS).
 
 export interface AgentReviewInput {
   model: ReviewModel;
@@ -39,7 +41,10 @@ export interface AgentReviewer {
   review(input: AgentReviewInput): Promise<Finding[]>;
 }
 
-/** Rules §6.3: lowercase, strip quotes, dashes to spaces, drop other punctuation, collapse whitespace. */
+/**
+ * Rules §6.3: makes a model quote and the file text comparable. Lowercase, strip quotes, dashes to spaces,
+ * drop other punctuation, collapse whitespace.
+ */
 export function normaliseQuote(text: string): string {
   return text
     .toLowerCase()
@@ -50,15 +55,20 @@ export function normaliseQuote(text: string): string {
     .trim();
 }
 
-/** The level whose text contains the quote (0 = definition), or null when the quote is not in the competency. */
+/**
+ * Rules §6.3 quote check. The level whose text contains the quote (0 = definition), or null when the quote
+ * is shorter than REVIEW.minQuoteWords or is not in that competency's text. A null drops the flag, which is
+ * what stops the model inventing problems the file does not contain.
+ */
 export function locateQuote(quote: string, model: ReviewModel, code: string): number | null {
   const q = normaliseQuote(quote);
-  if (q.split(" ").length < MIN_QUOTE_WORDS) return null;
+  if (q.split(" ").length < REVIEW.minQuoteWords) return null;
   const comp = model.competencies.find((c) => c.code === code);
   if (!comp) return null;
   return competencyTexts(comp).find((t) => normaliseQuote(t.text).includes(q))?.level ?? null;
 }
 
+/** One verified AI flag, already formatted as a line of the merged finding's detail. */
 interface Flag {
   code: string;
   level: number;
@@ -74,6 +84,7 @@ interface StateItem {
 
 const byCodeThenLevel = (a: Flag, b: Flag) => a.code.localeCompare(b.code, undefined, { numeric: true }) || a.level - b.level;
 
+/** Rules §6.2: no state, "national" or "India" means no state-fit call. */
 const isNational = (state?: string) => !state || /national|^india$/i.test(state.trim());
 
 /** Calls the provider (Claude, or the mock without an API key) on the fixed checklist. */
@@ -86,11 +97,12 @@ export class ChecklistReviewer implements AgentReviewer {
     const scopeHitText = (codes: string[]) =>
       checks.scopeHits.filter((h) => codes.includes(h.code)).map((h) => `${h.code} ${levelName(h.level)}: ${h.rule} — "${h.quote}"`);
 
-    // Q1 + Q2 per competency, in batches
+    // Q1 + Q2 per laddered competency (rules §6.1), REVIEW.checklistBatchSize per call and
+    // REVIEW.checklistParallel calls at once. Each prompt lists that batch's code scope hits as "do NOT repeat".
     const items = await runInBatches(
       laddered,
-      CHECKLIST_BATCH,
-      CHECKLIST_PARALLEL,
+      REVIEW.checklistBatchSize,
+      REVIEW.checklistParallel,
       async (batch) => {
         const comps: ChecklistCompetency[] = batch.map((c) => ({
           code: c.code,
@@ -108,10 +120,17 @@ export class ChecklistReviewer implements AgentReviewer {
       async () => undefined,
     );
 
-    // Verification in code (rules §6.3): the quote must be in that competency, and not already covered by a rule
+    // Verification in code (rules §6.3): the quote must be in that competency, and not already covered by a rule.
+    // overlapsRule: the quote matches an OUTDATED pattern or a ladder rule marked `suppressesAiFlags` in config
+    // (rules 2 and 3 of §4.3). Only rules that apply to this cadre count: a frontline-only rule never runs for
+    // other cadres, so it must not drop their AI flags either. onlyIfAbsent / unlessNear are file-level
+    // conditions and are not re-tested on a single quote: any pattern match is left to the rule-based check.
+    // codeScope: a scope flag on a competency level a code scope rule already hit is a duplicate
+    const frontline = checks.family !== null;
+    const applies = (r: { frontlineOnly?: boolean }) => frontline || !r.frontlineOnly;
     const overlapsRule = (quote: string) =>
-      rules.outdated.some((p) => regex(p.pattern, p.flags.replace("g", "")).test(quote)) ||
-      rules.ladder.filter((r) => r.levels.some((l) => l >= 3)).some((r) => regex(r.pattern, r.flags).test(quote));
+      rules.outdated.filter(applies).some((p) => regex(p.pattern, p.flags.replace("g", "")).test(quote)) ||
+      rules.ladder.filter((r) => r.suppressesAiFlags && applies(r)).some((r) => regex(r.pattern, r.flags).test(quote));
     const codeScope = new Set(checks.scopeHits.map((h) => `${h.code}|${h.level}`));
 
     const scope: Flag[] = [];
@@ -129,7 +148,8 @@ export class ChecklistReviewer implements AgentReviewer {
       }
     }
 
-    // Q3 state fit, only for a named state
+    // Q3 state fit (rules §6.2, §6.3 item 4), only for a named state: one call on the whole serialized FRAC.
+    // Unknown categories are dropped, the first REVIEW.maxStateItems are kept, then sorted by category and text
     let stateItems: StateItem[] = [];
     if (!isNational(state)) {
       const out = await this.ask(
@@ -142,7 +162,7 @@ export class ChecklistReviewer implements AgentReviewer {
       const order = (category: string) => STATE_CATEGORIES.indexOf(category as (typeof STATE_CATEGORIES)[number]);
       stateItems = out.items
         .filter((i) => order(i.category) >= 0 && i.item.trim())
-        .slice(0, MAX_STATE_ITEMS)
+        .slice(0, REVIEW.maxStateItems)
         .sort((a, b) => order(a.category) - order(b.category) || a.item.localeCompare(b.item));
     }
 
@@ -162,7 +182,11 @@ export class ChecklistReviewer implements AgentReviewer {
   }
 }
 
-/** Rules §6.4: at most three findings, fixed titles, items sorted by code then level. */
+/**
+ * Rules §6.4: at most three findings, fixed titles, items sorted by code then level, all `source: "agent"`.
+ * "Other acts beyond {cadre} scope" (B) from Q1, "Clinical or programme facts to correct" (M) from Q2,
+ * "Does not reflect {state}" (m) from Q3.
+ */
 function merge(scope: Flag[], accuracy: Flag[], stateItems: StateItem[], cadre: string, state: string): Finding[] {
   const out: Finding[] = [];
   const codes = (flags: Flag[]) => [...new Set(flags.map((f) => f.code))];

@@ -15,6 +15,21 @@ describe("JobRunner", () => {
     expect(await jobs.get(job.id)).toMatchObject({ status: "done", msg: "Batch 1", done: 1, total: 3, error: null });
   });
 
+  it("keeps a long-running job fresh for the watchdog, and never revives it after it finishes", async () => {
+    const jobs = new MemoryJobRepository();
+    const runner = new JobRunner(jobs, 10);
+    const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+    const job = await runner.start(spec, async () => {
+      await pause(30);
+      const startedAt = (await jobs.get(job.id))?.updatedAt ?? "";
+      await pause(40); // one slow model call, no progress writes
+      expect((await jobs.get(job.id))?.updatedAt > startedAt).toBe(true);
+    });
+    await runner.idle();
+    await pause(40);
+    expect(await jobs.get(job.id)).toMatchObject({ status: "done", msg: "Working…" });
+  });
+
   it("stores the error message when the task fails", async () => {
     const jobs = new MemoryJobRepository();
     const runner = new JobRunner(jobs);

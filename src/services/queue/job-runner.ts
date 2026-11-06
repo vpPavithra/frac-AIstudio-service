@@ -1,10 +1,15 @@
+// IN-PROCESS JOB RUNNER for every long-running operation: Creator steps 2-5, the expert check and uploaded
+// reviews. Starts a task without awaiting it, keeps its jobs row current (status, msg, done/total, usage)
+// and turns an error into status "error" with a stable code. Created once in src/server.ts and shared by
+// FracService and ReviewService. Stuck rows left by a restart are failed by job-watchdog.service.ts.
 import { randomUUID } from "node:crypto";
+import { JOBS } from "../../config/constants.ts";
 import type { Job, JobPatch } from "../../models/job.model.ts";
 import type { JobRepository } from "../../repositories/job.repository.ts";
 import { ApiError } from "../../utils/response.ts";
 import { describeError, logger } from "../../utils/logger.ts";
 
-/** Code for a job that threw something other than an ApiError. */
+/** Code for a job that threw something other than an ApiError (an ApiError keeps its own code, e.g. AI_OUTPUT_INVALID). */
 export const JOB_FAILED = "JOB_FAILED";
 
 export interface JobProgress {
@@ -25,8 +30,10 @@ export interface UsageDelta {
 /** Adds one model call's spend to the job's running total (jobs.usage). */
 export type RecordUsage = (delta: UsageDelta) => Promise<void>;
 
+/** The work a job does; it reports through `progress` and `recordUsage` and throws to fail the job. */
 export type JobTask = (progress: JobProgress, recordUsage: RecordUsage) => Promise<void>;
 
+/** The row fields a new job starts with. `kind` is the step name, "check" or "review". */
 export interface StartJob {
   ownerId: string;
   kind: string;
@@ -43,8 +50,13 @@ export interface StartJob {
 export class JobRunner {
   private readonly running = new Set<Promise<void>>();
 
-  constructor(private readonly jobs: JobRepository) {}
+  /** `heartbeatMs`: how often a running job touches its row (JOB_HEARTBEAT_MS); tests pass a short one. */
+  constructor(
+    private readonly jobs: JobRepository,
+    private readonly heartbeatMs = JOBS.heartbeatMs,
+  ) {}
 
+  /** Inserts the job as queued and returns it at once; the task runs in the background (fire and forget). */
   async start(spec: StartJob, task: JobTask): Promise<Job> {
     const now = new Date().toISOString();
     const job: Job = {
@@ -64,7 +76,7 @@ export class JobRunner {
     };
     await this.jobs.insert(job);
 
-    const run = this.run(job.id, job.kind, task).finally(() => this.running.delete(run));
+    const run = this.run(job.id, job.kind, job.msg, task).finally(() => this.running.delete(run));
     this.running.add(run);
     return job;
   }
@@ -74,16 +86,26 @@ export class JobRunner {
     while (this.running.size) await Promise.allSettled([...this.running]);
   }
 
-  private async run(id: string, kind: string, task: JobTask): Promise<void> {
+  private async run(id: string, kind: string, msg: string, task: JobTask): Promise<void> {
     // Batches run in parallel and each writes a snapshot of the job; chaining the writes keeps them in
-    // order, so an older snapshot (fewer calls, a lower count) can never land after a newer one
+    // order, so an older snapshot (fewer calls, a lower usage total or count) can never land after a newer one.
+    // A failed write rejects only its own caller; the chain carries on for the next write
     let writes: Promise<unknown> = Promise.resolve();
     const write = (patch: JobPatch): Promise<void> => {
       const next = writes.then(() => this.jobs.update(id, patch));
       writes = next.catch(() => undefined);
       return next.then(() => undefined);
     };
-    const progress: JobProgress = (msg, done, total) => write({ msg, done, total });
+    let lastMsg = msg;
+    const progress: JobProgress = (next, done, total) => {
+      lastMsg = next;
+      return write({ msg: next, done, total });
+    };
+    // One model call can outlast the watchdog's stale window (a long research call makes no progress writes),
+    // so a running job re-writes its current message on a timer. That only moves updated_at; it never
+    // changes the status. Stopped before the final status is written, so a beat can never land after it.
+    const heartbeat = setInterval(() => void write({ msg: lastMsg }).catch(() => undefined), this.heartbeatMs);
+    heartbeat.unref();
     // jobs.usage is numbers only, so `estimated` is stored as 1 when any call's cost is an estimate
     const usage: Record<string, number> = { calls: 0, inputTokens: 0, outputTokens: 0, webSearches: 0, costUsd: 0 };
     const recordUsage: RecordUsage = (delta) => {
@@ -98,13 +120,18 @@ export class JobRunner {
     try {
       await write({ status: "running" });
       await task(progress, recordUsage);
+      clearInterval(heartbeat);
       await write({ status: "done" });
+      // One log line per job with its total tokens and cost (spec 9); also logged on failure below
       if (usage.calls) logger.info("Job spend", { jobId: id, kind, ...usage });
     } catch (err) {
       const message = describeError(err);
       const errorCode = err instanceof ApiError ? err.code : JOB_FAILED;
       logger.warn("Job failed", { jobId: id, kind, errorCode, error: message, ...(usage.calls ? { usage } : {}) });
+      clearInterval(heartbeat);
       await write({ status: "error", error: message, errorCode });
+    } finally {
+      clearInterval(heartbeat);
     }
   }
 }

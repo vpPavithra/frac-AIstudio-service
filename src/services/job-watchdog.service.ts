@@ -1,13 +1,19 @@
+// JOB WATCHDOG: fails jobs left "queued"/"running" by a restart or a hung step, so the portal stops polling
+// a spinner. Started once by src/server.ts with JOBS.staleAfterMs / JOBS.sweepEveryMs (JOB_STALE_AFTER_MS,
+// JOB_SWEEP_EVERY_MS). A running job touches its row every JOBS.heartbeatMs (job-runner.ts), even during a
+// long model call, so only a job whose process died or hung goes stale.
 import type { JobRepository } from "../repositories/job.repository.ts";
 import { describeError, logger } from "../utils/logger.ts";
 
+/** errorCode on a swept job, so the portal can tell an interrupted step from a failed one. */
 export const JOB_INTERRUPTED = "JOB_INTERRUPTED";
+/** The error text a swept job shows. */
 export const INTERRUPTED_MESSAGE = "This step was interrupted (the service restarted or the step stopped responding). Run it again.";
 
 /**
  * Fails queued/running jobs nobody has touched for `staleAfterMs`. Jobs run in-process, so a
  * restart leaves their rows "running" forever and the portal would poll a spinner indefinitely.
- * Every progress update refreshes updated_at, so a live job is not swept.
+ * Every progress update and the runner's heartbeat refresh updated_at, so a live job is not swept.
  */
 export async function sweepStuckJobs(jobs: JobRepository, staleAfterMs: number, now = new Date()): Promise<number> {
   const failed = await jobs.failStale(new Date(now.getTime() - staleAfterMs), INTERRUPTED_MESSAGE, JOB_INTERRUPTED);

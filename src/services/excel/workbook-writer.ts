@@ -1,9 +1,14 @@
+// Builds the two Excel downloads: the Creator's FRAC workbook and the Reviewer's report workbook.
+// Called by frac.service.ts and review.service.ts when the portal asks for an export. Returns an .xlsx
+// Buffer and the download file name. Files go to outside experts, so AI personas are never named:
+// each finding says only "Rule-based check" or "AI judgement (quoted)".
 import ExcelJS from "exceljs";
 import { parseRefs } from "../review-engine/refs.ts";
 import type { Finding, Report } from "../../models/report.model.ts";
 import type { Frac } from "../../models/frac.model.ts";
 import { TRIAGE_LABELS } from "../review-engine/report.ts";
 
+// Header and role-row colours (ARGB) shared by every sheet.
 const HEADER_FONT = { bold: true, color: { argb: "FF1F3B3E" } };
 const HEADER_FILL: ExcelJS.Fill = {
   type: "pattern",
@@ -16,8 +21,10 @@ const ROLE_FILL: ExcelJS.Fill = {
   fgColor: { argb: "FFD9EDEF" },
 };
 
+/** Column headers of the findings table on the "Expert check" and "Review" sheets. */
 const REPORT_HEADERS = ["Severity", "Check", "Finding", "Detail", "Refs", "Suggested fix", "Found by"];
 
+/** Wraps and top-aligns every cell, then colours the given header rows and bolds the given role rows. */
 function styleSheet(sheet: ExcelJS.Worksheet, headerRows: number[] = [], roleRows: number[] = []): void {
   sheet.eachRow((row, rowNumber) => {
     row.eachCell({ includeEmpty: true }, (cell) => {
@@ -38,6 +45,7 @@ function styleSheet(sheet: ExcelJS.Worksheet, headerRows: number[] = [], roleRow
   });
 }
 
+/** Joins the distinct competency codes that a role's activities map to, for the role row of the FRAC sheet. */
 function uniqueRoleCompetencyCodes(frac: Frac, activities: Frac["roles"][number]["activities"]): string {
   const refs = activities.flatMap((activity) => parseRefs(activity.comp, frac.codePrefix));
   return [...new Set(refs.map((ref) => ref.code))].join(", ");
@@ -50,6 +58,10 @@ export function methodText(report: Report): string {
   return `Rule-based checks give the same result on every run. AI judgement covers only a fixed checklist (scope, clinical accuracy, state fit), and each AI finding quotes the file. ${engine}${fingerprint}.`;
 }
 
+/**
+ * Rows of a report sheet: Verdict, Triage, Summary and Method label/value pairs, a blank row,
+ * then the findings table (REPORT_HEADERS plus one row per finding).
+ */
 function reportRows(report: Report): ExcelJS.CellValue[][] {
   return [
     ["Verdict", report.verdict],
@@ -62,6 +74,12 @@ function reportRows(report: Report): ExcelJS.CellValue[][] {
   ];
 }
 
+/** 1-based row of the findings header in `reportRows`, so styling follows the layout when rows are added above it. */
+function reportHeaderRow(rows: ExcelJS.CellValue[][]): number {
+  return rows.indexOf(REPORT_HEADERS) + 1;
+}
+
+/** One findings-table row. Severity codes B/M/m become BLOCKER/MAJOR/MINOR. */
 function findingRow(finding: Finding): ExcelJS.CellValue[] {
   const severity = finding.sev === "B" ? "BLOCKER" : finding.sev === "M" ? "MAJOR" : "MINOR";
   return [
@@ -76,15 +94,21 @@ function findingRow(finding: Finding): ExcelJS.CellValue[] {
   ];
 }
 
+/** Serialises the workbook to a Node Buffer for the HTTP response. */
 async function finishWorkbook(workbook: ExcelJS.Workbook): Promise<Buffer> {
   const buffer = await workbook.xlsx.writeBuffer();
   return Buffer.from(buffer);
 }
 
 /**
- * Builds the Creator workbook with FRAC, competency, method/source and optional expert-check sheets.
- * The method paragraph is required from the caller so the prototype's verbatim text is not invented.
- * Side effects: creates an in-memory Excel workbook.
+ * Builds the Creator download. Sheets:
+ * - "FRAC": Role, Activity, one "Pn: label" column per posting, Tentative Competency Label, Source,
+ *   Source tier. Each role row (shaded) lists its activities' distinct competency codes; activity rows follow.
+ * - "Competencies": code, label, description, type, area, label and description for levels 1-5, KCM alignment.
+ * - "Method & Sources": cadre, state, build date, method paragraph and the research notes as label/value
+ *   rows, then a Title / Issuer / Year / Use / Tier table of sources.
+ * - "Expert check" (only when the FRAC has a review): the same rows as the Reviewer's "Review" sheet.
+ * The caller passes the method paragraph so the prototype's verbatim text is used, never invented here.
  */
 export async function buildFracWorkbook(frac: Frac, methodParagraph: string): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
@@ -175,32 +199,37 @@ export async function buildFracWorkbook(frac: Frac, methodParagraph: string): Pr
     const reviewSheet = workbook.addWorksheet("Expert check");
     const rows = reportRows(frac.review);
     rows.forEach((row) => reviewSheet.addRow(row));
-    styleSheet(reviewSheet, [5]);
+    styleSheet(reviewSheet, [reportHeaderRow(rows)]);
   }
 
   return finishWorkbook(workbook);
 }
 
-/** Builds the single-sheet Excel download for a Reviewer report. */
+/**
+ * Builds the Reviewer download: one "Review" sheet with Verdict, Triage, Summary and Method,
+ * then the findings table (Severity, Check, Finding, Detail, Refs, Suggested fix, Found by).
+ */
 export async function buildReviewWorkbook(report: Report): Promise<Buffer> {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "FRAC Studio";
   const sheet = workbook.addWorksheet("Review");
-  reportRows(report).forEach((row) => sheet.addRow(row));
-  styleSheet(sheet, [5]);
+  const rows = reportRows(report);
+  rows.forEach((row) => sheet.addRow(row));
+  styleSheet(sheet, [reportHeaderRow(rows)]);
   return finishWorkbook(workbook);
 }
 
-/** Returns the download name required by the Creator spec. */
+/** Returns the Creator download name: "<cadre> competencies - <state>.xlsx". */
 export function fracWorkbookFilename(frac: Pick<Frac, "cadre" | "state">): string {
   return `${safeFilename(frac.cadre)} competencies - ${safeFilename(frac.state)}.xlsx`;
 }
 
-/** Returns the download name required by the Reviewer spec. */
+/** Returns the Reviewer download name: "FRAC review - <title>.xlsx". */
 export function reviewWorkbookFilename(title: string): string {
   return `FRAC review - ${safeFilename(title)}.xlsx`;
 }
 
+/** Replaces characters Windows forbids in file names and trims dots/dashes; falls back to "FRAC" if empty. */
 function safeFilename(value: string): string {
   return value
     .trim()

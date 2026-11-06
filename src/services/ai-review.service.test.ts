@@ -75,6 +75,23 @@ describe("ChecklistReviewer", () => {
     expect(p.calls.map((c) => c.task)).toEqual(["review-competencies", "review-competencies"]);
   });
 
+  it("drops a flag a config ladder rule already covers, only for cadres that rule applies to", async () => {
+    // supervising-l3 is frontlineOnly with suppressesAiFlags: it covers ANM, not a Medical Officer
+    const c1 = comp("C1", "Domain");
+    c1.levels[2].desc = "Supervises and mentors junior staff during sessions";
+    const m = model({ competencies: [c1, comp("C2", "Functional"), comp("C3", "Behavioural")] });
+    const answer = {
+      "review-competencies": {
+        items: [{ code: "C1", scope: [{ quote: "Supervises and mentors junior staff during sessions", act: "Supervising", basis: "x" }], accuracy: [] }],
+      },
+    };
+    const run = (cadre: string) =>
+      new ChecklistReviewer(provider(answer)).review({ model: m, cadre, checks: computeChecks(m, RULES, { cadre }), rules: RULES });
+
+    expect(await run("ANM")).toEqual([]);
+    expect((await run("Medical Officer")).map((f) => f.title)).toEqual(["Other acts beyond Medical Officer scope"]);
+  });
+
   it("fails the job with AI_OUTPUT_INVALID on a bad shape", async () => {
     const m = model();
     const p = provider({ "review-competencies": { items: "nope" } });

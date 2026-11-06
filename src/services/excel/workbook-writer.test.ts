@@ -168,6 +168,15 @@ describe("buildFracWorkbook", () => {
 });
 
 describe("buildReviewWorkbook", () => {
+  it("styles the findings header row, below the Method row", async () => {
+    const excel = new ExcelJS.Workbook();
+    await excel.xlsx.load(await buildReviewWorkbook(review()));
+    const header = excel.getWorksheet("Review")?.getRow(6).getCell(1);
+    expect(header?.value).toBe("Severity");
+    expect(header?.font.bold).toBe(true);
+    expect(header?.fill).toMatchObject({ fgColor: { argb: "FFB7DDE0" } });
+  });
+
   it("writes the review report to a single Review sheet", async () => {
     const sheets = await readWorkbook(await buildReviewWorkbook(review()));
     expect(sheets).toHaveLength(1);
