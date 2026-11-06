@@ -49,7 +49,8 @@ price means editing the profile. Neither needs a code change.
 | `npm run dev:ai` | The provider `AI_PROVIDER` names (`.env` overrides `service.json`); refuses to start on the mock, and stops if the key is missing |
 | `npm run dev` | Whatever `AI_PROVIDER` says, mock included |
 | `npm run ai:check` | One tiny real call per tier to prove the key, models and quota; prints tokens and cost |
-| `npm run ai:report` | Writes `reports/ai-report-<date>.md`: how the AI answered (per provider, model and task), failures, jobs, review checklist flags kept and dropped. `-- --days 7` or `-- --since 2026-11-01` |
+| `npm run ai:report` | Writes `reports/ai-report-<date>.md`: by day (cost and billed), tokens, cost, model and wall time and thinking share per step, per FRAC / review, revisions and what they added, cost per user, by provider and task, slowest calls, failures, jobs, review checklist flags, and a warning when a day's billed spend passes `REPORT_DAILY_BUDGET_USD` ($5). `-- --days 7`, `-- --since 2026-11-01`, `-- --calls` to list every call |
+| `npm run ai:report:daily` | One day's report, compared with the day before, with every call (start, finish, job, task, model, outcome, tokens, cost) in `reports/daily/ai-daily-<date>.md`. Today so far by default; `-- --yesterday` for a cron job after midnight, `-- --day 2026-11-06` for any day. Times in IST (`REPORT_UTC_OFFSET_MINUTES`) |
 | `npm run start:mock` / `start:ai` | The same, from the built `dist/` |
 
 **Make sure a run uses the AI, not the mock:**
@@ -79,7 +80,7 @@ What switching affects, how to edit the sample data, and how to delete the mocks
 
 Every model call is logged to `ai_calls` (provider, model, task, time, tokens, cost, outcome; no prompt or
 answer text), and every review stores how many AI flags it raised, kept and dropped.
-`npm run ai:report` turns that into a Markdown report. Release notes live in `RELEASE_NOTES/`: copy
+`npm run ai:report` turns that into a Markdown report and `npm run ai:report:daily` writes one per day. The server log also prints an "AI call started" and an "AI call finished" line for every call, with its job, task, model, time, tokens and cost. To keep daily reports, schedule `npm run ai:report:daily -- --yesterday` after midnight IST (cron or a Jenkins job), on a machine that can reach the database. Release notes live in `RELEASE_NOTES/`: copy
 [TEMPLATE.md](RELEASE_NOTES/TEMPLATE.md) per release, and keep updates, blockers and AI quality over time in
 [AI_SERVICE_TRACKER.md](RELEASE_NOTES/AI_SERVICE_TRACKER.md).
 

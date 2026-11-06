@@ -241,6 +241,7 @@ One service, three ways to run it. Run every command in `~/SonarRepos/frac-studi
 | Claude | `ANTHROPIC_API_KEY` | `AI_PROVIDER=claude npm run ai:check`, then `AI_PROVIDER=claude npm run dev:ai` |
 | A built server (`dist/`) | as above | `npm run start:mock` or `npm run start:ai` |
 
+- **Every call, as it happens:** the server log prints "AI call started" and "AI call finished" for each call (job, task, provider, model, time, tokens, cost, outcome). `npm run ai:report:daily` writes one day's report listing every call with its start and finish time (IST), plus tokens, cost, wall time and thinking share per step, the comparison with the day before, cost per FRAC, what revisions added, cost per user, and a warning when a day's billed spend passes `REPORT_DAILY_BUDGET_USD` ($5 by default; estimates do not count).
 - **See how the AI answered:** `npm run ai:report` writes `reports/ai-report-<date>.md` from the per-call log: answered-OK rate, wrong-shape and failed calls, time, tokens and cost per provider and task, and how many review flags were kept or dropped. Release notes are in `RELEASE_NOTES/` (template, tracker of updates and blockers).
 - **Make sure a run uses the AI, not the mock:**
 
