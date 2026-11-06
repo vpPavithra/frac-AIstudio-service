@@ -32,6 +32,14 @@ describe("scope (§4.4)", () => {
     expect(scopeHits.map((h) => [h.code, h.level, h.rule])).toEqual([["C1", 4, "complications"], ["C1", 4, "prescribing"]]);
   });
 
+  it("does not read a previous caesarean in a risk-factor list as an operative procedure, but still flags performing one", () => {
+    const c = comp("C1", "Domain");
+    c.levels[0].desc = "Name the common high-risk conditions (severe anaemia, hypertension, previous caesarean, multiple pregnancy) from the RCH list.";
+    expect(byTitle(anm(model({ competencies: [c] })).findings, "Beyond ANM scope: Operative")).toBeUndefined();
+    c.levels[0].desc = "Assists the MO during a caesarean section.";
+    expect(byTitle(anm(model({ competencies: [c] })).findings, "Beyond ANM scope: Operative")?.sev).toBe("B");
+  });
+
   it("clears IV access for referral, but not IV drugs", () => {
     const ok = comp("C1", "Domain");
     ok.levels[2].desc = "Secures IV access before referral";

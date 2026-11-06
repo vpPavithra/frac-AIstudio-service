@@ -3,6 +3,8 @@
 // the step files call them and pass the text to the TextProvider. Brief size wording comes from
 // config/frac-sizes.json (via sizes.ts). Never edit the text inside the templates without the spec owner.
 import type { Frac } from "../../models/frac.model.ts";
+import { loadReviewRules } from "../../config/review-rules.ts";
+import { cadreFamily } from "../review-engine/rules.ts";
 import { SIZE_TARGETS } from "./sizes.ts";
 
 // Prompt builders, structured as spec 5.2–5.5 and rules r3 §6 describe. METHOD, SOURCE_LIBRARY, KAUSHAL,
@@ -51,6 +53,27 @@ const scope = (f: Frac) =>
   `AUTHORISED (treat as authoritative):\n${f.research?.authorised ?? ""}\nNOT AUTHORISED (must be referred):\n${f.research?.notAuthorised ?? ""}`;
 const postings = (f: Frac) => f.postings.map((p) => `${p.key} ${p.label}`).join("; ");
 
+/**
+ * The Reviewer's own rule tables (config/review-rules.json scope, config/outdated.json), so the Creator writes
+ * what the expert check passes: each act beyond the cadre's scope with what to write instead, and the outdated
+ * names with their current ones. Read per prompt, like the review, so a rule edit applies without a restart.
+ * Empty for a cadre with no scope rules (e.g. a nurse) apart from the outdated names.
+ */
+export const reviewGuard = (f: Frac): string => {
+  const rules = loadReviewRules();
+  const family = cadreFamily(f.cadre) ?? cadreFamily(f.cadreFull);
+  const acts = (family ? (rules.scope[family] ?? []) : []).map((r) => `- ${r.act}. Write instead: ${r.instead}.`);
+  const outdated = rules.outdated.filter((o) => family || !o.frontlineOnly).map((o) => `- ${o.found} → ${o.correct}`);
+  return [
+    acts.length
+      ? `THE EXPERT CHECK FLAGS THESE AS BEYOND ${f.cadre.toUpperCase()} SCOPE. Do not give the ${f.cadre} these acts, and avoid the wording too: a label such as "Manage emergencies…" is flagged even when its indicators stay within standing orders. Name drugs; never write "emergency drugs".\n${acts.join("\n")}`
+      : "",
+    outdated.length ? `OUTDATED NAMES THE EXPERT CHECK FLAGS (use the current one):\n${outdated.join("\n")}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+};
+
 /** Step 2 (spec 5.2). On revise it carries the whole previous research (team edits included) plus the feedback. */
 export const researchPrompt = (f: Frac, feedback?: string) =>
   [KAUSHAL, brief(f), METHOD, SOURCE_LIBRARY,
@@ -79,7 +102,7 @@ export const activitiesPrompt = (f: Frac, roles: { code: string; title: string }
     .filter((x) => x.acts.length)
     .map((x) => `${x.r.code}:\n${x.acts.map((a) => `- ${a.text}`).join("\n")}`);
   const keys = f.postings.map((p) => p.key);
-  return [KAUSHAL, brief(f), scope(f), METHOD, `POSTINGS: ${postings(f)}`,
+  return [KAUSHAL, brief(f), scope(f), reviewGuard(f), METHOD, `POSTINGS: ${postings(f)}`,
     `ROLES:\n${roles.map((r) => `${r.code} ${r.title}`).join("\n")}`,
     earlier.length ? `EARLIER ACTIVITIES (keep the good ones):\n${earlier.join("\n")}` : "", revise(feedback),
     `For each role, write ${count} observable workplace activities with performance verbs. For each activity give Yes or No for every posting (${keys.join(", ")}), the source document and the source tier (JD | Programme guideline | Facility standard | Inferred – verify).`,
@@ -92,7 +115,7 @@ export const activitiesPrompt = (f: Frac, roles: { code: string; title: string }
  */
 export const competenciesPrompt = (f: Frac, count: number, feedback?: string) => {
   const prefix = f.codePrefix || "C";
-  return [KAUSHAL, brief(f), METHOD,
+  return [KAUSHAL, brief(f), reviewGuard(f), METHOD,
     `ACTIVITIES:\n${f.roles.flatMap((r) => r.activities.map((a) => `${a.code} ${a.text}`)).join("\n")}`,
     f.competencies.length ? `EXISTING COMPETENCIES (keep existing codes; mint new codes after the highest one):\n${f.competencies.map((c) => `${c.code} ${c.label}`).join("\n")}` : "",
     revise(feedback),
@@ -111,7 +134,7 @@ export const laddersPrompt = (f: Frac, codes: string[], feedback?: string) => {
     [`${c.code} ${c.label} [${c.type}] — ${c.description}`,
       `Used by: ${usedBy(c.code).join("; ") || "none"}`,
       c.levels ? `Current ladder:\n${c.levels.map((l, i) => `L${i + 1} ${l.label} :: ${l.desc}`).join("\n")}` : ""].filter(Boolean).join("\n"));
-  return [PERSONAS, brief(f), scope(f), METHOD, `COMPETENCIES:\n${blocks.join("\n\n")}`, revise(feedback),
+  return [PERSONAS, brief(f), scope(f), reviewGuard(f), METHOD, `COMPETENCIES:\n${blocks.join("\n\n")}`, revise(feedback),
     "Kaushal writes and Vidya checks every clinical fact. For each competency write L1–L5. Each level has a one-line label that starts with a measurable verb and differs from the other levels, and a desc of 2–4 indicators (first indicator on the first line, each further one on a new line starting with \"-\"). Levels are cumulative; L5 covers audit, mentoring and improving the system. Clinical content follows current Indian national guidelines and stays within the authorised scope.",
     `${JSON_ONLY}\n{"ladders":[{"code":"","levels":[{"label":"","desc":""},{"label":"","desc":""},{"label":"","desc":""},{"label":"","desc":""},{"label":"","desc":""}]}]}`].filter(Boolean).join("\n\n");
 };

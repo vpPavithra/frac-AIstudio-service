@@ -72,6 +72,7 @@
         "act": "Operative or MTP procedures",
         "pattern": "\\b(MVA|manual vacuum aspiration|dilatation and curettage|caesarean|c-section|vacuum extraction|forceps deliver\\w*)\\b",
         "flags": "i",
+        "allow": "\\b(previous|prior|past|history of|h/o)\\s+(lscs|caesarean|c-section)|caesarean\\s+(scar|history)|post[- ]?caesarean",
         "sev": "B",
         "instead": "These are MO or specialist procedures"
       },
