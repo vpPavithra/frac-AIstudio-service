@@ -2,7 +2,7 @@
 
 Backend for FRAC Studio (FRAC Creator, FRAC Reviewer, My FRACs). The UI lives in `sunbird-cb-orgportal`
 at `app/frac-studio`, and calls this service through `sunbird-cb-uiproxy` at `/apis/protected/v8/fracStudio/*`.
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design and [docs/CODEBASE_GUIDE.md](docs/CODEBASE_GUIDE.md) for what every folder and file does.
 
 ## Run
 
@@ -82,3 +82,28 @@ code change or deploy is needed, both are read when a review runs:
 
 The review fingerprint includes both files, so a stored review is never reused after a rule changes.
 What is built against the spec and rules, and what is still open: `docs/spec/R3_GAP_ANALYSIS.md`.
+
+## Tuning without a code change
+
+Every tunable is a key in `config/service.json` (or an environment variable of the same name, which wins).
+`npm run config:check` rejects unknown keys and non-numbers. These are read once at startup, so restart
+the service after a change.
+
+| What | Keys | Default |
+|---|---|---|
+| Models and effort | `ANTHROPIC_COMPLEX_MODEL`, `ANTHROPIC_DEFAULT_MODEL`, `LLM_COMPLEX_EFFORT`, `LLM_DEFAULT_EFFORT` | Claude Sonnet 5.5, high / medium |
+| Call limits | `LLM_TIMEOUT_MS`, `LLM_RETRIES`, `LLM_MAX_TOKENS`, `LLM_MAX_RESUMES` | 10 min, 3, 64,000, 3 |
+| Creator batching | `AI_BATCH_SIZE`, `AI_BATCH_PARALLEL` (activities and ladders) | 4 per call, 3 at once |
+| Review checklist | `REVIEW_BATCH_SIZE`, `REVIEW_BATCH_PARALLEL`, `REVIEW_MAX_STATE_ITEMS`, `REVIEW_MIN_QUOTE_WORDS` | 6, 3, 6, 4 |
+| Research web search | `RESEARCH_WEB_SEARCH`, `RESEARCH_SEARCH_DOMAINS`, `RESEARCH_SEARCH_MAX_USES` | on, 4 government domains, 5 |
+| Prices (cost per job) | `RATE_*_USD_PER_1M`, `RATE_WEB_SEARCH_USD_PER_1K`, `RATE_CACHE_WRITE_MULTIPLIER` | Sonnet 5.5 list prices |
+| Jobs | `JOB_STALE_AFTER_MS`, `JOB_SWEEP_EVERY_MS`, `JOB_HEARTBEAT_MS` | 15 min, 1 min, 1 min |
+| Postgres pool | `POSTGRES_POOL_MAX`, `POSTGRES_CONNECT_TIMEOUT_MS`, `POSTGRES_IDLE_TIMEOUT_MS` | 10, 10 s, 30 s |
+| Request limits | `MAX_UPLOAD_MB`, `MAX_JSON_MB`, `MAX_TEXT_CHARS`, `MAX_ROLES`, `MAX_ACTIVITIES_PER_ROLE`, `MAX_COMPETENCIES` | 15, 5, 20,000, 200, 200, 500 |
+
+Brief sizes (roles, activities per role and competencies for compact, standard and full) are in
+`config/frac-sizes.json` (override with `FRAC_SIZES_CONFIG_PATH`). Startup stops if a size is missing or a
+count is not a positive whole number.
+
+What stays in code on purpose: rules the spec fixes, such as at most 3 postings, 5 levels per ladder, the
+fixed finding titles and the triage thresholds. Changing those changes the product, so they go through review.

@@ -1,3 +1,5 @@
+// Access log, mounted by app.ts right after requestContext so each line carries the request id.
+// The error code comes from res.locals.errorCode, which sendError (utils/response.ts) sets.
 import type { NextFunction, Request, Response } from "express";
 import { logger } from "../utils/logger.ts";
 

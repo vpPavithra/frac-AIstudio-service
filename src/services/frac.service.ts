@@ -1,3 +1,8 @@
+// FRAC SERVICE: the Creator (spec 5) and My FRACs. Creates, reads, edits, versions and exports FRACs, and
+// starts each AI step as a job: brief -> research -> roles & activities -> competencies -> ladders -> expert
+// check. Each step function (services/ai/*.step.ts) calls the TextProvider, validates the JSON with Zod and
+// records usage/cost; this file checks the step may run (STEP_NOT_READY), merges the result into the latest
+// saved FRAC, logs it and snapshots a version. Called by controllers/frac.controller.ts; wired in server.ts.
 import { randomUUID } from "node:crypto";
 import { fracToModel } from "./review-engine/convert.ts";
 import type { Frac, FracVersion } from "../models/frac.model.ts";
@@ -16,6 +21,7 @@ import { runRoles } from "./ai/roles.step.ts";
 import type { StepContext } from "./ai/step-context.ts";
 import { type ReviewService, worstSeverity } from "./review.service.ts";
 
+/** One row of My FRACs (GET /v1/fracs). `worst` is the most severe open review finding, if any. */
 export interface FracSummary {
   id: string;
   cadre: string;
@@ -27,8 +33,13 @@ export interface FracSummary {
   updatedAt: string;
 }
 
+/** Brief fields (spec 5.1) that lock once research exists. */
 const BRIEF_FIELDS = ["cadre", "state", "size", "prompt"] as const;
 
+/**
+ * A new FRAC at step 1 (brief only). cadreFull starts as the cadre and codePrefix as "C" until research
+ * sets them. `id` and `now` are parameters so tests can fix them.
+ */
 export function newFrac(ownerId: string, brief: CreateFracInput, id = randomUUID(), now = new Date()): Frac {
   const at = now.toISOString();
   return {
@@ -54,8 +65,9 @@ export function newFrac(ownerId: string, brief: CreateFracInput, id = randomUUID
 }
 
 /**
- * Applies validated team edits (spec 8, PATCH). The brief locks once research exists (5.1);
- * editing roles after competencies exist sets rolesDirty (5.3); the team may clear it.
+ * Applies validated team edits (spec 8, PATCH). The brief locks once research exists (5.1; 409 BRIEF_LOCKED);
+ * editing roles after competencies exist sets rolesDirty (5.3); the team may clear it. codePrefix is sanitised.
+ * Pure: the caller saves the result.
  */
 export function applyEdits(frac: Frac, edits: PatchFracInput, now = new Date()): Frac {
   const changesBrief = BRIEF_FIELDS.some((k) => edits[k] !== undefined && edits[k] !== frac[k]);
@@ -74,6 +86,7 @@ export function applyEdits(frac: Frac, edits: PatchFracInput, now = new Date()):
   return next;
 }
 
+/** The My FRACs row for a FRAC: counts and the worst finding, without the full content. */
 export function summarise(f: Frac): FracSummary {
   return {
     id: f.id,
@@ -91,6 +104,7 @@ export function summarise(f: Frac): FracSummary {
   };
 }
 
+/** The AI steps started through POST /v1/fracs/:id/steps/:step; the expert check has its own route. */
 export type GenerationStep = "research" | "roles" | "competencies" | "ladders";
 
 interface StepSpec {
@@ -102,7 +116,10 @@ interface StepSpec {
   notReady: (f: Frac) => string | null;
 }
 
-/** Step number (spec 5), job message, the step function and what must exist before it runs. */
+/**
+ * Step number (spec 5), job message, the step function and what must exist before it runs.
+ * An imported FRAC (opened from a review) has roles but no research, so roles accepts `imported` too.
+ */
 const STEPS: Record<GenerationStep, StepSpec> = {
   research: { number: 2, label: "Job research", msg: JOB_MESSAGES.research, run: runResearch, notReady: () => null },
   roles: {
@@ -119,7 +136,10 @@ const STEPS: Record<GenerationStep, StepSpec> = {
   },
 };
 
-/** Creator tab (spec 5) and My FRACs. */
+/**
+ * Creator tab (spec 5) and My FRACs. Every read goes through `get`, which scopes to the owner and answers
+ * 404 for someone else's FRAC, so no other method checks ownership itself.
+ */
 export class FracService {
   constructor(
     private readonly repos: Repositories,
@@ -133,6 +153,8 @@ export class FracService {
    * Runs one generation step as a job (spec 5.2–5.5). The step reads the FRAC as it was when the job
    * started; its result is merged into the latest saved FRAC, so edits made meanwhile are kept. Then
    * the step and its feedback are logged and a version is snapshotted, so a bad revise can be undone.
+   * Throws 409 STEP_NOT_READY (before any job starts) when an earlier step is missing. Returns the queued job;
+   * step errors (AI_OUTPUT_INVALID, AI_* from the provider) end up on the job, not here.
    */
   async startStep(ownerId: string, id: string, step: GenerationStep, body: StepInput) {
     const frac = await this.get(ownerId, id);
@@ -141,6 +163,7 @@ export class FracService {
     if (reason) throw conflict("STEP_NOT_READY", reason);
 
     return this.runner.start({ ownerId, kind: step, targetId: id, msg: spec.msg }, async (progress, recordUsage) => {
+      // Re-reads before each write so team edits saved during the job are kept (ladders save per batch)
       const save = async (update: (latest: Frac) => Partial<Frac>) => {
         const latest = await this.get(ownerId, id);
         const next: Frac = { ...latest, ...update(latest), updatedAt: new Date().toISOString() };
@@ -157,12 +180,14 @@ export class FracService {
     });
   }
 
+  /** Step 1: saves a new FRAC from the brief. */
   async create(ownerId: string, brief: CreateFracInput): Promise<Frac> {
     const frac = newFrac(ownerId, brief);
     await this.repos.fracs.insert(frac);
     return frac;
   }
 
+  /** The FRAC if this owner has it; 404 NOT_FOUND otherwise, so other owners' ids are not revealed. */
   async get(ownerId: string, id: string): Promise<Frac> {
     const frac = await this.repos.fracs.get(id);
     if (!frac || frac.ownerId !== ownerId) throw notFound("FRAC");
@@ -173,13 +198,18 @@ export class FracService {
     return (await this.repos.fracs.listByOwner(ownerId)).map(summarise);
   }
 
+  /** Saves team edits (autosave). Not versioned; versions are taken by steps, the check and restore. */
   async patch(ownerId: string, id: string, edits: PatchFracInput): Promise<Frac> {
     const next = applyEdits(await this.get(ownerId, id), edits);
     await this.repos.fracs.update(next);
     return next;
   }
 
-  /** Step 6 expert check: the Reviewer engine on fracToModel (spec 5.6). */
+  /**
+   * Step 6 expert check: the Reviewer engine on fracToModel (spec 5.6), with the fixed EXPERT_CHECK_NOTES.
+   * Saves the report on the FRAC, snapshots it, and stores it as a review of kind "expert-check" (gap 10).
+   * Throws 400 NO_COMPETENCIES before any job starts. The check reviews the FRAC as it was when it started.
+   */
   async startCheck(ownerId: string, id: string) {
     const frac = await this.get(ownerId, id);
     if (!frac.competencies.length) {
@@ -198,6 +228,7 @@ export class FracService {
     });
   }
 
+  /** Saved snapshots of a FRAC, after the owner check. */
   async versions(ownerId: string, id: string): Promise<FracVersion[]> {
     await this.get(ownerId, id);
     return this.repos.fracs.versions(id);
@@ -214,6 +245,7 @@ export class FracService {
     return restored;
   }
 
+  /** The FRAC as an Excel workbook (spec 7), with the method paragraph from config (METHOD_PARAGRAPH_PATH). */
   async exportWorkbook(ownerId: string, id: string): Promise<{ buffer: Buffer; filename: string }> {
     const frac = await this.get(ownerId, id);
     return { buffer: await buildFracWorkbook(frac, this.methodParagraph()), filename: fracWorkbookFilename(frac) };

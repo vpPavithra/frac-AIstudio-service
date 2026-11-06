@@ -1,5 +1,8 @@
+// Jenkins pipeline for frac-studio-service, run on demand with a github_release_tag parameter.
 // Same pipeline shape as playlist-service: compile in a pre-build image, package the runtime
 // image with build.sh, archive metadata, then a report-only SonarQube stage.
+// Needs env hub_org (image registry/org) and docker_pre_build (pre-build image/container name).
+// Produces the image ${hub_org}/frac-studio-service:<tag>_<commit>_<build>, metadata.json and build_tag.txt.
 node('build-slave') {
     try {
         String ANSI_GREEN = "\u001B[32m"

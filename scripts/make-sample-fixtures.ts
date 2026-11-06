@@ -1,5 +1,6 @@
 // Writes the synthetic sample workbooks to test/fixtures/sample/ for manual uploads (Reviewer UI, Postman).
-// Usage: npm run fixtures:sample
+// Builds them from test/support/sample-workbooks.ts (SAMPLES), one .xlsx per entry, columns 28 wide.
+// Usage: npm run fixtures:sample. Run by hand only; not part of the build or tests.
 import ExcelJS from "exceljs";
 import { mkdirSync } from "node:fs";
 import path from "node:path";

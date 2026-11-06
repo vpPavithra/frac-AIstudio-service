@@ -1,8 +1,10 @@
-// Small in-memory workbooks for unit tests. Real dictionaries live in test/fixtures (not in git).
+// Small in-memory workbooks and review models for unit tests (review engine, reader, AI review, API).
+// Real dictionaries live in test/fixtures (not in git).
 import type { SheetData } from "../../src/services/review-engine/parse-workbook.ts";
 import type { Level } from "../../src/models/frac.model.ts";
 import type { ModelCompetency, ReviewModel } from "../../src/models/review.model.ts";
 
+/** Standard Competencies sheet headers: code, label, description, type, area, then levels 1-5. */
 export const COMP_HEADERS = [
   "Competency Code",
   "Competency Label",
@@ -12,6 +14,7 @@ export const COMP_HEADERS = [
   ...[1, 2, 3, 4, 5].flatMap((n) => [`Competency Level ${n} Label`, `Competency Level ${n} Description`]),
 ];
 
+/** A clean five-level ladder that passes every ladder check. */
 export function goodLevels(topic: string): Level[] {
   return [
     { label: `Identifies ${topic} needs`, desc: `Identifies cases\n- Records findings` },
@@ -22,10 +25,12 @@ export function goodLevels(topic: string): Level[] {
   ];
 }
 
+/** A competency with the given code and type; levels default to a clean ladder. */
 export function comp(code: string, type: string, levels: Level[] = goodLevels(code)): ModelCompetency {
   return { code, label: `${code} label`, description: `Conducts ${code}`, type, area: "PH", levels };
 }
 
+/** A small valid ReviewModel (2 roles, 4 activities, 3 competencies); `over` replaces top-level fields. */
 export function model(over: Partial<ReviewModel> = {}): ReviewModel {
   return {
     title: "Test",
@@ -56,10 +61,15 @@ export function model(over: Partial<ReviewModel> = {}): ReviewModel {
   };
 }
 
+/** A competency as one Competencies sheet row, in COMP_HEADERS order. */
 export function compRow(c: ModelCompetency): string[] {
   return [c.code, c.label, c.description, c.type, c.area, ...c.levels.flatMap((l) => [l.label, l.desc])];
 }
 
+/**
+ * A small ANM-style workbook with the quirks the parser must handle: a title row above the headers,
+ * the "Comptency" typo, mixed ref formats, a blank row, a Hindi sheet to skip and a blank-code row.
+ */
 export function workbook(): SheetData[] {
   return [
     {

@@ -1,9 +1,13 @@
 // MOCK PROVIDER: sample answers when no ANTHROPIC_API_KEY is set (or AI_PROVIDER=mock); no model, no key.
 // Content lives in ./content/cadres.json. How to edit or remove the mock: README.md in this folder.
+// It answers every AI task (Creator steps 2-5 and the Reviewer checklist) from the request's structured
+// `input`, ignoring the prompt text, in the same JSON shapes the step schemas validate. Usage is estimated
+// from text length, priced at Claude rates (pricing.ts) and marked `estimated`. Reads MOCK.delayMs.
 import { MOCK } from "../config/constants.ts";
 import { priceUsd } from "../providers/text/pricing.ts";
 import type { AiTask, CompletionRequest, CompletionResult, TextProvider } from "../providers/text/types.ts";
 
+/** The shape of content/cadres.json. */
 export interface MockContent {
   /** Words in the brief's scope that name a posting, e.g. "sub-centre" → "{cadre} at Sub-Centre (outreach)". */
   postingKeywords?: Record<string, string>;
@@ -13,6 +17,7 @@ export interface MockContent {
 interface MockRole { title: string; source: string; activities: string[] }
 interface MockCompetency { label: string; description: string; type: string; area: string; kcm: string }
 interface MockSource { title: string; issuer: string; year: string; use: string; tier: string }
+/** One cadre's sample answers. `match` lists name fragments; `base` names a profile to inherit fields from. */
 interface CadreProfile {
   match: string[];
   base?: string;
@@ -31,12 +36,16 @@ interface CadreProfile {
   competencies: MockCompetency[];
 }
 
+/** Rough English average, only for the mock's token estimate. */
 const CHARS_PER_TOKEN = 4;
+/** Common long words ignored when matching activities and scope to profile items. */
 const STOP_WORDS = new Set(["with", "from", "that", "this", "each", "their", "into", "under", "after", "within", "using"]);
 
+/** Lower-case words longer than 3 letters, minus STOP_WORDS: the mock's crude similarity measure. */
 const words = (text: string) =>
   new Set(text.toLowerCase().split(/[^a-z]+/).filter((w) => w.length > 3 && !STOP_WORDS.has(w)));
 
+/** Replaces {cadre} and {state} placeholders from cadres.json with the brief's values. */
 const fill = (text: string, vars: { cadre: string; state: string }) =>
   text.replaceAll("{cadre}", vars.cadre).replaceAll("{state}", vars.state || "the state");
 
@@ -55,11 +64,13 @@ function byScope<T>(items: T[], scope: string, textOf: (item: T) => string, coun
 /** Pauses so the progress bar visibly moves. 0 in tests. */
 const pause = () => new Promise((resolve) => setTimeout(resolve, MOCK.delayMs));
 
+/** TextProvider that answers from sample data. Created by index.ts createMockProvider. */
 export class MockTextProvider implements TextProvider {
   readonly name = "mock" as const;
   private readonly profiles: Record<string, CadreProfile>;
   private readonly postingKeywords: Record<string, string>;
 
+  /** Resolves `base` once: a profile is its base's fields overlaid with its own. */
   constructor(file: MockContent) {
     this.postingKeywords = file.postingKeywords ?? {};
     this.profiles = Object.fromEntries(
@@ -79,6 +90,7 @@ export class MockTextProvider implements TextProvider {
     return { json, model: "mock", usage, costUsd: priceUsd(request.tier, usage), estimated: true };
   }
 
+  /** Routes a task to its answer builder; each returns the JSON shape that task's schema expects. */
   private answer(task: AiTask, input: Record<string, unknown>): unknown {
     switch (task) {
       case "research":
@@ -119,6 +131,7 @@ export class MockTextProvider implements TextProvider {
     return (unique.length ? unique : p.postings.map((label) => fill(label, vars))).slice(0, 3);
   }
 
+  /** Step 2 answer: the profile's research, with the brief's scope and any feedback echoed so revise is visible. */
   private research(input: Record<string, unknown>) {
     const vars = { cadre: String(input.cadre ?? ""), state: String(input.state ?? "") };
     const p = this.profile(vars.cadre);
@@ -139,6 +152,7 @@ export class MockTextProvider implements TextProvider {
     };
   }
 
+  /** Step 3a answer: `count` profile roles, preferring those that match the brief's scope. */
   private roles(input: Record<string, unknown>) {
     const p = this.profile(String(input.cadre ?? ""));
     const count = Number(input.count ?? p.roles.length);
@@ -146,7 +160,10 @@ export class MockTextProvider implements TextProvider {
     return { roles: picked.map((r) => ({ title: r.title, source: r.source })) };
   }
 
-  /** Activities for the requested roles; a role the team added or renamed gets generic activities. */
+  /**
+   * Activities for the requested roles; a role the team added or renamed gets generic activities.
+   * Those generic ones carry source "Added by team", the same marker roles.step.ts keeps on revise.
+   */
   private activities(input: Record<string, unknown>) {
     const p = this.profile(String(input.cadre ?? ""));
     const count = Number(input.count ?? 6);
@@ -202,6 +219,7 @@ export class MockTextProvider implements TextProvider {
       const donor = assigned.findIndex((c) => assigned.filter((x) => x === c).length > 1);
       if (donor >= 0) assigned[donor] = k;
     }
+    // Spec 3.7: usually L3; L4 for supervising/reviewing work; L5 only for audit or mentoring
     const levelFor = (text: string) => (/audit|mentor/i.test(text) ? 5 : /supervise|review|verify|investigate|manage/i.test(text) ? 4 : 3);
     return {
       competencies: comps,

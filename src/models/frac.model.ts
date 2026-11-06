@@ -1,10 +1,15 @@
-// FRAC shapes from the FRAC Studio spec, section 4.1.
+// FRAC shapes from the FRAC Studio spec, section 4.1. A FRAC is the Creator's working document: the
+// brief, research, roles with activities, and laddered competencies. Stored whole as JSONB (fracs.doc),
+// returned as-is by /v1/fracs, and written to Excel by services/excel. Types only, no logic.
 import type { Report } from "./report.model.ts";
 
+/** How strong the evidence behind an activity is; "Inferred – verify" asks the team to check it. */
 export type SourceTier = "JD" | "Programme guideline" | "Facility standard" | "Inferred – verify";
 export type CompetencyType = "Domain" | "Functional" | "Behavioural";
+/** Brief size; the role/activity/competency counts per size are in config/frac-sizes.json. */
 export type FracSize = "compact" | "standard" | "full";
 
+/** One proficiency level (L1–L5) of a competency ladder. */
 export interface Level {
   label: string;
   /** 2–4 indicators; each after the first starts on a new line with "-" */
@@ -13,6 +18,7 @@ export interface Level {
 
 // ---- 4.1 FRAC (Creator object) ----
 
+/** A posting (work setting) column of the Role–Activity sheet; `key` is the column id in FracActivity.postings. */
 export interface Posting {
   key: string;
   label: string;
@@ -63,12 +69,17 @@ export interface FracCompetency {
   levels: Level[] | null;
 }
 
+/** One feedback entry the team gave when revising a step. */
 export interface FracLogEntry {
   at: string;
   step: number;
   feedback: string;
 }
 
+/**
+ * The FRAC document. `step` is the furthest Creator step reached. `rolesDirty` is set by the server when
+ * roles are edited after competencies exist, so the activity→competency mappings need a look. `review` is the last expert check.
+ */
 export interface Frac {
   id: string;
   createdAt: string;
@@ -91,6 +102,7 @@ export interface Frac {
   log: FracLogEntry[];
 }
 
+/** A saved snapshot's metadata (the document itself stays in frac_versions.doc). */
 export interface FracVersion {
   id: number;
   fracId: string;

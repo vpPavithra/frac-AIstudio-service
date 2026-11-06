@@ -1,8 +1,11 @@
+// First middleware in app.ts. Starts the per-request AsyncLocalStorage context (utils/context.ts)
+// that utils/logger.ts reads to stamp the request id on every log line.
 import { randomUUID } from "node:crypto";
 import type { NextFunction, Request, Response } from "express";
 import { requestContext } from "../utils/context.ts";
 
 const REQUEST_ID_HEADER = "x-request-id";
+// A caller-supplied id is reused only if it is short and plain, so it cannot inject into log lines
 const SAFE_REQUEST_ID = /^[A-Za-z0-9._-]{1,64}$/;
 
 /**

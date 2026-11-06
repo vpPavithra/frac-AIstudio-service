@@ -1,3 +1,6 @@
+# Runtime image for frac-studio-service, built by build.sh in the Jenkins "Build" stage.
+# Expects dist/, config/ and migrations/ already in the build context (unzipped from Dockerfile.build's
+# dist.zip). Runs the compiled server on port 3005 as the non-root node user.
 FROM node:20-alpine
 WORKDIR /usr/src/app
 
@@ -10,7 +13,8 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 
 # dist/ is the compiled service (dist/mocks holds the sample-data provider used when no API key is
-# set); config/ (outdated.json, review-rules.json) and migrations/ are read at runtime
+# set). config/ (service.json, outdated.json, review-rules.json, frac-sizes.json) and migrations/
+# are read at runtime
 COPY dist/ .
 COPY config/ ./config/
 COPY migrations/ ./migrations/

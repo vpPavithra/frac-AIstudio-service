@@ -1,3 +1,6 @@
+// Reads an uploaded .xlsx file into plain rows of text (SheetData) for the review engine.
+// Called by the Reviewer upload (review.service.ts) before parsing. Values only: styles, formulas and
+// hyperlinks are dropped. Pure: no HTTP, no SQL.
 import ExcelJS from "exceljs";
 import { Readable } from "node:stream";
 import type { SheetData } from "../review-engine/parse-workbook.ts";
@@ -38,6 +41,7 @@ export async function readWorkbook(buffer: ArrayBuffer | Buffer): Promise<SheetD
   }
 }
 
+/** Loads the whole workbook with exceljs. Strict about styles and sheet names, but accepts any zip entry order. */
 async function readWithFullLoader(bytes: Buffer): Promise<SheetData[]> {
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.load(bytes as unknown as ArrayBuffer);
@@ -54,6 +58,7 @@ async function readWithFullLoader(bytes: Buffer): Promise<SheetData[]> {
   });
 }
 
+/** Fallback reader: streams the zip, ignoring styles and hyperlinks, for files the full loader refuses. */
 async function readWithStreamingReader(bytes: Buffer): Promise<SheetData[]> {
   const reader = new ExcelJS.stream.xlsx.WorkbookReader(Readable.from([bytes]), {
     sharedStrings: "cache",

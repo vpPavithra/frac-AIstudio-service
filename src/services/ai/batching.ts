@@ -1,7 +1,15 @@
+// Batch runner shared by the AI steps that make many model calls: activities (Creator step 3b), level
+// ladders (step 5) and the Reviewer's checklist (ai-review.service.ts). Callers pass the batch size and
+// parallelism: AI.stepBatchSize / AI.stepParallel (AI_BATCH_SIZE, AI_BATCH_PARALLEL) for the Creator,
+// REVIEW.checklistBatchSize / checklistParallel for the review. Pure: no I/O of its own.
 /**
  * Splits items into batches of `size` and runs up to `parallel` batches at once (spec 5.3b, 5.5),
  * keeping the original order in the result. `onBatchDone` fires after each batch with the number of
  * items done so far, for progress and for saving partial results.
+ *
+ * Batches finish in any order, so `itemsDone` counts finished items, not a position. If a worker throws,
+ * the returned promise rejects at once (the job fails), but lanes already running keep taking the
+ * remaining batches until none are left; there is no cancellation.
  */
 export async function runInBatches<T, R>(
   items: T[],
@@ -16,6 +24,7 @@ export async function runInBatches<T, R>(
   const results: R[][] = new Array(batches.length);
   let next = 0;
   let itemsDone = 0;
+  // Each lane pulls the next unclaimed batch until none are left; `parallel` lanes run side by side
   const lane = async () => {
     while (next < batches.length) {
       const index = next++;

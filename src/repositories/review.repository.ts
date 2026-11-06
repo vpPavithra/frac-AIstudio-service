@@ -1,7 +1,10 @@
+// Storage for reviews (`reviews` table): uploads and Creator expert checks. Used only by ReviewService
+// (FracService reaches reviews through ReviewService). Built by repositories/index.ts.
 import type { Pool } from "pg";
 import type { ReviewRecord } from "../models/review.model.ts";
 import { byNewest, clone, iso } from "./row-helpers.ts";
 
+/** Review storage. Reads do not check the owner except listByOwner/findByFingerprint; services check after `get`. */
 export interface ReviewRepository {
   insert(review: ReviewRecord): Promise<void>;
   update(review: ReviewRecord): Promise<void>;
@@ -24,6 +27,7 @@ interface ReviewRow {
   created_at: Date;
 }
 
+/** Postgres row → ReviewRecord. */
 const toReview = (r: ReviewRow): ReviewRecord => ({
   id: r.id,
   ownerId: r.owner_id,

@@ -1,3 +1,5 @@
+// Zod schema for the form fields of POST /v1/frac-reviews (multipart), used by routes/review.routes.ts.
+// Multipart sends every field as a string, hence the string-to-boolean handling of `fresh`.
 import { z } from "zod";
 
 /** Empty strings from multipart form fields mean "not given". */

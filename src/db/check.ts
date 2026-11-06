@@ -1,10 +1,11 @@
+// Startup reachability check for Postgres. Called by server.ts before migrations and before listening.
 import { describeError } from "../utils/logger.ts";
 import type { Queryable } from "./migrate.ts";
 
 /**
  * Fails fast when Postgres cannot be reached, so the service refuses to start (as aastrika-ai-service
  * does) instead of starting and failing every request one at a time. `where` names the target in
- * the message, e.g. "localhost:5432/frac_studio".
+ * the message, e.g. "localhost:5432/frac_studio". Throws a plain Error (startup, not a request).
  */
 export async function checkDatabase(db: Queryable, where: string): Promise<void> {
   try {

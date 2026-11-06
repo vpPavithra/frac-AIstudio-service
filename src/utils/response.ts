@@ -2,13 +2,18 @@
 //
 // A client cannot branch on prose, so every failure carries a stable machine-readable code next
 // to the sentence a person reads. 4xx means "the request was wrong, do not retry"; 5xx means
-// "try again shortly".
+// "try again shortly". Services and controllers throw these; middleware/errorHandler.ts writes them.
 import type { Response } from "express";
 
+/** The JSON body of every error response. */
 export interface ApiErrorBody {
   error: { code: string; message: string; details?: unknown };
 }
 
+/**
+ * An error the client should see: HTTP `status`, stable `code` for the client to branch on, a message
+ * a person can read, and optional `details` (e.g. every validation issue). Throw it; do not send it.
+ */
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -21,6 +26,7 @@ export class ApiError extends Error {
   }
 }
 
+// Shorthands for the common statuses. Codes fixed here: NOT_SIGNED_IN (401), NOT_FOUND (404), PAYLOAD_TOO_LARGE (413)
 export const badRequest = (code: string, message: string, details?: unknown) =>
   new ApiError(400, code, message, details);
 export const unauthorized = (message = "Not signed in") => new ApiError(401, "NOT_SIGNED_IN", message);

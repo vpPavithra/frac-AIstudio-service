@@ -3,7 +3,11 @@ import { TITLES } from "./checks.ts";
 
 // Builds the report (rules r3 §7). In r3 the verdict, triage, summary and strengths are computed here
 // from the findings, never written by the model, so the same findings always give the same report.
+// Computed-report step of the review flow: ReviewService.review merges the rule-based findings
+// (checks.ts) and the AI findings (ai-review.service.ts) through buildReport. TRIAGE_LABELS is also
+// used by excel/workbook-writer.ts. Reads no config.
 
+/** Display name of each check, in the fixed check order used for sorting and the per-check table (rules §7). */
 export const CHECK_NAMES: Record<CheckKey, string> = {
   bloom: "Bloom's verbs",
   structure: "FRAC structure",
@@ -12,6 +16,7 @@ export const CHECK_NAMES: Record<CheckKey, string> = {
   coverage: "Coverage & sources",
 };
 
+/** Short triage labels for the UI and the Excel export. */
 export const TRIAGE_LABELS: Record<Triage, string> = {
   use: "Use with minor edits",
   revise: "Revise",
@@ -25,6 +30,7 @@ const VERDICT_OPENING: Record<Triage, string> = {
   use: "Usable with minor edits",
 };
 
+/** Blocker sorts first, then Major, then minor. */
 const SEV_RANK: Record<Severity, number> = { B: 0, M: 1, m: 2 };
 const CHECK_ORDER = Object.keys(CHECK_NAMES) as CheckKey[];
 
@@ -38,7 +44,10 @@ export function sortFindings(findings: Finding[]): Finding[] {
   );
 }
 
-/** Per-check status = worst severity among that check's open findings. */
+/**
+ * Rules §7 per-check status = worst severity among that check's open findings: B "Fix before use",
+ * M "Needs work", m "Mostly fine", none "Pass". Findings marked fixed are ignored (spec gap 3).
+ */
 export function summariseChecks(findings: Finding[]): CheckSummary[] {
   return CHECK_ORDER.map((key) => {
     const mine = findings.filter((f) => f.check === key && !f.fixed);
@@ -64,7 +73,7 @@ export interface TriageInput {
 }
 
 /**
- * rebuild: activities are syllabus outcomes, no competency is typed, or more than half the laddered
+ * Rules §7 triage. rebuild: activities are syllabus outcomes, no competency is typed, or more than half the laddered
  * competencies have incomplete ladders; revise: any Blocker or 3+ Majors; otherwise use.
  */
 export function computeTriage({ findings, laddered, incompleteLadders }: TriageInput): Triage {
@@ -75,9 +84,14 @@ export function computeTriage({ findings, laddered, incompleteLadders }: TriageI
 }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+/** Scope findings from both halves: rule-based "Beyond {cadre} scope: …" and the AI "Other acts beyond …". */
 const isScope = (f: Finding) => f.title.startsWith("Beyond ") || f.title.startsWith("Other acts beyond ");
 
-/** "{Revise before use} — 2 blockers, 4 major and 3 minor findings. Fix first: …" */
+/**
+ * Rules §7 verdict: "{Revise before use} — 2 blockers, 4 major and 3 minor findings. Fix first: …".
+ * "Fix first" names the number of rule-based scope acts, then the next two Blocker/Major titles that
+ * are not scope findings. Expects `findings` already sorted (sortFindings).
+ */
 export function computeVerdict(triage: Triage, findings: Finding[], cadre: string): string {
   const n = (sev: Severity) => findings.filter((f) => f.sev === sev).length;
   const counts = `${plural(n("B"), "blocker")}, ${n("M")} major and ${n("m")} minor ${n("m") === 1 ? "finding" : "findings"}`;
@@ -87,6 +101,7 @@ export function computeVerdict(triage: Triage, findings: Finding[], cadre: strin
   return `${VERDICT_OPENING[triage]} — ${counts}.${first.length ? ` Fix first: ${first.join("; ")}.` : ""}`;
 }
 
+/** Rules §7 summary: what was checked (counts, D/F/B split, cadre, state) and how many findings each half gave. */
 export function computeSummary(stats: Stats, findings: Finding[], cadre: string, state: string): string {
   const ruleBased = findings.filter((f) => f.source === "computed").length;
   const ai = findings.length - ruleBased;
@@ -99,7 +114,7 @@ export function computeSummary(stats: Stats, findings: Finding[], cadre: string,
   );
 }
 
-/** The core areas covered, then each check with no findings. */
+/** Rules §7 strengths: the core areas covered (from the AREAS check), then each check with no findings. */
 export function computeStrengths(findings: Finding[], coveredAreas: string[]): string[] {
   const clean = CHECK_ORDER.filter((key) => !findings.some((f) => f.check === key)).map((key) => `${CHECK_NAMES[key]}: no issues found`);
   return [...(coveredAreas.length ? [`Core areas covered: ${coveredAreas.join(", ")}`] : []), ...clean];
@@ -120,6 +135,7 @@ export interface ReportInput {
   at?: Date;
 }
 
+/** Merges both halves into the stored Report: sorted findings plus computed triage, verdict, summary, strengths. */
 export function buildReport(input: ReportInput): Report {
   const findings = sortFindings([...input.computed, ...input.agent]);
   const triage = computeTriage({ findings, laddered: input.laddered, incompleteLadders: input.incompleteLadders });

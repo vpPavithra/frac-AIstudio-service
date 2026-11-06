@@ -1,3 +1,5 @@
+// HTTP handlers for /v1/fracs: read params and the owner, call FracService, shape the response.
+// No rules live here. Steps and checks answer 202 { jobId }; the portal then polls GET /v1/jobs/:id.
 import type { Request, Response } from "express";
 import { parseInput } from "../middleware/validate.ts";
 import { ownerOf } from "../middleware/auth.ts";

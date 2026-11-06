@@ -1,12 +1,17 @@
-// Report shapes from the FRAC Studio spec, section 4.3.
+// Report shapes from the FRAC Studio spec, section 4.3. A Report is the review engine's output, for an
+// uploaded workbook or a Creator expert check. Built by services/review-engine/report.ts. Types only.
 
+/** B = blocker, M = major, m = minor. */
 export type Severity = "B" | "M" | "m";
 export type CheckKey = "bloom" | "structure" | "ladder" | "context" | "coverage";
+/** "computed": a deterministic rule found it; "agent": an AI checklist flag that passed the quote check. */
 export type FindingSource = "computed" | "agent";
+/** Overall call: use as is, revise, or rebuild. Computed from the findings, not chosen by the AI. */
 export type Triage = "use" | "revise" | "rebuild";
 
 // ---- 4.3 Report ----
 
+/** Counts shown at the top of a report. B / F / D: Behavioural, Functional and Domain competencies. */
 export interface Stats {
   roles: number;
   activities: number;
@@ -28,11 +33,13 @@ export interface Finding {
   refs: string[];
   fix: string;
   source: FindingSource;
+  /** Marked fixed in the Creator; summaries ignore fixed findings until the check is re-run. */
   fixed?: boolean;
 }
 
 export type CheckStatus = "Fix before use" | "Needs work" | "Mostly fine" | "Pass";
 
+/** One row of the checks table: how many open findings a check has and the status word for it. */
 export interface CheckSummary {
   key: CheckKey;
   name: string;

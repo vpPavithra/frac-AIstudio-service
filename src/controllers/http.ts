@@ -1,3 +1,4 @@
+// Small HTTP helpers shared by the controllers (Excel download, route params).
 import type { Response } from "express";
 
 const XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";

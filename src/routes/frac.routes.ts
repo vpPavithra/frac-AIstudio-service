@@ -1,3 +1,5 @@
+// Routes for /v1/fracs (Creator and My FRACs). Mounted by routes/index.ts. Bodies are validated here
+// (validateBody) before the controller sees them.
 import { Router } from "express";
 import { fracController } from "../controllers/frac.controller.ts";
 import { validateBody } from "../middleware/validate.ts";
@@ -12,6 +14,7 @@ export function fracRoutes(fracs: FracService): Router {
   r.get("/", c.list);
   r.get("/:id", c.get);
   r.patch("/:id", validateBody(patchFracSchema), c.patch);
+  // Registered before /:id/steps/:step so "check" is not treated as a generation step
   r.post("/:id/steps/check", c.startCheck);
   r.post("/:id/steps/:step", validateBody(stepSchema), c.startStep);
   r.get("/:id/export.xlsx", c.exportWorkbook);

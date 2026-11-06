@@ -1,8 +1,21 @@
 import type { Ref } from "../../models/review.model.ts";
 
+// Competency references in FRAC mapping cells ("ANM3@L3, ANM5-ANM7", "12, 14"). Part of the parse step:
+// parse-workbook.ts and convert.ts (fracToModel) turn every mapping cell into Ref[] here, and the
+// coverage checks (rules r3 §4.6) compare those codes with the competency sheet. formatRefs writes them
+// back for the Creator and the Excel export (excel/workbook-writer.ts also calls parseRefs).
+// Spec 6.1 parseRefs; spec gap 5 (a cell can hold many refs, not just the first).
+
+/** Guard against a typo such as "C1-C9999" expanding into thousands of refs: a range stops after 80 codes. */
 const MAX_RANGE = 80;
 
-// All patterns run sticky against an upper-cased, dash-normalised string (spec 6.1 parseRefs)
+// All patterns run sticky (flag y, matched only at lastIndex) against an upper-cased, dash-normalised
+// string (spec 6.1 parseRefs). parseRefs tries them in the order below at each word start.
+// LEVEL:       optional level suffix "@L3", " L3", "LEVEL 3" (levels 1-5 only).
+// LEVEL_RANGE: "ME50L2-L5", one code with a level range; kept as one ref at the highest level.
+// CODE_RANGE:  "C3-C14" or "C3-14", a run of codes with the same prefix.
+// SINGLE:      "C12", "C12@L3", "C12 L3", "C12L3".
+// BARE:        "12" or "12-14", numbers with no prefix; the file's dominant prefix is added (skipped if none).
 const LEVEL = String.raw`\s*@?\s*L(?:EVEL)?\s*([1-5])(?![0-9])`;
 const LEVEL_RANGE = new RegExp(String.raw`([A-Z]{1,6})(\d+)\s*@?\s*L(?:EVEL)?\s*([1-5])\s*-\s*L?(?:EVEL)?\s*([1-5])(?![0-9])`, "y");
 const CODE_RANGE = /([A-Z]{1,6})(\d+)\s*-\s*([A-Z]{1,6})?(\d+)(?![0-9])/y;
@@ -33,10 +46,12 @@ export function dominantPrefix(codes: string[]): string {
   return best;
 }
 
+/** Letters and digits only: a ref may start only where the previous character is not one of these. */
 function isWordChar(ch: string | undefined): boolean {
   return ch !== undefined && /[A-Z0-9]/.test(ch);
 }
 
+/** Runs a sticky regex at position `at` only (no search ahead). */
 function stickyMatch(re: RegExp, text: string, at: number): RegExpExecArray | null {
   re.lastIndex = at;
   return re.exec(text);
@@ -73,6 +88,7 @@ export function parseRefs(input: string | null | undefined, prefix = ""): Ref[] 
       continue;
     }
 
+    // A prefix of "L" is a level ("L3"), never a competency code, in every branch below
     let m = stickyMatch(LEVEL_RANGE, text, i);
     if (m && m[1] !== "L") {
       push(m[1] + m[2], Math.max(Number(m[3]), Number(m[4])));
@@ -80,6 +96,7 @@ export function parseRefs(input: string | null | undefined, prefix = ""): Ref[] 
       continue;
     }
 
+    // "C3-D9" (two different prefixes) is not a range; it falls through to two single codes
     m = stickyMatch(CODE_RANGE, text, i);
     if (m && (m[3] === undefined || m[3] === m[1])) {
       i += m[0].length;

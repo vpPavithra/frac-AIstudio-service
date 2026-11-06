@@ -1,10 +1,16 @@
+// The contract between FracService.startStep and the Creator step functions (research, roles,
+// competencies, ladders): what a step receives, and callModel, the one way a step calls the AI.
+// callModel is the "call the TextProvider, record usage/cost, validate with Zod" part of every step.
 import type { ZodType, ZodTypeDef } from "zod";
 import type { Frac } from "../../models/frac.model.ts";
 import type { AiTask, ModelTier, TextProvider } from "../../providers/text/types.ts";
 import { ApiError } from "../../utils/response.ts";
 import type { JobProgress, RecordUsage } from "../queue/job-runner.ts";
 
-/** What every generation step gets: the FRAC as it was when the job started, and the job's hooks. */
+/**
+ * What every generation step gets: the FRAC as it was when the job started, and the job's hooks.
+ * Built by FracService.startStep; `progress` and `recordUsage` come from the JobRunner.
+ */
 export interface StepContext {
   frac: Frac;
   feedback?: string;
@@ -22,7 +28,9 @@ export interface StepContext {
 
 /**
  * One model call: records its spend on the job first (so a bad answer is still billed, spec gap 1),
- * then validates the JSON against the step's output shape.
+ * then validates the JSON against the step's output shape. No retry here: the SDK retries transport
+ * errors, and a shape error fails the job with AI_OUTPUT_INVALID (502) naming the first bad path.
+ * Provider errors (AI_AUTH, AI_BUSY, AI_REFUSED, AI_OUTPUT_TRUNCATED…) propagate unchanged.
  */
 export async function callModel<T>(
   ctx: StepContext,

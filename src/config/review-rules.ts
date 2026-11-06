@@ -1,3 +1,6 @@
+// Loader for the review engine's (r3) rule tables: config/review-rules.json (REVIEW_RULES_CONFIG_PATH)
+// plus the OUTDATED list from config/outdated.json. server.ts hands loadReviewRules to ReviewService
+// as a function, so both files are re-read for every review and edits apply without a restart.
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import type { ReviewRules } from "../services/review-engine/rules.ts";

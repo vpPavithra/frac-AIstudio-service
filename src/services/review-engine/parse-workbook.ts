@@ -2,20 +2,29 @@ import { dominantPrefix, normalizeCode, parseRefs } from "./refs.ts";
 import type { Level } from "../../models/frac.model.ts";
 import type { ModelActivity, ModelCompetency, ModelRole, ReviewModel } from "../../models/review.model.ts";
 
+// Parse step of the review flow (spec 6.1, rules r3 §2): turns an uploaded workbook, already flattened
+// to text by excel/workbook-reader.ts, into the ReviewModel the checks, the AI checklist and the
+// fingerprint all read. Called by ReviewService.startUploadReview. Sheets are found by their header
+// row, not by name or position, because every state lays its FRAC out differently. Reads no config.
+
 /** Reader-agnostic sheet: every cell already flattened to trimmed text. */
 export interface SheetData {
   name: string;
   rows: string[][];
 }
 
+/** Thrown when the upload is not a FRAC; errorHandler turns it into a 400 with the message below. */
 export class WorkbookParseError extends Error {}
 
 export const NO_COMPETENCY_SHEET =
   'Could not find a competency sheet. It needs a header row with "Competency Code" and "Level 1" (or "Applicable Level" / "Theme 1") columns.';
 export const NO_FRAC_SHEET_WARNING = "No FRAC sheet found: structure and coverage checks will be limited.";
 
+/** Header rows and the "Position:" line are looked for only in a sheet's first 12 rows (rules r3 §2). */
 const HEADER_SCAN_ROWS = 12;
+// Hindi copies of the English sheets are skipped so each competency is read once (spec 11: Hindi is open)
 const HINDI_SHEET = /\(H\)|hindi/i;
+// Header patterns, tested on lower-cased, trimmed header cells (rules r3 §2)
 const COMP_CODE = /competenc.*code|^code$/;
 // Rules r3 §2: a competency sheet is either laddered (Level 1…) or KCM format (Applicable Level, Theme n)
 const COMP_SHEET = /level\s*1|applicable level|theme\s*1/;
@@ -24,7 +33,9 @@ const ACTIVITY = /^activit/;
 // The Meghalaya layout: one "Roles/Activities" column of R1/A1 codes plus a "Description" column
 const ROLE_ACTIVITY = /role.*activit/;
 const DESCRIPTION = /^desc/;
+// The activity → competency mapping column; when absent, hasMapping is false (rules r3 §2, §4.6)
 const MAPPING = /compe?t|mapping/;
+// Every other FRAC column is a posting (Sub-Centre, PHC …) unless its header matches this (rules r3 §2)
 const NOT_POSTING = /source|tier|applicab|note|desc/;
 const POSITION = /^position\s*:\s*(.+)$/i;
 
@@ -44,6 +55,7 @@ function headerIn(sheet: SheetData, ...required: RegExp[]): HeaderHit | null {
   return null;
 }
 
+/** The first sheet in `sheets` with such a header row. */
 function findHeader(sheets: SheetData[], ...required: RegExp[]): HeaderHit | null {
   for (const sheet of sheets) {
     const hit = headerIn(sheet, ...required);
@@ -82,6 +94,10 @@ function cell(row: string[], idx: number): string {
   return idx >= 0 ? (row[idx] ?? "").trim() : "";
 }
 
+/**
+ * Reads one competency sheet. A laddered sheet gives five {label, desc} levels per row; a KCM-format sheet
+ * gives `format: "kcm"`, themes and the applicable level, with no ladder (rules r3 §2). Rows with no code are skipped.
+ */
 function parseCompetencies(hit: HeaderHit): ModelCompetency[] {
   const h = hit.headers;
   // Label/description/type/area must not grab "Competency Level n …" columns (spec gap 8)
@@ -136,6 +152,11 @@ function parseCompetencies(hit: HeaderHit): ModelCompetency[] {
   return out;
 }
 
+/**
+ * Reads the Role–Activity (FRAC) sheet. Rows run in order: a code starting with "R" (or a first row that
+ * is not an activity) opens a role, and the rows under it are its activities. Missing codes get R{n}/A{n}.
+ * `prefix` lets bare numbers in the mapping cell ("12, 14") become codes ("ANM12, ANM14").
+ */
 function parseFrac(hit: HeaderHit, prefix: string): Pick<ReviewModel, "postings" | "postingLabels" | "roles" | "hasMapping"> {
   const h = hit.headers;
   // Either Role + Activity columns, or one Roles/Activities code column with the text under Description
@@ -188,7 +209,11 @@ export interface ParsedWorkbook {
   warnings: string[];
 }
 
-/** Spec 6.1. Throws WorkbookParseError when no competency sheet can be found. */
+/**
+ * Spec 6.1, rules r3 §2. Reads every competency sheet and the first other sheet with Role + Activity (or
+ * Roles/Activities + Description) headers. A missing FRAC sheet is a warning, not an error: the review
+ * still runs and raises "No Role–Activity sheet". Throws WorkbookParseError when no competency sheet can be found.
+ */
 export function parseWorkbook(sheets: SheetData[], title: string): ParsedWorkbook {
   const usable = sheets.filter((s) => !HINDI_SHEET.test(s.name));
   // Every competency sheet, not just the first: files often split Domain, Functional and Behavioural

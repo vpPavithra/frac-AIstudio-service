@@ -5,6 +5,7 @@
 //
 // Precedence, lowest to highest:  code default < service.json < service.<NODE_ENV>.json < process.env
 // Values are merged into process.env, the one place constants.ts reads from.
+// Called by constants.ts (loadSettings, at import) and scripts/check-config.ts (readSettingsFile).
 import fs from "node:fs";
 import path from "node:path";
 

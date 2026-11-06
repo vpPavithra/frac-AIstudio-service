@@ -1,3 +1,6 @@
+// Loader for the method paragraph (config/method.txt, or METHOD_PARAGRAPH_PATH) written into the
+// "Method & Sources" sheet of a FRAC export. server.ts passes it to FracService as a function, so the
+// file is re-read on each export.
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { PATHS } from "./constants.ts";

@@ -1,9 +1,12 @@
+// Zod request schemas for /v1/fracs, used by routes/frac.routes.ts (validateBody) and
+// controllers/frac.controller.ts (parseInput). Array and text caps come from LIMITS in config/constants.ts.
 import { z } from "zod";
 import { LIMITS } from "../config/constants.ts";
 
 // Request shapes for the Creator API (spec 4.1). Every field a handler uses is declared here;
 // validateBody drops anything else.
 
+/** Long free text, capped by MAX_TEXT_CHARS; missing becomes "". */
 const text = () => z.string().max(LIMITS.maxTextChars).default("");
 /** `required` is the message for both a missing field and an empty one, so the person sees one sentence. */
 const shortText = (max = 200, required?: string) => {
@@ -11,7 +14,9 @@ const shortText = (max = 200, required?: string) => {
   return required ? base.min(1, required) : base;
 };
 
+/** Brief sizes the portal offers. config/frac-sizes.json must define every one (config/frac-sizes.ts). */
 export const FRAC_SIZES = ["compact", "standard", "full"] as const;
+/** The state stored when the brief names none. */
 export const NATIONAL_BASELINE = "India (national baseline)";
 
 const levelSchema = z.object({ label: text(), desc: text() });

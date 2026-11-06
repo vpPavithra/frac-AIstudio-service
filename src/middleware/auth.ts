@@ -1,3 +1,5 @@
+// Identity for every /v1 request. app.ts mounts requireOwner in front of all API routes; controllers
+// then read the owner with ownerOf(res) and pass it to the services, which scope every read by it.
 import type { NextFunction, Request, Response } from "express";
 import { unauthorized } from "../utils/response.ts";
 
@@ -11,7 +13,7 @@ export const USER_ID_HEADER = "x-aastrika-creator";
  * The owner always comes from the proxy-forwarded header, never from the request body or a
  * query param, and is required: every record is scoped by it. Unlike aastrika-ai-service (where
  * the header is attribution only and defaults to "admin"), here it is authorisation, so there is
- * no fallback. The service must only be reachable through the proxy.
+ * no fallback. The service must only be reachable through the proxy. Missing header: 401 NOT_SIGNED_IN.
  */
 export function requireOwner(req: Request, res: Response, next: NextFunction): void {
   const ownerId = req.header(USER_ID_HEADER)?.trim();
@@ -23,6 +25,7 @@ export function requireOwner(req: Request, res: Response, next: NextFunction): v
   next();
 }
 
+/** The owner id requireOwner stored for this request. Only valid on routes behind requireOwner. */
 export function ownerOf(res: Response): string {
   return res.locals.ownerId as string;
 }

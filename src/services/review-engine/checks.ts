@@ -26,11 +26,18 @@ import {
 // counted separately); new rules for breadth, KCM tagging, ladder shift, scope, job areas, extra
 // outdated terms and the missing mapping column; results also carry the scope hits and covered areas
 // that the AI checklist and the computed verdict need.
+//
+// Flow: ReviewService.review calls computeChecks right after parsing, with the rule tables from
+// config/review-rules.json and config/outdated.json (ReviewRules); the result goes to the AI checklist
+// and then to buildReport (report.ts). Severities: B Blocker, M Major, m minor.
 
 export { BANNED, SYLLABUS, type OutdatedPattern } from "./rules.ts";
 
+/** Characters either side of an OUTDATED hit searched for its `unlessNear` pattern (rules §4.5). */
 const NEAR_WINDOW = 80;
+/** Codes listed in a finding's detail before "and n more" (rules §4.5: up to 12 codes). */
 const MAX_LISTED = 12;
+/** Longest scope quote kept in a finding or passed to the AI checklist. */
 const QUOTE_MAX = 160;
 
 /** Rule-based finding titles that triage reads (rules §7). */
@@ -48,15 +55,17 @@ export interface ScopeHit {
   rule: string;
 }
 
+/** What the caller knows beyond the file: the cadre from the upload form or the Creator brief. */
 export interface CheckContext {
   cadre?: string;
 }
 
+/** Output of computeChecks: the rule-based findings plus what the AI checklist and the report need. */
 export interface CheckResult {
   findings: Finding[];
   stats: Stats;
   family: CadreFamily | null;
-  /** The cadre as shown in titles: the brief/upload cadre, else the file's Position, else the family. */
+  /** The cadre as shown in titles: the brief/upload cadre, else the file's Position, else displayCadre's fallbacks. */
   cadre: string;
   /** Passed to the AI checklist so it does not repeat them (rules §6.1, §6.3). */
   scopeHits: ScopeHit[];
@@ -83,6 +92,7 @@ export function indicators(desc: string): string[] {
     .filter((line) => line !== "");
 }
 
+/** Competency type by its first letter (Behavioural, Functional, Domain); anything else, blank included, is "other". */
 export function typeClass(type: string): "B" | "F" | "D" | "other" {
   const first = type.trim().charAt(0).toUpperCase();
   return first === "B" || first === "F" || first === "D" ? first : "other";
@@ -111,6 +121,7 @@ function firstWord(text: string): string {
   return stripLead(text).split(/\s+/)[0] ?? "";
 }
 
+/** "C1, C2, … and 5 more": codes for a finding's detail, at most MAX_LISTED shown. */
 function list(codes: string[]): string {
   const shown = codes.slice(0, MAX_LISTED).join(", ");
   return codes.length > MAX_LISTED ? `${shown} and ${codes.length - MAX_LISTED} more` : shown;
@@ -122,6 +133,7 @@ function pct(part: number, whole: number): string {
 
 const clip = (s: string, max = QUOTE_MAX) => (s.length > max ? `${s.slice(0, max - 1)}…` : s);
 
+/** A rule-based finding (source "computed"); refs are de-duplicated and capped at twice MAX_LISTED. */
 function finding(check: CheckKey, sev: Severity, title: string, detail: string, refs: string[], fix: string): Finding {
   return { check, sev, title, detail, refs: [...new Set(refs)].slice(0, MAX_LISTED * 2), fix, source: "computed" };
 }
@@ -134,6 +146,11 @@ const labelAndDesc = (c: ModelCompetency) => `${c.label}\n${c.description}`;
 
 // ---- 4.1 Bloom's verbs (laddered competencies only) ----
 
+/**
+ * Rules §4.1, at most one finding. "Level labels use non-measurable verbs": any laddered level label starts
+ * with a BANNED verb; M when the worst level has 25%+ of laddered competencies, else m. Only when no label
+ * hits: "Some indicators use non-measurable verbs" (m) for an indicator line starting with a BANNED verb.
+ */
 function bloomChecks(laddered: ModelCompetency[]): Finding[] {
   const n = laddered.length;
   if (!n) return [];
@@ -232,10 +249,12 @@ function breadthCheck(domain: ModelCompetency[], frontline: boolean, areas: Area
   ];
 }
 
+/** Rules §4.2: the shape of the FRAC itself (sheets, activities, competency types, breadth, KCM tagging). */
 function structureChecks(model: ReviewModel, frontline: boolean, areas: AreaRule[]): Finding[] {
   const out: Finding[] = [];
   const comps = model.competencies;
 
+  // "No Role–Activity sheet" (M, §4.2): the parser found no FRAC sheet
   if (!model.hasFrac) {
     out.push(
       finding(
@@ -248,6 +267,8 @@ function structureChecks(model: ReviewModel, frontline: boolean, areas: AreaRule
       ),
     );
   } else {
+    // "Activities read as syllabus outcomes" (M if 30%+ of activities, else m; §4.2): starts with a SYLLABUS
+    // verb. Triage reads it: raised at all, the FRAC is "rebuild" (§7)
     const acts = allActivities(model);
     const syllabus = acts.filter((a) => SYLLABUS.test(stripLead(a.text)));
     if (syllabus.length) {
@@ -264,6 +285,7 @@ function structureChecks(model: ReviewModel, frontline: boolean, areas: AreaRule
       );
     }
 
+    // "Roles with fewer than 2 activities" (m, §4.2)
     const thin = model.roles.filter((r) => r.activities.length < 2);
     if (thin.length) {
       out.push(
@@ -280,6 +302,8 @@ function structureChecks(model: ReviewModel, frontline: boolean, areas: AreaRule
   }
 
   if (!comps.length) return out;
+  // "Competency type is missing" (M, §4.2): no competency is D, F or B. Triage makes it "rebuild" (§7).
+  // Otherwise "No Behavioural / Functional competencies" (M, §4.2) when either type is absent.
   const classes = comps.map((c) => typeClass(c.type));
   if (classes.every((t) => t === "other")) {
     out.push(
@@ -313,6 +337,7 @@ function structureChecks(model: ReviewModel, frontline: boolean, areas: AreaRule
   const domain = comps.filter((c) => ["D", "other"].includes(typeClass(c.type)));
   out.push(...breadthCheck(domain, frontline, areas));
 
+  // "Domain competencies that match KCM Functional or Behavioural names" (m, §4.2): label matches DOMAIN_LOOKS_KCM
   const looksKcm = comps.filter((c) => typeClass(c.type) === "D" && DOMAIN_LOOKS_KCM.test(c.label));
   if (looksKcm.length) {
     out.push(
@@ -327,6 +352,8 @@ function structureChecks(model: ReviewModel, frontline: boolean, areas: AreaRule
     );
   }
 
+  // "KCM competencies this post does not demand" (m, §4.2, frontline only): label matches KCM_FUNCTIONAL_NOT_FRONTLINE.
+  // Tested on every competency, whatever its type.
   if (frontline) {
     const notDemanded = comps.filter((c) => KCM_FUNCTIONAL_NOT_FRONTLINE.test(c.label));
     if (notDemanded.length) {
@@ -347,14 +374,18 @@ function structureChecks(model: ReviewModel, frontline: boolean, areas: AreaRule
 
 // ---- 4.3 Level ladder ----
 
+/** Rules §4.3 fixed fix text for "Level ladders are shifted upward": the anchor for each of L1–L5. */
 const LADDER_FIX =
   "Re-anchor every ladder: L1 states and recognises; L2 performs with a supervisor present; L3 performs alone to protocol; L4 handles complications and variation within the cadre's scope, and decides on referral; L5 mentors peers and ASHAs, and runs facility-level audits and quality improvement (e.g. NQAS checklists). Remove policy, research and state-level work from every level.";
 
+/** Rules §4.3: whether each competency's L1–L5 ladder is complete, distinct and pitched at the post. */
 function ladderChecks(model: ReviewModel, laddered: ModelCompetency[], rules: ReviewRules, frontline: boolean): Finding[] {
   const out: Finding[] = [];
   const n = laddered.length;
   const norm = (s: string) => s.trim().toLowerCase().replace(/\s+/g, " ");
 
+  // "Incomplete level ladders" (M if more than 10% of laddered competencies, else m; §4.3). Triage reads the
+  // count: more than half incomplete makes the FRAC "rebuild" (§7)
   const incomplete = laddered.filter((c) => c.levels.filter((l) => l.label.trim()).length < 5);
   if (incomplete.length) {
     out.push(
@@ -369,6 +400,7 @@ function ladderChecks(model: ReviewModel, laddered: ModelCompetency[], rules: Re
     );
   }
 
+  // "Functional and Behavioural competencies have no job ladder" (M, §4.3): KCM-format rows copied without L1–L5
   const kcm = model.competencies.filter((c) => !hasLadder(c));
   if (kcm.length) {
     out.push(
@@ -383,6 +415,8 @@ function ladderChecks(model: ReviewModel, laddered: ModelCompetency[], rules: Re
     );
   }
 
+  // "Generic L5 label repeated across competencies" (M, §4.3): the same L5 label (case and spacing ignored)
+  // on 3+ competencies; one finding per label
   const byL5 = new Map<string, string[]>();
   for (const c of laddered) {
     const l5 = norm(c.levels[4]?.label ?? "");
@@ -403,6 +437,7 @@ function ladderChecks(model: ReviewModel, laddered: ModelCompetency[], rules: Re
     );
   }
 
+  // "Same label at two levels" (m, §4.3): one competency repeats a label across its own levels
   const repeated = laddered.filter((c) => {
     const labels = c.levels.map((l) => norm(l.label)).filter(Boolean);
     return new Set(labels).size < labels.length;
@@ -420,7 +455,8 @@ function ladderChecks(model: ReviewModel, laddered: ModelCompetency[], rules: Re
     );
   }
 
-  // LADDER_RULES (config): one finding listing every rule that hit, with counts and codes
+  // "Level ladders are shifted upward" (M, §4.3): LADDER_RULES from config/review-rules.json, frontline-only rules
+  // skipped for other cadres. One finding listing every rule that hit, with counts and codes
   const shifts = rules.ladder
     .filter((r) => frontline || !r.frontlineOnly)
     .map((r) => {
@@ -439,6 +475,13 @@ function ladderChecks(model: ReviewModel, laddered: ModelCompetency[], rules: Re
 
 // ---- 4.4 Scope (sentence by sentence) and 4.5 Outdated terms ----
 
+/**
+ * Rules §4.4. "Beyond {cadre} scope: {act}" (severity from the rule, B or M): one finding per scope rule of
+ * the cadre family (config/review-rules.json `scope`) whose pattern matches a sentence of any competency
+ * definition or level, unless the rule's `allow` matches the same sentence. Only the first hitting sentence
+ * per competency level is kept. No family (or no rules for it, e.g. CHO, nurse) means no scope findings;
+ * the AI checklist covers those cadres. The hits also go to the AI so it does not repeat them (§6.1, §6.3).
+ */
 function scopeChecks(model: ReviewModel, family: CadreFamily | null, rules: ReviewRules, cadre: string): { findings: Finding[]; hits: ScopeHit[] } {
   const scopeRules = family ? (rules.scope[family] ?? []) : [];
   const hits: ScopeHit[] = [];
@@ -470,6 +513,12 @@ function scopeChecks(model: ReviewModel, family: CadreFamily | null, rules: Revi
   return { findings, hits };
 }
 
+/**
+ * Rules §4.5. "Outdated reference: {found}" (severity from the pattern, B/M/m): one finding per
+ * config/outdated.json pattern found in any activity or competency text. `frontlineOnly` skips non-frontline
+ * cadres, `onlyIfAbsent` skips the pattern when its partner appears anywhere in the file (e.g. partograph
+ * with the Labour Care Guide), and `unlessNear` ignores a hit with its partner within NEAR_WINDOW characters.
+ */
 function contextChecks(model: ReviewModel, patterns: OutdatedPattern[], frontline: boolean): Finding[] {
   const texts: { code: string; text: string }[] = [
     ...allActivities(model).map((a) => ({ code: a.code, text: a.text })),
@@ -509,12 +558,14 @@ function contextChecks(model: ReviewModel, patterns: OutdatedPattern[], frontlin
 
 // ---- 4.6 Coverage ----
 
+/** Rules §4.6: whether activities map to real competencies, postings are marked and core job areas are covered. */
 function coverageChecks(model: ReviewModel, family: CadreFamily | null, areas: AreaRule[], cadre: string): { findings: Finding[]; covered: string[] } {
   const out: Finding[] = [];
   const acts = allActivities(model);
 
   if (model.hasFrac && !model.hasMapping) {
-    // No mapping column: one minor instead of the unmapped / unused / undefined checks
+    // "Activities are not mapped to competencies yet" (m, §4.6). No mapping column: one minor instead of the
+    // unmapped / unused / undefined checks
     out.push(
       finding(
         "coverage",
@@ -527,6 +578,7 @@ function coverageChecks(model: ReviewModel, family: CadreFamily | null, areas: A
     );
   } else if (model.hasFrac) {
     const defined = new Set(model.competencies.map((c) => c.code));
+    // "Activities not mapped to a competency" (M if 5%+ of activities, else m; §4.6), quoting the first 3
     const unmapped = acts.filter((a) => !a.refs.length);
     if (unmapped.length) {
       const quoted = unmapped
@@ -545,6 +597,7 @@ function coverageChecks(model: ReviewModel, family: CadreFamily | null, areas: A
       );
     }
 
+    // "Competencies never used" (m, §4.6): no activity or role mapping refers to it
     const allRefs = [...acts.flatMap((a) => a.refs), ...model.roles.flatMap((r) => r.refs ?? [])];
     const used = new Set(allRefs.map((r) => r.code));
     const unused = model.competencies.filter((c) => !used.has(c.code));
@@ -561,6 +614,7 @@ function coverageChecks(model: ReviewModel, family: CadreFamily | null, areas: A
       );
     }
 
+    // "Mappings point to undefined competencies" (M, §4.6): a mapped code missing from the competency sheets
     const undefinedCodes = [...new Set(allRefs.map((r) => r.code).filter((code) => !defined.has(code)))];
     if (undefinedCodes.length) {
       out.push(
@@ -576,6 +630,8 @@ function coverageChecks(model: ReviewModel, family: CadreFamily | null, areas: A
     }
   }
 
+  // "Activities with no posting marked" (m, §4.6): some, but not all, activities have every posting blank.
+  // All blank means the file does not use postings at all, which is not flagged
   if (model.hasFrac && model.postings.length) {
     const blank = acts.filter((a) => model.postings.every((p) => !(a.postings[p] ?? "").trim()));
     if (blank.length && blank.length < acts.length) {
@@ -592,7 +648,9 @@ function coverageChecks(model: ReviewModel, family: CadreFamily | null, areas: A
     }
   }
 
-  // AREAS (config): every area for this cadre family must match some competency label or definition
+  // "Core {cadre} areas with no dedicated competency" (M, §4.6, §5): AREAS from config/review-rules.json.
+  // Every area for this cadre family must match some competency label or definition; the activities
+  // that mention a missing area are listed. Covered areas feed the report's strengths
   const mineAreas = family ? areas.filter((a) => a.families.includes(family)) : [];
   const compText = model.competencies.map(labelAndDesc).join("\n");
   const covered: string[] = [];
@@ -623,6 +681,7 @@ function coverageChecks(model: ReviewModel, family: CadreFamily | null, areas: A
   return { findings: out, covered };
 }
 
+/** Counts for the report header and summary: roles, activities, competencies by type, KCM rows, indicators. */
 export function computeStats(model: ReviewModel): Stats {
   const stats: Stats = {
     roles: model.roles.length,
@@ -643,12 +702,19 @@ export function computeStats(model: ReviewModel): Stats {
   return stats;
 }
 
-/** The cadre named in titles: the context's, else the file's Position line, else the family. */
+/**
+ * The cadre named in titles: the context's, else the file's Position line, else the family found in the
+ * file title (upper-cased, e.g. "ANM"), else "this cadre".
+ */
 export function displayCadre(model: ReviewModel, ctx: CheckContext): string {
   return ctx.cadre?.trim() || model.position?.trim() || cadreFamily(model.title)?.toUpperCase() || "this cadre";
 }
 
-/** Rules r3 §4: every rule that a list or a pattern can decide, computed deterministically. */
+/**
+ * Rules r3 §4: every rule that a list or a pattern can decide, computed deterministically. The cadre family
+ * (§3) comes from the context cadre, else the file's Position, else its title; no family means not frontline,
+ * so the frontline-only rules, scope rules and area coverage are skipped. Called by ReviewService.review.
+ */
 export function computeChecks(model: ReviewModel, rules: ReviewRules, ctx: CheckContext = {}): CheckResult {
   const family = cadreFamily(ctx.cadre || model.position || model.title);
   const frontline = family !== null;

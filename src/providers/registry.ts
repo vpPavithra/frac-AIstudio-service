@@ -1,3 +1,6 @@
+// AI PROVIDER REGISTRY: picks the one TextProvider every AI call uses (Creator steps and the Reviewer).
+// Called once by src/server.ts at startup. Reads AI.provider (AI_PROVIDER) and AI.apiKey (ANTHROPIC_API_KEY).
+// The mock in src/mocks is loaded dynamically so the folder can be deleted without a code change.
 import { AI } from "../config/constants.ts";
 import type { FracService } from "../services/frac.service.ts";
 import type { JobRunner } from "../services/queue/job-runner.ts";
@@ -11,6 +14,7 @@ export interface MocksModule {
   seedMockData(deps: { fracs: FracService; reviews: ReviewService; runner: JobRunner }, owners: string[]): Promise<number>;
 }
 
+/** What createAi returns to server.ts. */
 export interface AiSetup {
   provider: TextProvider;
   /** Present only when the mock answers, for the optional sample-data seed. */
@@ -27,6 +31,7 @@ async function loadMocks(): Promise<MocksModule | null> {
   try {
     return (await import(url.href)) as MocksModule;
   } catch (err) {
+    // Only "this exact file is missing" means no mocks; any other error (e.g. a broken import inside it) is real
     const missing = (err as NodeJS.ErrnoException).code === "ERR_MODULE_NOT_FOUND" && String((err as Error).message).includes(url.pathname);
     if (missing) return null;
     throw err;

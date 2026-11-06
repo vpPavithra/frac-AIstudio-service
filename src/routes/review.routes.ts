@@ -1,3 +1,5 @@
+// Routes for /v1/frac-reviews (Reviewer). Mounted by routes/index.ts. The upload route runs multer
+// first, so the form fields are in req.body by the time validateBody checks them.
 import { Router } from "express";
 import { reviewController } from "../controllers/review.controller.ts";
 import { upload } from "../middleware/upload.ts";

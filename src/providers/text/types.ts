@@ -8,9 +8,13 @@
  */
 export type AiTask = "research" | "roles" | "activities" | "competencies" | "ladders" | "review-competencies" | "review-state";
 
-/** Spec 9: complex tier for research, roles, competencies and review; default for activities and ladders. */
+/**
+ * Spec 9: complex tier for research, roles, competencies and review; default for activities and ladders.
+ * Both tiers run Claude Sonnet 5.5 today; the complex tier gets higher effort (MODELS, LLM in constants.ts).
+ */
 export type ModelTier = "complex" | "default";
 
+/** One model call, as a step hands it to the provider. */
 export interface CompletionRequest {
   task: AiTask;
   tier: ModelTier;
@@ -32,6 +36,7 @@ export interface CallUsage {
   webSearches?: number;
 }
 
+/** What a provider returns. `json` is null when the answer held no JSON object; the step's schema rejects it. */
 export interface CompletionResult {
   /** Parsed JSON in the step's output shape (validated by the step). */
   json: unknown;
@@ -42,6 +47,7 @@ export interface CompletionResult {
   estimated?: boolean;
 }
 
+/** The provider seam. Implemented by ClaudeTextProvider and src/mocks' MockTextProvider; chosen by registry.ts. */
 export interface TextProvider {
   /** "claude" or "mock"; shown by GET /v1/info and in the startup log. */
   readonly name: string;

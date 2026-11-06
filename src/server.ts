@@ -1,3 +1,7 @@
+// Process entry point (`npm run dev`, `npm start` → dist/server.js). Picks the store (Postgres or
+// memory, FRAC_STUDIO_STORE), the AI provider (Claude or mock), wires repositories → JobRunner →
+// services → app, optionally runs migrations (MIGRATE_ON_START), starts the stuck-job watchdog and
+// listens on PORT. Reads .env (dotenv), config/service.json via constants.ts, and the rule/method files.
 import "dotenv/config";
 import { ChecklistReviewer } from "./services/ai-review.service.ts";
 import { createApp } from "./app.ts";
@@ -15,6 +19,7 @@ import { FracService } from "./services/frac.service.ts";
 import { ReviewService } from "./services/review.service.ts";
 import { describeError, logger } from "./utils/logger.ts";
 
+// "memory" keeps everything in process (lost on restart); any other value means Postgres via POSTGRES_* env vars
 const inMemory = SERVER.store === "memory";
 
 const pool = inMemory ? null : createPool();
@@ -26,16 +31,20 @@ async function start(): Promise<void> {
   const { provider, mocks } = await createAi();
   // The rule tables are re-read per review so reviewers' edits apply without a restart
   const reviews = new ReviewService(repos, runner, new ChecklistReviewer(provider), () => loadReviewRules());
+  // The method paragraph (config/method.txt) is also re-read per export, for the same reason
   const fracs = new FracService(repos, runner, reviews, () => loadMethodParagraph(), provider);
+  // Refuse to start when Postgres is unreachable, rather than failing every request later
   if (pool) await checkDatabase(pool, poolTarget());
   if (pool && SERVER.migrateOnStart) {
     const applied = await runMigrations(pool, loadMigrations());
     logger.info(applied.length ? "Applied migrations" : "Database is up to date", { applied });
   }
+  // Jobs run in this process; the watchdog fails any job left queued/running by a crash or restart
   const stopWatchdog = startJobWatchdog(repos.jobs, JOBS);
   const server = createApp({ fracs, reviews, jobs: repos.jobs, provider }).listen(SERVER.port, () => {
     logger.info("frac-studio-service listening", { port: SERVER.port, store: inMemory ? "memory" : "postgres", ai: provider.name });
   });
+  // MOCK_SEED: fill the memory store with sample FRACs/reviews for local UI work (mock provider only)
   if (MOCK.seed && mocks) {
     if (!inMemory) logger.warn("MOCK_SEED is ignored outside the memory store");
     else

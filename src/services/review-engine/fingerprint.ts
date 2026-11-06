@@ -4,6 +4,9 @@ import type { ReviewRules } from "./rules.ts";
 
 // "Same file, same review" (rules r3 §9). A review is stored with this fingerprint; uploading the same
 // file with the same context returns the stored review instead of asking the model again.
+// Last step of the review flow: ReviewService computes it before a review (to look up a stored one,
+// unless the caller asked for a fresh run) and stamps it on the finished report (report.fingerprint).
+// The model ignores temperature, so this store, not the model, is what makes a review repeatable.
 
 /** Bump whenever the engine code or the prompts change; it is part of every fingerprint. */
 export const ENGINE_VERSION = "r3";

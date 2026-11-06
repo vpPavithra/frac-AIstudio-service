@@ -1,3 +1,5 @@
+// The /v1 API router. app.ts mounts it behind requireOwner, so every route here has an owner.
+// Splits into /fracs, /frac-reviews, /jobs/:id and /info.
 import { Router } from "express";
 import { jobController } from "../controllers/job.controller.ts";
 import type { TextProvider } from "../providers/text/types.ts";
@@ -7,6 +9,7 @@ import type { ReviewService } from "../services/review.service.ts";
 import { fracRoutes } from "./frac.routes.ts";
 import { reviewRoutes } from "./review.routes.ts";
 
+/** Everything the routes need, built once in server.ts (or a test) and passed to createApp. */
 export interface RouteDeps {
   fracs: FracService;
   reviews: ReviewService;

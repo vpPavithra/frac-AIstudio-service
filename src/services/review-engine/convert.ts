@@ -3,6 +3,13 @@ import type { Finding, Report } from "../../models/report.model.ts";
 import type { Frac, FracRole } from "../../models/frac.model.ts";
 import type { ModelCompetency, ReviewModel } from "../../models/review.model.ts";
 
+// Converts between the Creator's Frac and the Reviewer's ReviewModel, so one review engine serves both.
+// fracToModel: frac.service (step 6 expert check) reviews a Creator FRAC. modelToFrac: ReviewService
+// ("Open in Create FRAC to fix") imports a reviewed workbook into the Creator. serializeModel: the text
+// form of the FRAC that ai-review.service.ts sends to Vidya for the Q3 state call (rules r3 §6.2).
+// Pure, no config.
+
+/** Five blank levels for a Creator competency whose ladder is not written yet (null in the Frac). */
 const EMPTY_LEVELS = () => [1, 2, 3, 4, 5].map(() => ({ label: "", desc: "" }));
 
 /** Creator FRAC → review model. Parses every ref in a mapping cell, not just the first (spec gap 5). */
@@ -49,7 +56,10 @@ export interface ModelToFracInput {
   now?: Date;
 }
 
-/** Reviewed workbook → Creator FRAC at step 6 with the report attached (spec 6.5 "Open in Create FRAC"). */
+/**
+ * Reviewed workbook → Creator FRAC at step 6 with the report attached (spec 6.5 "Open in Create FRAC").
+ * Posting columns become keys P1, P2 …; a competency with no ladder text gets `levels: null`.
+ */
 export function modelToFrac(input: ModelToFracInput): Frac {
   const { model, report } = input;
   const at = (input.now ?? new Date()).toISOString();
@@ -102,15 +112,19 @@ export function modelToFrac(input: ModelToFracInput): Frac {
   };
 }
 
-/** Competency codes a finding points at, for the "Fix these competencies" button. */
+/** Competency codes a finding points at, for the "Fix these competencies" button. Only tests call it today. */
 export function competencyRefs(finding: Finding, model: ReviewModel): string[] {
   const known = new Set(model.competencies.map((c) => c.code));
   return finding.refs.filter((r) => known.has(r));
 }
 
+/** Shortens a prompt line to `max` characters, ending with "…". */
 const clip = (s: string, max: number) => (s.length > max ? `${s.slice(0, max - 1)}…` : s);
 
-/** Compact text form of the FRAC for the review prompt (spec 6.4). */
+/**
+ * Compact text form of the FRAC for the review prompt (spec 6.4). Long lines are clipped (220 chars per
+ * competency line, 170 per level line) and the whole text is cut at `maxChars` to bound the prompt size.
+ */
 export function serializeModel(model: ReviewModel, maxChars = 200_000): string {
   const lines: string[] = [];
   if (model.postings.length) {

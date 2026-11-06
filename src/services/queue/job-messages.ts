@@ -1,6 +1,8 @@
 // Job progress messages shown in the UI (spec 8). The check and review lines follow rules r3 §6, where
 // the AI part of a review is Vidya's fixed checklist (the spec's text predates r3 and names both agents).
+// Used by FracService (Creator steps and expert check), the step files (progress updates) and ReviewService.
 
+/** The `msg` a job shows while it runs; the functions take the count shown in the text. */
 export const JOB_MESSAGES = {
   research: "Kaushal is gathering the job description, postings and sources…",
   roles: "Kaushal is drafting the roles from the job description…",

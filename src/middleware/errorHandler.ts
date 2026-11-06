@@ -1,3 +1,6 @@
+// The last middleware in app.ts: turns anything thrown or passed to next(err) into the one error body
+// `{ error: { code, message, details? } }` (utils/response.ts). Also maps errors from libraries that do
+// not know about ApiError: the workbook parser, multer uploads and body-parser.
 import type { NextFunction, Request, Response } from "express";
 import multer from "multer";
 import { WorkbookParseError } from "../services/review-engine/parse-workbook.ts";
@@ -12,7 +15,12 @@ function bodyParserError(err: unknown): ApiError | null {
   return null;
 }
 
-/** Maps known failures to their code; anything else is a 500 with a generic message, logged. */
+/**
+ * Maps known failures to their code; anything else is a 500 with a generic message, logged.
+ * Codes: ApiError keeps its own; WorkbookParseError → 400 NO_COMPETENCY_SHEET; multer → 413
+ * PAYLOAD_TOO_LARGE or 400 UPLOAD_INVALID; bad JSON → 400 INVALID_JSON; unknown → 500 INTERNAL_ERROR.
+ * Express 5 forwards rejected async handlers here, so controllers simply throw.
+ */
 export function errorHandler(err: unknown, _req: Request, res: Response, _next: NextFunction): void {
   if (err instanceof ApiError) {
     sendError(res, err);

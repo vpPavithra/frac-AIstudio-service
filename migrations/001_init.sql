@@ -1,5 +1,8 @@
--- FRAC Studio schema (spec section 4). One JSONB doc per FRAC is enough: FRACs stay under 1 MB.
+-- 001: initial FRAC Studio schema (spec section 4): fracs, frac_versions, reviews and jobs.
+-- Applied once by `npm run migrate` (or MIGRATE_ON_START=true), inside a transaction.
+-- One JSONB doc per FRAC is enough: FRACs stay under 1 MB.
 
+-- One row per FRAC; owner_id comes from the x-aastrika-creator header and scopes every read
 CREATE TABLE IF NOT EXISTS fracs (
   id          UUID PRIMARY KEY,
   owner_id    TEXT        NOT NULL,
@@ -39,6 +42,7 @@ CREATE TABLE IF NOT EXISTS reviews (
 );
 CREATE INDEX IF NOT EXISTS reviews_owner_created_idx ON reviews (owner_id, created_at DESC);
 
+-- Background jobs (Creator steps, reviews, checks); the portal polls status and done/total for progress
 CREATE TABLE IF NOT EXISTS jobs (
   id          UUID PRIMARY KEY,
   owner_id    TEXT        NOT NULL,

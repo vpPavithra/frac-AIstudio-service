@@ -1,5 +1,6 @@
 // Synthetic stand-ins for the real dictionaries in spec 6.1 / 6.6. Every defect is planted at a known
 // count so the tests can assert exact numbers. Not clinical content: do not use as a reference FRAC.
+// Used by test/sample.test.ts, test/api.test.ts, test/pg.test.ts and scripts/make-sample-fixtures.ts.
 import type { SheetData } from "../../src/services/review-engine/parse-workbook.ts";
 
 const TOPICS = [
@@ -15,8 +16,10 @@ const TOPICS = [
   "postnatal care",
 ];
 
+/** Topic name with its index, so every generated competency and activity is unique. */
 const topic = (i: number) => `${TOPICS[i % TOPICS.length]} (${i})`;
 
+/** The ten level headers: label and description for levels 1 to 5. */
 function levelCols(): string[] {
   return [1, 2, 3, 4, 5].flatMap((n) => [`Competency Level ${n} Label`, `Competency Level ${n} Description`]);
 }
@@ -37,6 +40,7 @@ function ladder(t: string, over: { l1?: string; l5?: string; l3desc?: string } =
   ];
 }
 
+/** Competency type mix: 7 Domain, 2 Functional, 1 Behavioural in every ten. */
 const typeOf = (i: number) => (i % 10 === 9 ? "Behavioural" : i % 10 >= 7 ? "Functional" : "Domain");
 
 // ---------------------------------------------------------------------------------------------
@@ -47,6 +51,7 @@ const typeOf = (i: number) => (i % 10 === 9 ? "Behavioural" : i % 10 >= 7 ? "Fun
 //   Mapping cells mix "ME50L2-L5", "ME3@L3", "ME7 L4" and bare numbers; a Hindi sheet must be skipped;
 //   the competency description column comes after the level columns (spec gap 8).
 // ---------------------------------------------------------------------------------------------
+/** Planted defect counts in gnmSample(); tests assert the review finds exactly these. */
 export const GNM_COUNTS = {
   competencies: 74,
   l1Banned: 58,
@@ -64,16 +69,19 @@ const LAW_IN_L3: Record<number, string> = {
   7: "Applies Mental Health Act 1987 provisions on consent\n- Documents consent",
 };
 
+/** Inclusive integer range [from, to]. */
 function range(from: number, to: number): number[] {
   return Array.from({ length: to - from + 1 }, (_, k) => from + k);
 }
 
+/** GNM mapping cell for activity j: empty if planted as unmapped, else one of four ref formats in turn. */
 function gnmMapping(j: number): string {
   if (GNM_UNMAPPED.has(j)) return "";
   const k = ((j - 1) % GNM_COUNTS.competencies) + 1;
   return [`ME${k}L2-L5`, `ME${k}@L3`, `ME${k} L4`, `${k}`][j % 4];
 }
 
+/** GNM-style workbook: a titled dictionary sheet, a Hindi copy to skip, and a FRAC sheet. */
 export function gnmSample(): SheetData[] {
   const compHeaders = ["Competency Code", "Competency Label", "Competency Type", "Competency Area", ...levelCols(), "Competency Description"];
   const compRows = range(1, GNM_COUNTS.competencies).map((i) => {
@@ -113,6 +121,7 @@ export function gnmSample(): SheetData[] {
 // ANM-style: "Comptency" typo header, role-row code ranges, bare numbers and multi-ref cells.
 //   6 roles × 4 activities, 24 competencies C1–C24, ladders clean.
 // ---------------------------------------------------------------------------------------------
+/** ANM-style workbook: FRAC sheet first, then the Competencies sheet. */
 export function anmSample(): SheetData[] {
   const comps = range(1, 24).map((i) => [`C${i}`, `${topic(i)} competency`, `Delivers ${topic(i)}`, typeOf(i), "PH", ...ladder(topic(i))]);
   const fracRows: string[][] = [];
@@ -140,6 +149,7 @@ export function anmSample(): SheetData[] {
 // Staff-Nurse-style: a clean dictionary. Computed checks must give at most one minor finding.
 //   5 roles × 4 activities, 10 competencies (D/F/B mix), every competency used, postings filled.
 // ---------------------------------------------------------------------------------------------
+/** Clean Staff-Nurse-style workbook in the Creator export layout (P1/P2 postings, source tier). */
 export function staffNurseSample(): SheetData[] {
   const types = ["Domain", "Domain", "Domain", "Domain", "Domain", "Domain", "Functional", "Functional", "Behavioural", "Behavioural"];
   const comps = range(1, 10).map((i) => [`SN${i}`, `${topic(i)} competency`, `Delivers ${topic(i)}`, types[i - 1], "Clinical", ...ladder(topic(i))]);
@@ -164,6 +174,7 @@ export function staffNurseSample(): SheetData[] {
   ];
 }
 
+/** Output file name to builder, used by scripts/make-sample-fixtures.ts and the sample tests. */
 export const SAMPLES = {
   "sample-GNM-dictionary.xlsx": gnmSample,
   "sample-ANM-competencies.xlsx": anmSample,

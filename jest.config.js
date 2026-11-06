@@ -1,3 +1,6 @@
+// Jest config for `npm test` and `npm run test:coverage` (run with --experimental-vm-modules).
+// Compiles TypeScript as ESM through ts-jest, runs test/setup-env.ts first, and writes coverage to
+// coverage/ (lcov for SonarQube) when --coverage is passed.
 /** @type {import('jest').Config} */
 export default {
   preset: "ts-jest/presets/default-esm",

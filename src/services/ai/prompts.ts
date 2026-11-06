@@ -1,3 +1,7 @@
+// PROMPT BUILDERS for every AI call: Creator steps 2-5 (research, roles, activities, competencies, ladders)
+// and the Reviewer's checklist (ai-review.service.ts, also run by the expert check). Pure string builders;
+// the step files call them and pass the text to the TextProvider. Brief size wording comes from
+// config/frac-sizes.json (via sizes.ts). Never edit the text inside the templates without the spec owner.
 import type { Frac } from "../../models/frac.model.ts";
 import { SIZE_TARGETS } from "./sizes.ts";
 
@@ -35,8 +39,10 @@ export const SOURCE_LIBRARY = `SOURCE LIBRARY (where JDs and duties are found)
 - INC syllabi: teaching scope only, never proof of authorisation.
 - KCM, the FRAC Introduction Pack and the Karmayogi Quality Framework.`;
 
+/** Closing line before every output shape; claude.ts also sends a JSON-only system prompt. */
 const JSON_ONLY = "Answer with this JSON object only, no prose:";
 
+// Shared prompt blocks. `revise` is empty on a first run, so filter(Boolean) drops it.
 const brief = (f: Frac) =>
   `BRIEF\nCadre: ${f.cadreFull || f.cadre}\nState: ${f.state}\nSize: ${f.size} (${SIZE_TARGETS[f.size].ranges})\nWhat this FRAC should cover: ${f.prompt || "-"}`;
 const revise = (feedback?: string) =>
@@ -45,6 +51,7 @@ const scope = (f: Frac) =>
   `AUTHORISED (treat as authoritative):\n${f.research?.authorised ?? ""}\nNOT AUTHORISED (must be referred):\n${f.research?.notAuthorised ?? ""}`;
 const postings = (f: Frac) => f.postings.map((p) => `${p.key} ${p.label}`).join("; ");
 
+/** Step 2 (spec 5.2). On revise it carries the whole previous research (team edits included) plus the feedback. */
 export const researchPrompt = (f: Frac, feedback?: string) =>
   [KAUSHAL, brief(f), METHOD, SOURCE_LIBRARY,
     f.research ? `PREVIOUS RESEARCH:\n${JSON.stringify(f.research)}` : "", revise(feedback),
@@ -55,12 +62,17 @@ export const researchPrompt = (f: Frac, feedback?: string) =>
  "sources":[{"title":"","issuer":"","year":"","use":"","tier":""}],
  "authorised":[""],"notAuthorised":[""],"stateContext":[""],"sourceNotes":"","assumptions":[""],"verify":[""]}`].filter(Boolean).join("\n\n");
 
+/** Step 3a (spec 5.3): `count` roles from the edited research. On revise it lists the previous role titles. */
 export const rolesPrompt = (f: Frac, count: number, feedback?: string) =>
   [KAUSHAL, brief(f), `RESEARCH (treat as authoritative):\n${f.research?.summary ?? ""}`, scope(f), `POSTINGS: ${postings(f)}`, METHOD,
     f.roles.length ? `PREVIOUS ROLES:\n${f.roles.map((r) => `${r.code} ${r.title}`).join("\n")}` : "", revise(feedback),
     `List ${count} roles covering the whole job across all postings. Write each role as an action. Include non-clinical work: records, stock, supervision, mobilisation. "source" names the document the role comes from.`,
     `${JSON_ONLY}\n{"roles":[{"title":"","source":""}]}`].filter(Boolean).join("\n\n");
 
+/**
+ * Step 3b (spec 5.3) for one batch of roles. Earlier activities of a role with the same title are offered as
+ * "keep the good ones". The JSON example lists the FRAC's own posting keys so the answer uses them.
+ */
 export const activitiesPrompt = (f: Frac, roles: { code: string; title: string }[], count: number, feedback?: string) => {
   const earlier = roles
     .map((r) => ({ r, acts: f.roles.find((x) => x.title.trim().toLowerCase() === r.title.toLowerCase())?.activities ?? [] }))
@@ -74,6 +86,10 @@ export const activitiesPrompt = (f: Frac, roles: { code: string; title: string }
     `${JSON_ONLY}\n{"roles":[{"code":"R1","activities":[{"text":"","postings":{${keys.map((k) => `"${k}":"Yes"`).join(",")}},"source":"","tier":""}]}]}`].filter(Boolean).join("\n\n");
 };
 
+/**
+ * Step 4 (spec 5.4): every activity, plus on revise the existing codes and labels so the model keeps them
+ * (competenciesPatch keeps a ladder only when code and label both survive).
+ */
 export const competenciesPrompt = (f: Frac, count: number, feedback?: string) => {
   const prefix = f.codePrefix || "C";
   return [KAUSHAL, brief(f), METHOD,
@@ -84,6 +100,10 @@ export const competenciesPrompt = (f: Frac, count: number, feedback?: string) =>
     `${JSON_ONLY}\n{"competencies":[{"code":"${prefix}1","label":"","description":"","type":"Domain","area":"","kcm":""}],"mapping":[{"a":"A1","c":"${prefix}1","l":3}]}`].filter(Boolean).join("\n\n");
 };
 
+/**
+ * Step 5 (spec 5.5) for one batch of competency codes: each competency with the activities that use it
+ * (and their levels) and its current ladder, if any, so a revise edits rather than starts over.
+ */
 export const laddersPrompt = (f: Frac, codes: string[], feedback?: string) => {
   const usedBy = (code: string) =>
     f.roles.flatMap((r) => r.activities).filter((a) => a.comp.split("@")[0].trim() === code).map((a) => `${a.code} ${a.text} (@${a.comp.split("@")[1] ?? "?"})`);
@@ -98,6 +118,7 @@ export const laddersPrompt = (f: Frac, codes: string[], feedback?: string) => {
 
 // ---- Reviewer (rules r3 §6): fixed questions only. Code writes titles, severities, verdict and summary. ----
 
+/** The Reviewer's persona: Vidya alone answers the fixed checklist (rules r3 §6). */
 export const VIDYA = `You are ${VIDYA_ROLE}`;
 
 /** One competency as the checklist sees it: definition plus each level's label and indicators. */
@@ -106,9 +127,13 @@ export interface ChecklistCompetency {
   text: string;
 }
 
+/** What review-engine/checks.ts already decides, so the model does not repeat it (rules r3 §6). */
 const CODE_CHECKS = `ALREADY CHECKED IN CODE (do NOT flag these): measurable verbs; ladder shape (independent at L1–L2; supervising, mentoring or training at L3; policy, research, district or state roles at L4–L5); overlap and Domain/Functional/Behavioural tagging; outdated names (TT, RNTCP, NPCDCS, HWC, NVBDCP, MCTS, NRT, RMNCH+A, NRHM, VHND, Five Rights, partograph, old Acts).`;
 
-/** Q1 scope + Q2 accuracy for up to 6 competencies (rules §6.1). */
+/**
+ * Q1 scope + Q2 accuracy for one batch of competencies (rules §6.1; REVIEW_BATCH_SIZE, 6 by default).
+ * `scopeHits` are code-found scope problems in this batch, listed so the model does not flag them again.
+ */
 export const reviewChecklistPrompt = (cadre: string, state: string, comps: ChecklistCompetency[], scopeHits: string[]) =>
   [VIDYA, `Cadre: ${cadre}\nState: ${state || "India (national baseline)"}`, CODE_CHECKS,
     scopeHits.length ? `SCOPE PROBLEMS CODE ALREADY FOUND IN THESE COMPETENCIES (do NOT repeat):\n${scopeHits.join("\n")}` : "",
@@ -119,6 +144,7 @@ Q2 Accuracy: does any sentence state a drug, dose, schedule, cut-off, protocol, 
 Flag only what you are sure of. Every flag copies 6–25 consecutive words exactly from the competency into "quote". An empty list is a good answer.`,
     `${JSON_ONLY}\n{"items":[{"code":"","scope":[{"quote":"","act":"","basis":""}],"accuracy":[{"quote":"","issue":"","correct":""}]}]}`].filter(Boolean).join("\n\n");
 
+/** Rules r3 §6.2: the only categories a state-fit item may use; ai-review.service.ts also orders by them. */
 export const STATE_CATEGORIES = ["Disease burden", "Delivery and referral", "Language and culture", "State schemes", "Geography and access"] as const;
 
 /** Q3 state fit, only when a state is set (rules §6.2). */

@@ -1,3 +1,7 @@
+// CREATOR STEP 4, competencies (spec 5.4). Runs as a job started by FracService.startStep("competencies").
+// One complex-tier call derives the competencies last, from the activities, and maps every activity to one
+// competency at a level. The count comes from the brief size (config/frac-sizes.json via sizes.ts).
+// Flow: brief -> research -> roles & activities -> competencies -> ladders -> expert check.
 import type { z } from "zod";
 import type { Frac, FracCompetency } from "../../models/frac.model.ts";
 import { ApiError } from "../../utils/response.ts";
@@ -10,7 +14,10 @@ import { callModel, type StepContext } from "./step-context.ts";
 /**
  * Spec 5.4 post-processing: write activity.comp = "c@Ll"; keep a competency's ladder only when both
  * its code and its label are unchanged (otherwise null, so step 5 rewrites it); clear the review and
- * rolesDirty. A mapping that names an unknown activity or competency fails the step.
+ * rolesDirty. A mapping that names an unknown competency fails the step with AI_OUTPUT_INVALID; a mapping
+ * for an unknown activity code is ignored, and an activity the model left out gets an empty `comp`.
+ * The label comparison ignores case and surrounding spaces. This is what is kept on revise: ladders of
+ * competencies whose code and label survived. The prompt asks the model to keep existing codes.
  */
 export function competenciesPatch(frac: Frac, out: z.infer<typeof competenciesOutput>): Partial<Frac> {
   const codes = new Set(out.competencies.map((c) => c.code));
@@ -29,7 +36,10 @@ export function competenciesPatch(frac: Frac, out: z.infer<typeof competenciesOu
   return { competencies, roles, rolesDirty: false, review: null };
 }
 
-/** Step 4, competencies (Kaushal), complex tier, one call; derived last, from the activities. */
+/**
+ * Step 4, competencies (Kaushal), complex tier, one call; derived last, from the activities.
+ * Codes use the FRAC's codePrefix, or "C" before research has set one.
+ */
 export async function runCompetencies(ctx: StepContext): Promise<Partial<Frac>> {
   const { frac, feedback } = ctx;
   const count = SIZE_TARGETS[frac.size].comps;

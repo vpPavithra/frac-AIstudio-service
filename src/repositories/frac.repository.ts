@@ -1,3 +1,5 @@
+// Storage for FRACs (`fracs` table) and their version snapshots (`frac_versions`). Used by FracService
+// and ReviewService (open-in-creator). Built by repositories/index.ts.
 import type { Pool } from "pg";
 import type { Frac, FracVersion } from "../models/frac.model.ts";
 import { byNewest, clone, iso } from "./row-helpers.ts";
@@ -5,16 +7,20 @@ import { byNewest, clone, iso } from "./row-helpers.ts";
 // FRAC documents and their version snapshots. The FRAC lives in `doc`; the other columns are copies
 // for listing and indexing. The memory store runs tests and local work without Postgres.
 
+/** FRAC storage. Reads do not check the owner; services do that after `get`. */
 export interface FracRepository {
   insert(frac: Frac): Promise<void>;
   update(frac: Frac): Promise<void>;
   get(id: string): Promise<Frac | null>;
   listByOwner(ownerId: string): Promise<Frac[]>;
+  /** Saves a full copy of the FRAC as a new version, labelled with `reason` (e.g. "Expert check"). */
   snapshot(frac: Frac, reason: string): Promise<void>;
+  /** Version list (no documents), newest first. */
   versions(fracId: string): Promise<FracVersion[]>;
   version(fracId: string, versionId: number): Promise<Frac | null>;
 }
 
+/** Postgres implementation. The whole Frac is stored as JSONB in `doc`. */
 export class PgFracRepository implements FracRepository {
   constructor(private readonly pool: Pool) {}
 
@@ -72,6 +78,7 @@ export class PgFracRepository implements FracRepository {
   }
 }
 
+/** In-memory implementation for tests and FRAC_STUDIO_STORE=memory. Copies on the way in and out. */
 export class MemoryFracRepository implements FracRepository {
   private readonly rows = new Map<string, Frac>();
   private readonly snapshots: (FracVersion & { doc: Frac })[] = [];

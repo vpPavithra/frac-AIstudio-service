@@ -1,9 +1,12 @@
+// The only logger: every module logs through `logger`, never console.*. Output format and minimum level
+// come from LOG (LOG_FORMAT, LOG_LEVEL in config/constants.ts). warn/error go to stderr, the rest to stdout.
 import { LOG } from "../config/constants.ts";
 import { currentReqId } from "./context.ts";
 
 type Level = "debug" | "info" | "warn" | "error";
 type Fields = Record<string, unknown>;
 
+// Severity order; a line is written when its rank is at or above LOG.level's
 const RANK: Record<Level, number> = { debug: 10, info: 20, warn: 30, error: 40 };
 
 function write(level: Level, message: string, fields: Fields): void {

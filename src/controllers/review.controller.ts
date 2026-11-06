@@ -1,3 +1,5 @@
+// HTTP handlers for /v1/frac-reviews: read params and the owner, call ReviewService, shape the response.
+// Upload errors: 400 FILE_REQUIRED (no file), 400 FILE_TYPE_NOT_ALLOWED (not .xlsx).
 import type { Request, Response } from "express";
 import { ownerOf } from "../middleware/auth.ts";
 import type { ReviewService } from "../services/review.service.ts";

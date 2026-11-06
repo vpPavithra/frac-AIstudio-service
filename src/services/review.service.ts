@@ -17,6 +17,12 @@ import { badRequest, conflict, notFound } from "../utils/response.ts";
 import type { Repositories } from "../repositories/index.ts";
 import { describeError, logger } from "../utils/logger.ts";
 
+// The Reviewer service (spec 6, rules r3). Runs the whole review flow: upload → parse (parse-workbook.ts)
+// → rule-based checks (checks.ts) → Vidya's AI checklist (ai-review.service.ts) → computed report
+// (report.ts) → stored with its fingerprint (fingerprint.ts) in the reviews repository. Called by
+// review.controller.ts and, for the Creator's step 6 expert check, by frac.service.ts. The rule tables
+// (config/review-rules.json, config/outdated.json) come in through the `rules` loader built in server.ts.
+
 export interface UploadedWorkbook {
   name: string;
   buffer: Buffer;
@@ -51,6 +57,7 @@ export function worstSeverity(report: Report | null): "B" | "M" | "m" | null {
   return (["B", "M", "m"] as const).find((sev) => open.some((f) => f.sev === sev)) ?? null;
 }
 
+/** "Meghalaya ANM.xlsx" → "Meghalaya ANM"; "FRAC" when the name is only the extension. */
 const titleFromFilename = (name: string) => name.replace(/\.xlsx$/i, "").trim() || "FRAC";
 
 /** Reviewer tab (spec 6) and the review engine shared with the Creator's expert check. */
@@ -158,12 +165,14 @@ export class ReviewService {
     });
   }
 
+  /** One review, only for its owner; another owner's id reads as 404 so ids cannot be probed. */
   async get(ownerId: string, id: string): Promise<ReviewRecord> {
     const review = await this.repos.reviews.get(id);
     if (!review || review.ownerId !== ownerId) throw notFound("Review");
     return review;
   }
 
+  /** The owner's reviews for My FRACs, uploads and expert checks alike (filter by `kind`). */
   async list(ownerId: string): Promise<ReviewSummary[]> {
     const reviews = await this.repos.reviews.listByOwner(ownerId);
     return reviews.map((r) => ({
@@ -179,6 +188,7 @@ export class ReviewService {
     }));
   }
 
+  /** The finished report as an .xlsx (spec 7); 409 while the review job is still running. */
   async exportWorkbook(ownerId: string, id: string): Promise<{ buffer: Buffer; filename: string }> {
     const review = await this.get(ownerId, id);
     if (!review.report) throw conflict("REVIEW_NOT_READY", "The review is still running");
@@ -188,7 +198,10 @@ export class ReviewService {
     };
   }
 
-  /** "Open in Create FRAC to fix" (spec 6.5): imports the reviewed file as a FRAC at step 6. */
+  /**
+   * "Open in Create FRAC to fix" (spec 6.5): imports the reviewed file as a FRAC at step 6. Opening the same
+   * review again returns the FRAC made the first time, while that FRAC still exists.
+   */
   async openInCreator(ownerId: string, id: string): Promise<string> {
     const review = await this.get(ownerId, id);
     if (!review.sourceModel) throw badRequest("NO_SOURCE_WORKBOOK", "This review has no stored workbook to open");

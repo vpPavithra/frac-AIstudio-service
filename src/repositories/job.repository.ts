@@ -1,7 +1,10 @@
+// Storage for background jobs (`jobs` table). Written by services/queue/job-runner.ts as a job
+// progresses, read by GET /v1/jobs/:id, and swept by services/job-watchdog.service.ts. Built by index.ts.
 import type { Pool } from "pg";
 import type { Job, JobPatch } from "../models/job.model.ts";
 import { clone, iso } from "./row-helpers.ts";
 
+/** Job storage. `update` writes only the fields present in the patch and always bumps updated_at. */
 export interface JobRepository {
   insert(job: Job): Promise<void>;
   update(id: string, patch: JobPatch): Promise<void>;
@@ -26,6 +29,7 @@ interface JobRow {
   updated_at: Date;
 }
 
+// Patch field → column. Also an allowlist: only these names are ever put into the UPDATE statement
 const JOB_COLUMNS: Record<keyof JobPatch, string> = {
   status: "status",
   msg: "msg",

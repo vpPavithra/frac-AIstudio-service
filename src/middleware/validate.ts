@@ -1,3 +1,5 @@
+// Request validation with the Zod schemas in validations/. Routes use validateBody before a handler;
+// controllers call parseInput directly for route params (e.g. :versionId). Failures are 400 VALIDATION_FAILED.
 import type { NextFunction, Request, Response } from "express";
 import type { ZodType, ZodTypeDef } from "zod";
 import { badRequest } from "../utils/response.ts";

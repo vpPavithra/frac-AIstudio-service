@@ -1,3 +1,6 @@
+// The migration runner: reads numbered migrations/*.sql files and applies the ones not yet listed in
+// the schema_migrations table. Called by migrate.ts (`npm run migrate`) and by server.ts when
+// MIGRATE_ON_START=true. Never edit an applied migration; add the next number instead.
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { describeError } from "../utils/logger.ts";
@@ -7,6 +10,7 @@ export interface Queryable {
   query(sql: string, params?: unknown[]): Promise<{ rows: Record<string, unknown>[] }>;
 }
 
+/** One migrations/*.sql file: its file name (the id stored in schema_migrations) and its SQL. */
 export interface Migration {
   name: string;
   sql: string;
@@ -23,6 +27,7 @@ export function loadMigrations(dir = path.resolve(process.cwd(), "migrations")):
     .map((name) => ({ name, sql: readFileSync(path.join(dir, name), "utf8") }));
 }
 
+/** The migrations whose names are not in `applied`, in the given order. */
 export function pendingMigrations(all: Migration[], applied: Set<string>): Migration[] {
   return all.filter((m) => !applied.has(m.name));
 }
@@ -30,6 +35,7 @@ export function pendingMigrations(all: Migration[], applied: Set<string>): Migra
 /**
  * Applies every migration not yet recorded in schema_migrations, each in its own transaction,
  * under an advisory lock so concurrent pods do not race. Returns the names it applied.
+ * A failing migration is rolled back and rethrown as "Migration <name> failed: …"; later ones are not run.
  */
 export async function runMigrations(db: Queryable, migrations: Migration[]): Promise<string[]> {
   await db.query(
