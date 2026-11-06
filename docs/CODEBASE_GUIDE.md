@@ -194,6 +194,8 @@ record, list, export and "Open in Creator".
 | `services/reports/review-report.ts` | Builds the review analysis report for one upload or one FRAC's expert checks. Pure. |
 | `scripts/review-report.ts` | `npm run review:report -- <id>`: loads a review or a FRAC's expert checks and their calls, writes `reports/reviews/review-<id>.md`. |
 | `services/reports/ai-report.ts` | Builds the AI response report (Markdown) from calls, jobs and reviews. Pure. |
+| `repositories/review-answer-cache.repository.ts` | Stored AI checklist answers by fingerprint, so a repeat check skips unchanged competencies. |
+| `repositories/server-run.repository.ts` | Server starts and stops, for the per-run report. |
 | `repositories/ai-call.repository.ts` | The `ai_calls` per-call log: Postgres and memory. Insert-only. |
 | `providers/text/json.ts` | `extractJson`: the one JSON object in a model's final text; shared by every provider. |
 | `providers/text/limit.ts` | `limitConcurrency`: caps calls in flight for a profile's `maxConcurrent` (1 on the Gemini free tier). |

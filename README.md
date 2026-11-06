@@ -35,6 +35,7 @@ batching, progress, checks, report and export.
 | `gemini-free` (the default in `config/service.json`) | Gemini API free tier, `gemini-3.6-flash` on both tiers (switch to `gemini-3.8-flash` once Google's overload clears), no web search | `GEMINI_API_KEY` |
 | `gemini-paid` | Gemini API paid tier, `gemini-4-argon` (complex) + `gemini-3.8-flash`, Google Search for research | `GEMINI_API_KEY` |
 | `claude` | Claude Sonnet 5.5 on both tiers (high / medium thinking), web search for research | `ANTHROPIC_API_KEY` |
+| `claude-mixed` | Sonnet 5.5 for research, roles, competencies and the review; Haiku 5.5 ($0.10 / $0.50) for activities and ladders: about half the cost. Compare quality before choosing it | `ANTHROPIC_API_KEY` |
 | `claude-fast` | The same model with less thinking (medium / low): faster and cheaper, for the effort comparison | `ANTHROPIC_API_KEY` |
 
 The profiles live in [`config/ai-providers.json`](config/ai-providers.json): model and thinking level per
@@ -147,7 +148,7 @@ the service after a change.
 | Provider | `AI_PROVIDER`, `MOCK_PRICED_AS` (whose prices the mock's estimate uses) | `gemini-free`, `gemini-free` |
 | Call limits (every provider) | `LLM_TIMEOUT_MS`, `LLM_RETRIES`, `LLM_MAX_TOKENS`, `LLM_MAX_RESUMES`, `LLM_MAX_RETRY_DELAY_MS`, `LLM_INVALID_RETRIES` | 10 min, 3, 64,000, 3, 60 s, 1 |
 | Creator batching | `AI_BATCH_SIZE`, `AI_BATCH_PARALLEL` (activities and ladders) | 4 per call, 6 at once |
-| Review checklist | `REVIEW_BATCH_SIZE`, `REVIEW_BATCH_PARALLEL`, `REVIEW_MAX_STATE_ITEMS`, `REVIEW_MIN_QUOTE_WORDS` | 6, 6, 6, 4 |
+| Review checklist | `REVIEW_BATCH_SIZE`, `REVIEW_BATCH_PARALLEL`, `REVIEW_MAX_STATE_ITEMS`, `REVIEW_MIN_QUOTE_WORDS`, `REVIEW_REUSE_ANSWERS` | 6, 6, 6, 4, on (a repeat expert check asks the AI only about changed competencies; "Run a fresh review" asks everything) |
 | Research web search | `RESEARCH_WEB_SEARCH`, `RESEARCH_SEARCH_DOMAINS`, `RESEARCH_SEARCH_MAX_USES` | on, 4 government domains, 3 |
 | Jobs | `JOB_STALE_AFTER_MS`, `JOB_SWEEP_EVERY_MS`, `JOB_HEARTBEAT_MS` | 15 min, 1 min, 1 min |
 | Postgres pool | `POSTGRES_POOL_MAX`, `POSTGRES_CONNECT_TIMEOUT_MS`, `POSTGRES_IDLE_TIMEOUT_MS` | 10, 10 s, 30 s |
