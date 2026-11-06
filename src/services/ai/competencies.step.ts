@@ -2,7 +2,7 @@
 // One complex-tier call derives the competencies last, from the activities, and maps every activity to one
 // competency at a level. The count comes from the brief size (config/frac-sizes.json via sizes.ts).
 // Flow: brief -> research -> roles & activities -> competencies -> ladders -> expert check.
-import type { z } from "zod";
+import type { z } from "zod/v4";
 import type { Frac, FracCompetency } from "../../models/frac.model.ts";
 import { ApiError } from "../../utils/response.ts";
 import { JOB_MESSAGES } from "../queue/job-messages.ts";

@@ -3,7 +3,7 @@
 // government domains in RESEARCH_SEARCH_DOMAINS (see providers/text/claude.ts, gemini.ts). The answer is validated against researchOutput,
 // then researchPatch turns it into the FRAC's research, postings, cadreFull and codePrefix.
 // Flow: brief -> research -> roles & activities -> competencies -> ladders -> expert check.
-import type { z } from "zod";
+import type { z } from "zod/v4";
 import type { Frac } from "../../models/frac.model.ts";
 import { sanitizeCodePrefix } from "../../utils/codes.ts";
 import { researchPrompt } from "./prompts.ts";

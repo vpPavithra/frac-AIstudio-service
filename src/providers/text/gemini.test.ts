@@ -26,6 +26,7 @@ describe("Gemini provider helpers", () => {
     expect(code(geminiError(404, "models/x is not found"))).toBe("AI_REQUEST_REJECTED");
     expect(code(geminiError(400, "Invalid JSON payload"))).toBe("AI_REQUEST_REJECTED");
     expect(code(geminiError(503, "overloaded"))).toBe("AI_UNAVAILABLE");
+    expect((describeGeminiError(geminiError(503, "high demand"), "gemini-3.8-flash") as ApiError).message).toContain('"gemini-3.8-flash" is unavailable right now (HTTP 503)');
   });
 
   it("passes other errors through unchanged", () => {

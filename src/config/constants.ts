@@ -46,6 +46,8 @@ export const LLM = Object.freeze({
   maxTokens: int("LLM_MAX_TOKENS", 64_000),
   /** A web-search turn can pause (pause_turn); resume it at most this many times. */
   maxResumes: int("LLM_MAX_RESUMES", 3, 0),
+  /** Extra attempts when an answer is unreadable or in the wrong shape (askModel); each is billed and logged. */
+  invalidRetries: int("LLM_INVALID_RETRIES", 1, 0),
   /** Max wait between SDK retries; a free-tier 429 can ask for tens of seconds. */
   maxRetryDelayMs: int("LLM_MAX_RETRY_DELAY_MS", 60_000),
 });
@@ -112,6 +114,8 @@ export const PATHS = Object.freeze({
  */
 export const AI = Object.freeze({
   provider: text("AI_PROVIDER", "mock").trim(),
+  /** Set by `npm run dev:ai` / `start:ai`: refuse to start on the mock, so an "AI" run can never be sample data. */
+  requireReal: env.AI_REQUIRE_REAL === "true",
   /** Spec 5.2 production addition: research may search these government domains (if the profile has webSearch). Off switch for every provider. */
   researchWebSearch: env.RESEARCH_WEB_SEARCH !== "false",
   /** Comma-separated allowed domains for the web_search tool. */
@@ -150,12 +154,12 @@ export const MOCK = Object.freeze({
 /** Every setting name above, so config:check can reject unknown keys in service.json. */
 export const KNOWN_SETTINGS = [
   "PORT", "FRAC_STUDIO_STORE", "MIGRATE_ON_START",
-  "LLM_TIMEOUT_MS", "LLM_RETRIES", "LLM_MAX_TOKENS", "LLM_MAX_RESUMES", "LLM_MAX_RETRY_DELAY_MS",
+  "LLM_TIMEOUT_MS", "LLM_RETRIES", "LLM_MAX_TOKENS", "LLM_MAX_RESUMES", "LLM_MAX_RETRY_DELAY_MS", "LLM_INVALID_RETRIES",
   "MAX_UPLOAD_MB", "MAX_JSON_MB", "MAX_TEXT_CHARS", "MAX_ROLES", "MAX_ACTIVITIES_PER_ROLE", "MAX_COMPETENCIES",
   "JOB_STALE_AFTER_MS", "JOB_SWEEP_EVERY_MS", "JOB_HEARTBEAT_MS",
   "POSTGRES_POOL_MAX", "POSTGRES_CONNECT_TIMEOUT_MS", "POSTGRES_IDLE_TIMEOUT_MS", "CORS_ORIGINS", "LOG_FORMAT", "LOG_LEVEL",
   "OUTDATED_CONFIG_PATH", "REVIEW_RULES_CONFIG_PATH", "FRAC_SIZES_CONFIG_PATH", "AI_PROVIDERS_CONFIG_PATH", "METHOD_PARAGRAPH_PATH",
-  "AI_PROVIDER", "RESEARCH_WEB_SEARCH", "RESEARCH_SEARCH_DOMAINS", "RESEARCH_SEARCH_MAX_USES", "AI_BATCH_SIZE", "AI_BATCH_PARALLEL",
+  "AI_PROVIDER", "AI_REQUIRE_REAL", "RESEARCH_WEB_SEARCH", "RESEARCH_SEARCH_DOMAINS", "RESEARCH_SEARCH_MAX_USES", "AI_BATCH_SIZE", "AI_BATCH_PARALLEL",
   "REVIEW_BATCH_SIZE", "REVIEW_BATCH_PARALLEL", "REVIEW_MAX_STATE_ITEMS", "REVIEW_MIN_QUOTE_WORDS",
   "MOCK_DELAY_MS", "MOCK_SEED", "MOCK_SEED_OWNERS", "MOCK_PRICED_AS",
 ] as const;

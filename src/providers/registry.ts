@@ -57,7 +57,7 @@ async function loadMocks(): Promise<MocksModule | null> {
 }
 
 /**
- * Builds the provider AI_PROVIDER names. "mock" loads src/mocks; anything else must be a profile in
+ * Builds the provider AI_PROVIDER names. "mock" loads src/mocks (refused when `requireReal`, set by dev:ai / start:ai); anything else must be a profile in
  * config/ai-providers.json whose key is set in the environment. Startup stops with a message saying
  * what to set otherwise. The key comes from the environment only: the service's .env locally, the
  * deployment's secret store on a server; config files are committed and startup refuses keys in them.
@@ -66,7 +66,14 @@ export async function createAi(
   name: string = AI.provider,
   profiles: Record<string, AiProfile> = loadAiProfiles(),
   env: NodeJS.ProcessEnv = process.env,
+  requireReal: boolean = AI.requireReal,
 ): Promise<AiSetup> {
+  if (name === MOCK_PROVIDER && requireReal) {
+    throw new Error(
+      "This run must use a real AI provider (npm run dev:ai / start:ai), but AI_PROVIDER=mock. " +
+        "Remove AI_PROVIDER=mock from .env or the environment, or use `npm run dev:mock` for sample data.",
+    );
+  }
   if (name === MOCK_PROVIDER) {
     const mocks = await loadMocks();
     if (!mocks) {

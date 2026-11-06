@@ -11,6 +11,8 @@ export interface JobRepository {
   get(id: string): Promise<Job | null>;
   /** Marks queued/running jobs last updated before `before` as failed; returns how many. */
   failStale(before: Date, error: string, errorCode: string): Promise<number>;
+  /** Every job created at or after `since`, oldest first (the AI response report). */
+  listSince(since: Date): Promise<Job[]>;
 }
 
 interface JobRow {
@@ -72,25 +74,31 @@ export class PgJobRepository implements JobRepository {
 
   async get(id: string): Promise<Job | null> {
     const { rows } = await this.pool.query<JobRow>(`SELECT * FROM jobs WHERE id = $1`, [id]);
-    const r = rows[0];
-    if (!r) return null;
-    return {
-      id: r.id,
-      ownerId: r.owner_id,
-      kind: r.kind,
-      targetId: r.target_id,
-      status: r.status,
-      msg: r.msg ?? "",
-      done: r.done,
-      total: r.total,
-      error: r.error,
-      errorCode: r.error_code ?? null,
-      usage: r.usage ?? {},
-      createdAt: iso(r.created_at),
-      updatedAt: iso(r.updated_at),
-    };
+    return rows[0] ? toJob(rows[0]) : null;
+  }
+
+  async listSince(since: Date): Promise<Job[]> {
+    const { rows } = await this.pool.query<JobRow>(`SELECT * FROM jobs WHERE created_at >= $1 ORDER BY created_at`, [since]);
+    return rows.map(toJob);
   }
 }
+
+/** Postgres row → Job. */
+const toJob = (r: JobRow): Job => ({
+  id: r.id,
+  ownerId: r.owner_id,
+  kind: r.kind,
+  targetId: r.target_id,
+  status: r.status,
+  msg: r.msg ?? "",
+  done: r.done,
+  total: r.total,
+  error: r.error,
+  errorCode: r.error_code ?? null,
+  usage: r.usage ?? {},
+  createdAt: iso(r.created_at),
+  updatedAt: iso(r.updated_at),
+});
 
 export class MemoryJobRepository implements JobRepository {
   private readonly rows = new Map<string, Job>();
@@ -119,5 +127,12 @@ export class MemoryJobRepository implements JobRepository {
       }
     }
     return failed;
+  }
+
+  async listSince(since: Date): Promise<Job[]> {
+    return [...this.rows.values()]
+      .filter((j) => new Date(j.createdAt) >= since)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .map(clone);
   }
 }

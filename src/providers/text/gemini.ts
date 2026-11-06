@@ -98,6 +98,7 @@ export class GeminiTextProvider implements TextProvider {
     const usage = geminiUsage(response);
     return {
       json: extractJson(response.text ?? ""),
+      text: response.text ?? "",
       model: response.modelVersion ?? model,
       usage,
       costUsd: priceUsd(this.profile.rates, request.tier, usage),
@@ -124,5 +125,6 @@ export function describeGeminiError(err: unknown, model: string): unknown {
   if (err.status === 400) {
     return new ApiError(502, "AI_REQUEST_REJECTED", `The model rejected the request: ${err.message}`);
   }
-  return new ApiError(502, "AI_UNAVAILABLE", "The model is unavailable right now. Try again shortly.");
+  // 503 "high demand" and 504 deadline are Google-side overloads; the status tells them apart from an outage
+  return new ApiError(502, "AI_UNAVAILABLE", `The model "${model}" is unavailable right now (HTTP ${err.status}). Try again shortly, or switch the model in config/ai-providers.json.`);
 }

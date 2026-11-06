@@ -28,3 +28,36 @@ describe("Claude provider helpers", () => {
     expect(usd).toBeCloseTo(0.2 * 2 + 0.6 * 0.2 + 0.2 * 2 * 1.25 + 0.05);
   });
 });
+
+describe("extractJson tolerance", () => {
+  it("reads past braces in a preamble and inside strings, and ignores a remark after the object", () => {
+    expect(extractJson('Ladders for {C1}:\n{"ladders":[{"code":"C1","levels":[{"label":"Uses {x}","desc":"a"}]}]}\nNote: done {ok}')).toEqual({
+      ladders: [{ code: "C1", levels: [{ label: "Uses {x}", desc: "a" }] }],
+    });
+  });
+
+  it("repairs raw line breaks inside strings and trailing commas", () => {
+    expect(extractJson('{"label":"Line one\nline two","levels":[1,2,],}')).toEqual({ label: "Line one\nline two", levels: [1, 2] });
+  });
+
+  it("still refuses an unescaped quote inside a string, and says where", async () => {
+    const { jsonProblem } = await import("./json.ts");
+    const bad = '{"desc":"Explains the "five cleans" to mothers"}';
+    expect(extractJson(bad)).toBeNull();
+    expect(jsonProblem(bad)).toMatch(/near/);
+    expect(jsonProblem("")).toBe("the answer was empty");
+  });
+});
+
+describe("Claude structured output", () => {
+  it("enforces the JSON shape for fixed-shape tasks, but not for research (web search) or activities (free-key postings)", async () => {
+    const { structuredFormat } = await import("./claude.ts");
+    const { laddersOutput, activitiesOutput } = await import("../../services/ai/schemas.ts");
+    const format = structuredFormat("ladders", laddersOutput);
+    expect(format?.type).toBe("json_schema");
+    expect(JSON.stringify(format?.schema)).toContain('"required":["code","levels"]');
+    expect(structuredFormat("research", laddersOutput)).toBeNull();
+    expect(structuredFormat("activities", activitiesOutput)).toBeNull();
+    expect(structuredFormat("ladders", undefined)).toBeNull();
+  });
+});

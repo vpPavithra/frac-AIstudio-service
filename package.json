@@ -10,11 +10,11 @@
     "dev": "node --loader ts-node/esm src/server.ts",
     "dev:mock": "AI_PROVIDER=mock node --loader ts-node/esm src/server.ts",
     "dev:mock:seed": "AI_PROVIDER=mock FRAC_STUDIO_STORE=memory MOCK_SEED=true node --loader ts-node/esm src/server.ts",
-    "dev:ai": "node --loader ts-node/esm src/server.ts",
+    "dev:ai": "AI_REQUIRE_REAL=true node --loader ts-node/esm src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
     "start:mock": "AI_PROVIDER=mock node dist/server.js",
-    "start:ai": "node dist/server.js",
+    "start:ai": "AI_REQUIRE_REAL=true node dist/server.js",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest",
     "test:watch": "NODE_OPTIONS=--experimental-vm-modules jest --watch",
     "test:coverage": "NODE_OPTIONS=--experimental-vm-modules jest --coverage",
@@ -26,6 +26,7 @@
     "migrate": "node --loader ts-node/esm src/migrate.ts",
     "config:check": "node --loader ts-node/esm src/scripts/check-config.ts",
     "ai:check": "node --loader ts-node/esm src/scripts/ai-check.ts",
+    "ai:report": "node --loader ts-node/esm src/scripts/ai-report.ts",
     "check": "npm run typecheck && npm run lint && npm run config:check && npm test"
   },
   "dependencies": {

@@ -19,7 +19,12 @@ const level = z.enum(["low", "medium", "high"]);
 const profileSchema = z.object({
   kind: z.enum(PROVIDER_KINDS),
   /** The environment variable holding this provider's key, e.g. GEMINI_API_KEY. */
-  keyEnv: z.string().regex(/^[A-Z][A-Z0-9_]*_API_KEY$/, "must be an environment variable name ending in _API_KEY"),
+  keyEnv: z
+    .string()
+    .regex(
+      /^[A-Z][A-Z0-9_]*_API_KEY$/,
+      "must be the NAME of the environment variable that holds the key (e.g. GEMINI_API_KEY), not the key itself. Put the key in .env",
+    ),
   freeTier: z.boolean().default(false),
   maxConcurrent: z.number().int().min(1).optional(),
   models: z.object({ complex: z.string().min(1), default: z.string().min(1) }),

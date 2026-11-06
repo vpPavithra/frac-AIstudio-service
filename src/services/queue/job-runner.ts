@@ -4,7 +4,9 @@
 // FracService and ReviewService. Stuck rows left by a restart are failed by job-watchdog.service.ts.
 import { randomUUID } from "node:crypto";
 import { JOBS } from "../../config/constants.ts";
+import type { AiCall } from "../../models/ai-call.model.ts";
 import type { Job, JobPatch } from "../../models/job.model.ts";
+import type { AiCallRepository } from "../../repositories/ai-call.repository.ts";
 import type { JobRepository } from "../../repositories/job.repository.ts";
 import { ApiError } from "../../utils/response.ts";
 import { describeError, logger } from "../../utils/logger.ts";
@@ -25,6 +27,8 @@ export interface UsageDelta {
   costUsd: number;
   /** The cost is an estimate at list prices, not a bill (the mock, or a free-tier key). */
   estimated?: boolean;
+  /** Who answered and how, for the per-call AI log (ai_calls). Set by services/ai/ask-model.ts. */
+  call?: Pick<AiCall, "provider" | "model" | "task" | "tier" | "outcome" | "latencyMs" | "cacheReadTokens">;
 }
 
 /** Adds one model call's spend to the job's running total (jobs.usage). */
@@ -50,10 +54,14 @@ export interface StartJob {
 export class JobRunner {
   private readonly running = new Set<Promise<void>>();
 
-  /** `heartbeatMs`: how often a running job touches its row (JOB_HEARTBEAT_MS); tests pass a short one. */
+  /**
+   * `heartbeatMs`: how often a running job touches its row (JOB_HEARTBEAT_MS); tests pass a short one.
+   * `aiCalls`: where each model call's record goes (the AI response report); omitted, calls are not logged.
+   */
   constructor(
     private readonly jobs: JobRepository,
     private readonly heartbeatMs = JOBS.heartbeatMs,
+    private readonly aiCalls?: AiCallRepository,
   ) {}
 
   /** Inserts the job as queued and returns it at once; the task runs in the background (fire and forget). */
@@ -115,6 +123,21 @@ export class JobRunner {
       usage.webSearches += delta.webSearches ?? 0;
       usage.costUsd = Math.round((usage.costUsd + delta.costUsd) * 10_000) / 10_000;
       if (delta.estimated) usage.estimated = 1;
+      // The per-call log is for reporting only: a failed insert is logged, never fails the job
+      if (delta.call && this.aiCalls) {
+        const row: AiCall = {
+          ...delta.call,
+          jobId: id,
+          jobKind: kind,
+          inputTokens: delta.inputTokens,
+          outputTokens: delta.outputTokens,
+          webSearches: delta.webSearches ?? 0,
+          costUsd: delta.costUsd,
+          estimated: delta.estimated ?? false,
+          createdAt: new Date().toISOString(),
+        };
+        void this.aiCalls.insert(row).catch((err: unknown) => logger.warn("AI call log write failed", { jobId: id, error: describeError(err) }));
+      }
       return write({ usage: { ...usage } });
     };
     try {

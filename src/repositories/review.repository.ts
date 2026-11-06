@@ -12,6 +12,8 @@ export interface ReviewRepository {
   listByOwner(ownerId: string): Promise<ReviewRecord[]>;
   /** The owner's newest finished upload review with this fingerprint (rules r3 §9), or null. */
   findByFingerprint(ownerId: string, fingerprint: string): Promise<ReviewRecord | null>;
+  /** Every review created at or after `since`, oldest first, without the stored workbook model (the AI response report). */
+  listSince(since: Date): Promise<ReviewRecord[]>;
 }
 
 interface ReviewRow {
@@ -80,6 +82,16 @@ export class PgReviewRepository implements ReviewRepository {
     );
     return rows.map(toReview);
   }
+
+  async listSince(since: Date): Promise<ReviewRecord[]> {
+    // source_model is the whole parsed workbook; the report does not need it
+    const { rows } = await this.pool.query<ReviewRow>(
+      `SELECT id, owner_id, frac_id, kind, source_name, ctx, NULL AS source_model, report, fingerprint, created_at
+       FROM reviews WHERE created_at >= $1 ORDER BY created_at`,
+      [since],
+    );
+    return rows.map(toReview);
+  }
 }
 
 export class MemoryReviewRepository implements ReviewRepository {
@@ -109,5 +121,12 @@ export class MemoryReviewRepository implements ReviewRepository {
   async findByFingerprint(ownerId: string, fingerprint: string): Promise<ReviewRecord | null> {
     const hit = (await this.listByOwner(ownerId)).find((r) => r.kind === "upload" && r.fingerprint === fingerprint && r.report);
     return hit ?? null;
+  }
+
+  async listSince(since: Date): Promise<ReviewRecord[]> {
+    return [...this.rows.values()]
+      .filter((r) => new Date(r.createdAt) >= since)
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .map((r) => ({ ...clone(r), sourceModel: null }));
   }
 }

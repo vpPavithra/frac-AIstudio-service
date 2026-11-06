@@ -8,8 +8,8 @@
     "keyEnv": "GEMINI_API_KEY",
     "freeTier": true,
     "maxConcurrent": 1,
-    "//": "Gemini API free tier (checked 6 Nov 2026): gemini-3.8-flash is free; gemini-4-argon and Google Search grounding are not, so research runs without web search. Prices are the paid-tier list prices for gemini-3.8-flash, used only for the estimate.",
-    "models": { "complex": "gemini-3.8-flash", "default": "gemini-3.8-flash" },
+    "//": "Gemini API free tier (checked 6 Nov 2026): the Flash models are free; gemini-4-argon and Google Search grounding are not, so research runs without web search. gemini-3.6-flash because gemini-3.8-flash answered 503 (high demand) and 504 on 6 Nov 2026; switch back once `npm run ai:check` passes on it. Both have the same paid list price, used only for the estimate.",
+    "models": { "complex": "gemini-3.6-flash", "default": "gemini-3.6-flash" },
     "thinking": { "complex": "high", "default": "medium" },
     "webSearch": false,
     "rates": {
@@ -32,6 +32,21 @@
       "default": { "inUsdPer1M": 0.75, "outUsdPer1M": 3.75, "cacheReadUsdPer1M": 0.075 },
       "cacheWriteMultiplier": 1,
       "webSearchUsdPer1K": 14
+    }
+  },
+
+  "claude-fast": {
+    "kind": "claude",
+    "keyEnv": "ANTHROPIC_API_KEY",
+    "//": "Same model as `claude`, less thinking: medium on the complex tier, low on the default tier. Faster and cheaper; use it for the effort comparison (run the same FRAC on both, then npm run ai:report) before choosing it for go-live.",
+    "models": { "complex": "claude-sonnet-5-5", "default": "claude-sonnet-5-5" },
+    "thinking": { "complex": "medium", "default": "low" },
+    "webSearch": true,
+    "rates": {
+      "complex": { "inUsdPer1M": 2, "outUsdPer1M": 10, "cacheReadUsdPer1M": 0.2 },
+      "default": { "inUsdPer1M": 2, "outUsdPer1M": 10, "cacheReadUsdPer1M": 0.2 },
+      "cacheWriteMultiplier": 1.25,
+      "webSearchUsdPer1K": 10
     }
   },
 

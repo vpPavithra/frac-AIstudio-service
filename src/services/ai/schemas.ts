@@ -1,6 +1,8 @@
 // OUTPUT SCHEMAS (Zod) for every AI call. step-context.ts callModel (Creator steps) and ai-review.service.ts
 // (Reviewer) parse the provider's JSON with these. The shapes must match the JSON examples in prompts.ts.
-import { z } from "zod";
+// The Zod 4 API (shipped inside zod 3.25 as "zod/v4"): the Anthropic SDK turns these into JSON schemas for
+// Claude structured output (providers/text/claude.ts). Request validation (validations/) stays on the zod 3 API.
+import { z } from "zod/v4";
 
 // Model output shapes from spec 5.2–5.5 and 6.4. A provider's JSON is parsed with these before any
 // step uses it, so a malformed answer fails the job with AI_OUTPUT_INVALID instead of corrupting a FRAC.

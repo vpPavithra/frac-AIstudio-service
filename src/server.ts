@@ -24,7 +24,8 @@ const inMemory = SERVER.store === "memory";
 
 const pool = inMemory ? null : createPool();
 const repos = pool ? pgRepositories(pool) : memoryRepositories();
-const runner = new JobRunner(repos.jobs);
+// Each model call is also logged to ai_calls for the AI response report (npm run ai:report)
+const runner = new JobRunner(repos.jobs, JOBS.heartbeatMs, repos.aiCalls);
 
 async function start(): Promise<void> {
   // AI_PROVIDER: a profile in config/ai-providers.json (needs its key) or mock (`npm run dev:mock`)

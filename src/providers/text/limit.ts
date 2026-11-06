@@ -16,10 +16,13 @@ export function limitConcurrency(provider: TextProvider, max: number): TextProvi
   return {
     name: provider.name,
     async complete(request: CompletionRequest): Promise<CompletionResult> {
+      const asked = Date.now();
       if (active < max) active++;
       else await new Promise<void>((resolve) => waiting.push(resolve));
+      const queuedMs = Date.now() - asked;
       try {
-        return await provider.complete(request);
+        // The wait is reported so askModel records the model's own time, not the queue's
+        return { ...(await provider.complete(request)), queuedMs };
       } finally {
         release();
       }

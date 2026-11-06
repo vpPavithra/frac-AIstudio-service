@@ -7,7 +7,7 @@ import { parseWorkbook } from "./review-engine/parse-workbook.ts";
 import { buildReport } from "./review-engine/report.ts";
 import type { ReviewRules } from "./review-engine/rules.ts";
 import type { Frac } from "../models/frac.model.ts";
-import type { Report } from "../models/report.model.ts";
+import type { AiChecklistStats, Report } from "../models/report.model.ts";
 import type { ReviewContext, ReviewKind, ReviewModel, ReviewRecord } from "../models/review.model.ts";
 import { readWorkbook } from "./excel/workbook-reader.ts";
 import { buildReviewWorkbook, reviewWorkbookFilename } from "./excel/workbook-writer.ts";
@@ -74,8 +74,17 @@ export class ReviewService {
   async review(model: ReviewModel, ctx: ReviewContext, recordUsage?: RecordUsage): Promise<Report> {
     const rules = this.rules();
     const checks = computeChecks(model, rules, { cadre: ctx.cadre });
-    const agent = await this.agent.review({ model, cadre: checks.cadre, state: ctx.state, checks, rules, recordUsage });
-    return buildReport({
+    let aiChecklist: AiChecklistStats | undefined;
+    const agent = await this.agent.review({
+      model,
+      cadre: checks.cadre,
+      state: ctx.state,
+      checks,
+      rules,
+      recordUsage,
+      onStats: (stats) => (aiChecklist = stats),
+    });
+    const report = buildReport({
       title: model.title,
       cadre: checks.cadre,
       state: ctx.state,
@@ -88,6 +97,7 @@ export class ReviewService {
       engine: ENGINE_VERSION,
       fingerprint: reviewFingerprint(model, ctx, rules),
     });
+    return aiChecklist ? { ...report, aiChecklist } : report;
   }
 
   /** Runs the review of a stored upload as a job and replaces its report when done. */

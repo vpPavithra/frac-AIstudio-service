@@ -53,7 +53,8 @@ describe("ChecklistReviewer", () => {
       },
       "review-state": { items: [{ category: "State schemes", item: "Add Mukhyamantri schemes (verify).", refs: ["C1"] }, { category: "Weather", item: "x", refs: [] }] },
     });
-    const findings = await new ChecklistReviewer(p).review({ model: m, cadre: "ANM", state: "Bihar", checks, rules: RULES });
+    let stats;
+    const findings = await new ChecklistReviewer(p).review({ model: m, cadre: "ANM", state: "Bihar", checks, rules: RULES, onStats: (s) => (stats = s) });
 
     expect(p.calls.map((c) => c.task)).toEqual(["review-competencies", "review-state"]);
     expect(p.calls[0].prompt).toContain("do NOT repeat");
@@ -64,6 +65,18 @@ describe("ChecklistReviewer", () => {
     expect(findings[0].detail).toBe('C1 L4: "Gives oxytocin 10 IU IM after birth" — Dose stated without AMTSL context');
     expect(findings[0].fix).toBe("C1 L4: Oxytocin 10 IU IM within 1 minute (AMTSL)");
     expect(findings[1].detail).toBe("State schemes: Add Mukhyamantri schemes (verify).");
+    // For the AI response report: 3 flags raised, 1 kept, 1 not in the file, 1 already hit by a scope rule
+    expect(stats).toEqual({
+      competenciesAsked: 3,
+      scopeRaised: 2,
+      accuracyRaised: 1,
+      kept: 1,
+      droppedQuoteNotFound: 1,
+      droppedCoveredByRule: 0,
+      droppedDuplicateScope: 1,
+      stateRaised: 2,
+      stateKept: 1,
+    });
   });
 
   it("skips the state call for the national baseline and batches 6 competencies per call", async () => {

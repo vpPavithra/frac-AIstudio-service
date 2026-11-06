@@ -20,12 +20,18 @@ describe("AI provider registry", () => {
     expect(ai.mocks).not.toBeNull();
   });
 
+  it("refuses the mock when the run requires a real provider (dev:ai / start:ai)", async () => {
+    await expect(createAi("mock", profiles, {}, true)).rejects.toThrow(/must use a real AI provider.*AI_PROVIDER=mock/);
+    const ai = await createAi("gemini-free", profiles, { GEMINI_API_KEY: "test-key" }, true);
+    expect(ai.provider.name).toBe("gemini-free");
+  });
+
   it("stops with what to set when the key is missing or blank", async () => {
     await expect(createAi("gemini-free", profiles, {})).rejects.toThrow(/needs GEMINI_API_KEY.*dev:mock/);
     await expect(createAi("claude", profiles, { ANTHROPIC_API_KEY: "  " })).rejects.toThrow(/needs ANTHROPIC_API_KEY/);
   });
 
   it("lists the valid names when AI_PROVIDER is unknown", async () => {
-    await expect(createAi("openai", profiles, {})).rejects.toThrow(/Use one of: mock, gemini-free, gemini-paid, claude/);
+    await expect(createAi("openai", profiles, {})).rejects.toThrow(/Use one of: mock, gemini-free, gemini-paid, claude-fast, claude/);
   });
 });

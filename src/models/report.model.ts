@@ -48,6 +48,28 @@ export interface CheckSummary {
   cls: "blocker" | "major" | "minor" | "pass";
 }
 
+/**
+ * How the AI checklist answered on one review (rules r3 §6.3), for the AI response report. A flag is
+ * kept only when its quote is in the competency and no rule already covers it.
+ */
+export interface AiChecklistStats {
+  /** Laddered competencies sent to the Q1/Q2 checklist. */
+  competenciesAsked: number;
+  scopeRaised: number;
+  accuracyRaised: number;
+  /** Q1 and Q2 flags that passed the quote check and became finding lines. */
+  kept: number;
+  /** The quote was too short or not in that competency's text: the model said something the file does not. */
+  droppedQuoteNotFound: number;
+  /** An outdated-term or ladder rule already flags it. */
+  droppedCoveredByRule: number;
+  /** A code scope rule already hit that competency level. */
+  droppedDuplicateScope: number;
+  /** Q3 state-fit items returned, and kept after the category check and the cap. 0 for a national review. */
+  stateRaised: number;
+  stateKept: number;
+}
+
 export interface Report {
   title: string;
   cadre: string;
@@ -63,4 +85,6 @@ export interface Report {
   /** Review engine version and file fingerprint (rules r3 §8–9), shown in the Method row. */
   engine?: string;
   fingerprint?: string;
+  /** What the AI checklist raised and kept on this review (absent on reviews made before it was recorded). */
+  aiChecklist?: AiChecklistStats;
 }

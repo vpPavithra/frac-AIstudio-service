@@ -1,6 +1,7 @@
 // The one seam between FRAC Studio's AI steps and a model. Steps build the prompt and validate the
 // JSON; a provider only turns a request into JSON plus its spend. AI_PROVIDER picks a profile in
 // config/ai-providers.json (Gemini, Claude, ...) or the sample-data mock in src/mocks. See src/providers/registry.ts.
+import type { ZodType } from "zod/v4";
 
 /**
  * Which step is calling (spec 5.2–5.5, 6.4). A provider may use it to shape its answer.
@@ -22,6 +23,8 @@ export interface CompletionRequest {
   prompt: string;
   /** The structured facts the prompt was built from; the mock answers from these instead of the text. Real providers ignore it. */
   input: unknown;
+  /** The step's output shape. A provider that can enforce it (Claude structured output) may; the step validates it either way. */
+  schema?: ZodType;
 }
 
 /** Tokens and searches one call consumed, as the API reports them. */
@@ -45,6 +48,10 @@ export interface CompletionResult {
   costUsd: number;
   /** True when the cost is an estimate at list prices rather than a real bill (the mock, or a free tier). */
   estimated?: boolean;
+  /** The model's final text, kept only to explain an unreadable answer in the log. Never stored. */
+  text?: string;
+  /** Time spent waiting for a free slot (providers/text/limit.ts) before the call was sent; not the model's time. */
+  queuedMs?: number;
 }
 
 /** The provider seam. Implemented by ClaudeTextProvider, GeminiTextProvider and src/mocks' MockTextProvider; chosen by registry.ts. */

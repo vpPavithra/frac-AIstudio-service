@@ -1,6 +1,6 @@
-import type { ZodType, ZodTypeDef } from "zod";
 import { REVIEW } from "../config/constants.ts";
-import type { AiTask, TextProvider } from "../providers/text/types.ts";
+import type { TextProvider } from "../providers/text/types.ts";
+import { askModel } from "./ai/ask-model.ts";
 import { reviewChecklistPrompt, reviewStatePrompt, STATE_CATEGORIES, type ChecklistCompetency } from "./ai/prompts.ts";
 import { reviewChecklistOutput, reviewStateOutput } from "./ai/schemas.ts";
 import { runInBatches } from "./ai/batching.ts";
@@ -8,9 +8,8 @@ import type { RecordUsage } from "./queue/job-runner.ts";
 import { competencyTexts, levelName, type CheckResult } from "./review-engine/checks.ts";
 import { serializeModel } from "./review-engine/convert.ts";
 import { hasLadder, regex, type ReviewRules } from "./review-engine/rules.ts";
-import type { Finding } from "../models/report.model.ts";
+import type { AiChecklistStats, Finding } from "../models/report.model.ts";
 import type { ReviewModel } from "../models/review.model.ts";
-import { ApiError } from "../utils/response.ts";
 
 // The AI half of the review (rules r3 §6). Vidya answers fixed questions only: Q1 scope and Q2
 // accuracy per competency, Q3 state fit once. Every flag must quote the file; code checks the quote,
@@ -34,6 +33,8 @@ export interface AgentReviewInput {
   rules: ReviewRules;
   /** Adds each model call's spend to the job (spec 9). */
   recordUsage?: RecordUsage;
+  /** Receives how many flags the AI raised and why the dropped ones were dropped (the AI response report). */
+  onStats?: (stats: AiChecklistStats) => void;
 }
 
 /** The AI judgement of a review: at most three findings, all tagged `source: "agent"`. */
@@ -108,10 +109,14 @@ export class ChecklistReviewer implements AgentReviewer {
           code: c.code,
           text: competencyTexts(c).map((t) => `${t.level === 0 ? "Definition" : levelName(t.level)}: ${t.text}`).join("\n"),
         }));
-        const out = await this.ask(
-          "review-competencies",
-          reviewChecklistPrompt(cadre, state ?? "", comps, scopeHitText(batch.map((c) => c.code))),
-          { cadre, state, competencies: comps },
+        const out = await askModel(
+          {
+            provider: this.provider,
+            task: "review-competencies",
+            tier: "complex",
+            prompt: reviewChecklistPrompt(cadre, state ?? "", comps, scopeHitText(batch.map((c) => c.code))),
+            input: { cadre, state, competencies: comps },
+          },
           reviewChecklistOutput,
           input.recordUsage,
         );
@@ -135,16 +140,39 @@ export class ChecklistReviewer implements AgentReviewer {
 
     const scope: Flag[] = [];
     const accuracy: Flag[] = [];
+    // Counted for the AI response report: what the model raised, and why each dropped flag was dropped
+    const stats: AiChecklistStats = {
+      competenciesAsked: laddered.length,
+      scopeRaised: 0,
+      accuracyRaised: 0,
+      kept: 0,
+      droppedQuoteNotFound: 0,
+      droppedCoveredByRule: 0,
+      droppedDuplicateScope: 0,
+      stateRaised: 0,
+      stateKept: 0,
+    };
     for (const item of items) {
       for (const f of item.scope) {
+        stats.scopeRaised++;
         const level = locateQuote(f.quote, model, item.code);
-        if (level === null || overlapsRule(f.quote) || codeScope.has(`${item.code}|${level}`)) continue;
-        scope.push({ code: item.code, level, line: `${item.code} ${levelName(level)}: "${f.quote.trim()}" — ${f.act}${f.basis ? `; ${f.basis}` : ""}` });
+        if (level === null) stats.droppedQuoteNotFound++;
+        else if (overlapsRule(f.quote)) stats.droppedCoveredByRule++;
+        else if (codeScope.has(`${item.code}|${level}`)) stats.droppedDuplicateScope++;
+        else {
+          stats.kept++;
+          scope.push({ code: item.code, level, line: `${item.code} ${levelName(level)}: "${f.quote.trim()}" — ${f.act}${f.basis ? `; ${f.basis}` : ""}` });
+        }
       }
       for (const f of item.accuracy) {
+        stats.accuracyRaised++;
         const level = locateQuote(f.quote, model, item.code);
-        if (level === null || overlapsRule(f.quote)) continue;
-        accuracy.push({ code: item.code, level, line: `${item.code} ${levelName(level)}: "${f.quote.trim()}" — ${f.issue}`, correct: f.correct });
+        if (level === null) stats.droppedQuoteNotFound++;
+        else if (overlapsRule(f.quote)) stats.droppedCoveredByRule++;
+        else {
+          stats.kept++;
+          accuracy.push({ code: item.code, level, line: `${item.code} ${levelName(level)}: "${f.quote.trim()}" — ${f.issue}`, correct: f.correct });
+        }
       }
     }
 
@@ -152,33 +180,28 @@ export class ChecklistReviewer implements AgentReviewer {
     // Unknown categories are dropped, the first REVIEW.maxStateItems are kept, then sorted by category and text
     let stateItems: StateItem[] = [];
     if (!isNational(state)) {
-      const out = await this.ask(
-        "review-state",
-        reviewStatePrompt(cadre, state ?? "", serializeModel(model)),
-        { cadre, state, competencyCodes: model.competencies.map((c) => c.code) },
+      const out = await askModel(
+        {
+          provider: this.provider,
+          task: "review-state",
+          tier: "complex",
+          prompt: reviewStatePrompt(cadre, state ?? "", serializeModel(model)),
+          input: { cadre, state, competencyCodes: model.competencies.map((c) => c.code) },
+        },
         reviewStateOutput,
         input.recordUsage,
       );
+      stats.stateRaised = out.items.length;
       const order = (category: string) => STATE_CATEGORIES.indexOf(category as (typeof STATE_CATEGORIES)[number]);
       stateItems = out.items
         .filter((i) => order(i.category) >= 0 && i.item.trim())
         .slice(0, REVIEW.maxStateItems)
         .sort((a, b) => order(a.category) - order(b.category) || a.item.localeCompare(b.item));
+      stats.stateKept = stateItems.length;
     }
 
+    input.onStats?.(stats);
     return merge(scope, accuracy, stateItems, cadre, state ?? "");
-  }
-
-  /** One model call: records its spend first (so a bad answer is still billed), then validates the shape. */
-  private async ask<T>(task: AiTask, prompt: string, input: unknown, schema: ZodType<T, ZodTypeDef, unknown>, recordUsage?: RecordUsage): Promise<T> {
-    const result = await this.provider.complete({ task, tier: "complex", prompt, input });
-    await recordUsage?.({ ...result.usage, costUsd: result.costUsd, estimated: result.estimated });
-    const parsed = schema.safeParse(result.json);
-    if (!parsed.success) {
-      const first = parsed.error.issues[0];
-      throw new ApiError(502, "AI_OUTPUT_INVALID", `The ${task} answer did not have the expected shape (${first.path.join(".")}: ${first.message}).`);
-    }
-    return parsed.data;
   }
 }
 
