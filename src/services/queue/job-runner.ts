@@ -18,6 +18,9 @@ export const JOB_FAILED = "JOB_FAILED";
 /** 409 when a target already has a live job; `details` carries its jobId and kind so the portal can follow it. */
 export const JOB_RUNNING = "JOB_RUNNING";
 
+/** Job error when billed spend reaches JOBS.maxCostUsd; the call that crossed it is still recorded. */
+export const AI_BUDGET_EXCEEDED = "AI_BUDGET_EXCEEDED";
+
 /** The 409 for a target that already has a live job. */
 const jobRunning = (job: Job) =>
   new ApiError(409, JOB_RUNNING, "A step is already running on this FRAC. Wait for it to finish.", { jobId: job.id, kind: job.kind });
@@ -69,11 +72,13 @@ export class JobRunner {
   /**
    * `heartbeatMs`: how often a running job touches its row (JOB_HEARTBEAT_MS); tests pass a short one.
    * `aiCalls`: where each model call's record goes (the AI response report); omitted, calls are not logged.
+   * `maxCostUsd`: the per-job spending limit (JOB_MAX_COST_USD); tests pass a small one.
    */
   constructor(
     private readonly jobs: JobRepository,
     private readonly heartbeatMs = JOBS.heartbeatMs,
     private readonly aiCalls?: AiCallRepository,
+    private readonly maxCostUsd = JOBS.maxCostUsd,
   ) {}
 
   /** Inserts the job as queued and returns it at once; the task runs in the background (fire and forget). */
@@ -150,7 +155,10 @@ export class JobRunner {
     heartbeat.unref();
     // jobs.usage is numbers only, so `estimated` is stored as 1 when any call's cost is an estimate
     const usage: Record<string, number> = { calls: 0, inputTokens: 0, outputTokens: 0, webSearches: 0, costUsd: 0 };
+    // Billed spend only (estimates from the mock or a free tier never stop a job)
+    let billedUsd = 0;
     const recordUsage: RecordUsage = (delta) => {
+      if (!delta.estimated) billedUsd += delta.costUsd;
       usage.calls += 1;
       usage.inputTokens += delta.inputTokens;
       usage.outputTokens += delta.outputTokens;
@@ -172,7 +180,13 @@ export class JobRunner {
         };
         void this.aiCalls.insert(row).catch((err: unknown) => logger.warn("AI call log write failed", { jobId: id, error: describeError(err) }));
       }
-      return write({ usage: { ...usage } });
+      const written = write({ usage: { ...usage } });
+      if (this.maxCostUsd <= 0 || billedUsd < this.maxCostUsd) return written;
+      // Stops the job after recording the call that crossed the limit; batches already saved stay saved
+      return written.then(() => {
+        throw new ApiError(402, AI_BUDGET_EXCEEDED,
+          `This step stopped at its spending limit ($${this.maxCostUsd.toFixed(2)}, JOB_MAX_COST_USD). Finished parts are saved; run it again to continue.`);
+      });
     };
     try {
       await write({ status: "running" });

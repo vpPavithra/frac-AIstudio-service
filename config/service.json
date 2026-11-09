@@ -42,6 +42,7 @@
   "JOB_STALE_AFTER_MS": 900000,
   "JOB_SWEEP_EVERY_MS": 60000,
   "JOB_HEARTBEAT_MS": 60000,
+  "JOB_MAX_COST_USD": 3,
 
   "// postgres": "Pool sizing only; the connection (host, user, password) stays in .env or the secret store.",
   "POSTGRES_POOL_MAX": 10,

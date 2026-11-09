@@ -39,4 +39,25 @@ describe("JobRunner", () => {
     await runner.idle();
     expect(await jobs.get(job.id)).toMatchObject({ status: "error", error: "LLM timed out" });
   });
+
+  it("stops a job at its billed spending limit, after recording the call that crossed it; estimates never stop it", async () => {
+    const jobs = new MemoryJobRepository();
+    const runner = new JobRunner(jobs, undefined, undefined, 0.5);
+    let calls = 0;
+    const job = await runner.start(spec, async (_progress, recordUsage) => {
+      for (let i = 0; i < 5; i++) {
+        await recordUsage({ inputTokens: 100, outputTokens: 100, costUsd: 0.3 });
+        calls++;
+      }
+    });
+    await runner.idle();
+    expect(calls).toBe(1);
+    expect(await jobs.get(job.id)).toMatchObject({ status: "error", errorCode: "AI_BUDGET_EXCEEDED", usage: { calls: 2, costUsd: 0.6 } });
+
+    const free = await runner.start(spec, async (_progress, recordUsage) => {
+      for (let i = 0; i < 5; i++) await recordUsage({ inputTokens: 100, outputTokens: 100, costUsd: 0.3, estimated: true });
+    });
+    await runner.idle();
+    expect(await jobs.get(free.id)).toMatchObject({ status: "done", usage: { calls: 5 } });
+  });
 });

@@ -75,6 +75,11 @@ export const JOBS = Object.freeze({
    * a live job for a dead one. Kept to at most a third of the stale window whatever the config says.
    */
   heartbeatMs: Math.min(int("JOB_HEARTBEAT_MS", 60_000), Math.floor(staleAfterMs / 3)),
+  /**
+   * Most billed AI spend one job may reach before it stops with AI_BUDGET_EXCEEDED (0 = no limit). A
+   * standard FRAC's dearest step is about $0.40, so this only catches a runaway. Estimates are not counted.
+   */
+  maxCostUsd: num("JOB_MAX_COST_USD", 3),
 });
 
 /** Postgres pool sizing (non-secret; the connection itself comes from POSTGRES_* in the environment, see db.ts). */
@@ -170,7 +175,7 @@ export const KNOWN_SETTINGS = [
   "PORT", "FRAC_STUDIO_STORE", "MIGRATE_ON_START",
   "LLM_TIMEOUT_MS", "LLM_RETRIES", "LLM_MAX_TOKENS", "LLM_MAX_RESUMES", "LLM_MAX_RETRY_DELAY_MS", "LLM_INVALID_RETRIES",
   "MAX_UPLOAD_MB", "MAX_JSON_MB", "MAX_TEXT_CHARS", "MAX_ROLES", "MAX_ACTIVITIES_PER_ROLE", "MAX_COMPETENCIES",
-  "JOB_STALE_AFTER_MS", "JOB_SWEEP_EVERY_MS", "JOB_HEARTBEAT_MS",
+  "JOB_STALE_AFTER_MS", "JOB_SWEEP_EVERY_MS", "JOB_HEARTBEAT_MS", "JOB_MAX_COST_USD",
   "POSTGRES_POOL_MAX", "POSTGRES_CONNECT_TIMEOUT_MS", "POSTGRES_IDLE_TIMEOUT_MS", "CORS_ORIGINS", "LOG_FORMAT", "LOG_LEVEL",
   "OUTDATED_CONFIG_PATH", "REVIEW_RULES_CONFIG_PATH", "FRAC_SIZES_CONFIG_PATH", "AI_PROVIDERS_CONFIG_PATH", "METHOD_PARAGRAPH_PATH",
   "AI_PROVIDER", "AI_REQUIRE_REAL", "RESEARCH_WEB_SEARCH", "RESEARCH_SEARCH_DOMAINS", "RESEARCH_SEARCH_MAX_USES", "AI_BATCH_SIZE", "AI_BATCH_PARALLEL",
