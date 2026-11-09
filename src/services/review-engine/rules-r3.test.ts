@@ -48,6 +48,23 @@ describe("scope (§4.4)", () => {
     expect(byTitle(anm(model({ competencies: [ok] })).findings, "Beyond ANM scope: IV")?.sev).toBe("B");
   });
 
+  it("does not read a sentence that rules an act out as the cadre doing it, but still flags doing it", () => {
+    const asha = (desc: string) => {
+      const c = comp("C1", "Domain");
+      c.levels[0].desc = desc;
+      return computeChecks(model({ competencies: [c] }), RULES, { cadre: "ASHA" }).findings;
+    };
+    for (const safe of [
+      "State that the ASHA does not insert, remove, prescribe or inject any contraceptive",
+      "Mentor new ASHAs on staying within scope (no injections, no prescription drugs)",
+      "Assist the ANM with registers without handling vaccines or injections",
+      "Advise warmth on the way, without giving any drug or injection outside the ASHA kit protocol",
+    ]) expect(byTitle(asha(safe), "Beyond ASHA scope: Giving injections")).toBeUndefined();
+    expect(byTitle(asha("Correct any drift to injectables or prescribing in peers"), "Beyond ASHA scope: Prescribing")).toBeUndefined();
+    expect(byTitle(asha("Gives injections of oxytocin after delivery"), "Beyond ASHA scope: Giving injections")?.sev).toBe("B");
+    expect(byTitle(asha("Prescribing antibiotics for fever"), "Beyond ASHA scope: Prescribing")?.sev).toBe("B");
+  });
+
   it("does not run for a cadre with no scope list", () => {
     const c = comp("C1", "Domain");
     c.levels[3].desc = "Prescribes antibiotics";
@@ -104,6 +121,16 @@ describe("breadth (§4.2.1)", () => {
       competencies: [domain("D1", "Essential newborn care"), domain("D2", "Neonatal resuscitation"), domain("D3", "Low birth weight newborn care"), comp("F1", "Functional"), comp("B1", "Behavioural")],
     });
     expect(byTitle(anm(m).findings, "Competencies are too broadly defined")).toBeUndefined();
+  });
+
+  it("does not read family or birth planning as the KCM competency Planning", () => {
+    const kcm = (label: string) => {
+      const m = model({ competencies: [domain("D1", label), comp("F1", "Functional"), comp("B1", "Behavioural")] });
+      return byTitle(anm(m).findings, "Domain competencies that match KCM");
+    };
+    expect(kcm("Family planning supply and counselling on spacing")).toBeUndefined();
+    expect(kcm("Birth planning and birth preparedness")).toBeUndefined();
+    expect(kcm("Planning and organising work")).toBeDefined();
   });
 
   it("is minor when only definitions are topics", () => {

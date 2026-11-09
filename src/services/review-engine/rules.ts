@@ -148,9 +148,12 @@ export const ABOVE_POST =
   /\b(district|state|national)\s+(health\s+)?(organi[sz]ation|system|administration|planning|management|functioning)\b|\bhealth (system|organi[sz]ation) (and|&) functioning\b/i;
 /** (e) The definition is a topic ("Knowledge of …"), not a capability. Alone, this makes the finding minor. */
 export const TOPIC_DEFINITION = /^(knowledge|understanding|awareness) (of|and understanding of)/i;
-/** §4.2: tagged Domain, but the label is really a KCM Functional/Behavioural competency. */
+/**
+ * §4.2: tagged Domain, but the label is really a KCM Functional/Behavioural competency. "Planning" is the KCM
+ * name, but family, birth, discharge, care and delivery planning are clinical, so they are not matched.
+ */
 export const DOMAIN_LOOKS_KCM =
-  /knowledge sharing|communication|team ?work|leadership|coordination|community (engagement|mobili[sz]ation)|data (management|analysis|use)|planning|stakeholder|documentation|record keeping/i;
+  /knowledge sharing|communication|team ?work|leadership|coordination|community (engagement|mobili[sz]ation)|data (management|analysis|use)|(?<!(family|birth|discharge|care|delivery)\s+)planning|stakeholder|documentation|record keeping/i;
 /** §4.2, frontline only: KCM Functional competencies an administrative post needs, not a frontline one. */
 export const KCM_FUNCTIONAL_NOT_FRONTLINE =
   /policy architecture|financial management|procurement|administration matters|budget\w*|legislat\w*|contract management|vendor/i;

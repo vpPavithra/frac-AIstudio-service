@@ -141,7 +141,8 @@ one onto the review model (name → label, levels → L1–L5 label/desc). Run t
 - "Operative or MTP procedures" fires on ME68 indicators that only *define* or *assist with* forceps/vacuum
   delivery ("Remembers the definition…", "Assists the clinical practitioner during…"). Add an `allow` for
   knowledge/assist verbs?
-- `DOMAIN_LOOKS_KCM` matches "planning", so "Birth Planning and Preparedness" is flagged as a KCM name.
+- `DOMAIN_LOOKS_KCM` matches "planning", so "Birth Planning and Preparedness" is flagged as a KCM name. Fixed 9 Nov 2026: family, birth, discharge, care and delivery planning no longer match (ASHA9 "Family planning supply…" on the ASHA Karnataka FRAC).
+- Fixed 9 Nov 2026: the ASHA injections rule and the ASHA and ANM prescribing rules now `allow` a sentence where "not", "no", "never", "without", "nor" or "avoid" comes within 50 characters before the act, or that talks about drift into it. Five sentences on the ASHA Karnataka FRAC that rule the act out ("does not … inject", "no injections", "correct any drift to … prescribing") were raised as Blockers.
 - Data quality: type "Behavourial" (one record), area "Publich Health" (75 records).
 
 ## Open items carried from the rules file (§11)

@@ -64,6 +64,7 @@
         "act": "Prescribing",
         "pattern": "\\bprescrib(es|ing)\\b",
         "flags": "i",
+        "allow": "\\b(not|no|never|without|nor|avoid\\w*)\\b[^.;\\n]{0,50}\\bprescrib|\\b(drift\\w*|stray\\w*)\\s+(in)?to\\b[^.;\\n]{0,40}\\bprescrib",
         "sev": "B",
         "instead": "Dispense per protocol or MO prescription"
       },
@@ -91,7 +92,7 @@
         "act": "Giving injections",
         "pattern": "\\binject(s|ion|ions|ing)?\\b|\\bIM\\b|\\bIV\\b|intravenous",
         "flags": "i",
-        "allow": "refer\\w*|motivat\\w*|mobili[sz]\\w*|accompan\\w*",
+        "allow": "refer\\w*|motivat\\w*|mobili[sz]\\w*|accompan\\w*|\\b(not|no|never|without|nor|avoid\\w*)\\b[^.;\\n]{0,50}\\binject|\\b(drift\\w*|stray\\w*)\\s+(in)?to\\b[^.;\\n]{0,40}\\binject",
         "sev": "B",
         "instead": "Motivate and accompany the person to the ANM or facility for the injection (verify)"
       },
@@ -108,6 +109,7 @@
         "act": "Prescribing",
         "pattern": "\\bprescrib(es|ing)\\b",
         "flags": "i",
+        "allow": "\\b(not|no|never|without|nor|avoid\\w*)\\b[^.;\\n]{0,50}\\bprescrib|\\b(drift\\w*|stray\\w*)\\s+(in)?to\\b[^.;\\n]{0,40}\\bprescrib",
         "sev": "B",
         "instead": "Give drugs from the ASHA kit as per protocol, refer (verify)"
       }
