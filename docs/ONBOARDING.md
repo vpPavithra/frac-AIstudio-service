@@ -47,6 +47,7 @@ npm run migrate                          # against a real Postgres (POSTGRES_* i
 ```
 
 Which AI answers, how to switch, and what each costs: [FRAC_STUDIO_GUIDE.md](FRAC_STUDIO_GUIDE.md).
+To look at the stored data in pgAdmin 4: [DATABASE.md](DATABASE.md).
 
 Every `/v1` call needs the header `x-aastrika-creator: <user id>` (the uiproxy sets it in real use).
 
