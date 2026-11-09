@@ -1,13 +1,13 @@
 // The AI response report: how the AI answered over a period, as Markdown for release notes. Pure: it gets
-// the per-call log (ai_calls), the jobs and the reviews and returns text. scripts/ai-report.ts reads them
+// the per-call log (ai_calls), the jobs and the reviews and returns text. tools/reports/run-ai-report.ts reads them
 // from Postgres and writes the file (`npm run ai:report`).
 // Sections: summary, by day, by provider and model, by task, call errors, jobs, the review checklist,
 // findings, and (when asked, always for a daily report) every call with its start and finish time.
 // Days and times are on the REPORT_UTC_OFFSET_MINUTES clock (IST by default).
-import type { AiCall } from "../../models/ai-call.model.ts";
-import type { Job } from "../../models/job.model.ts";
-import type { AiChecklistStats } from "../../models/report.model.ts";
-import type { ReviewRecord } from "../../models/review.model.ts";
+import type { AiCall } from "../../src/models/ai-call.model.ts";
+import type { Job } from "../../src/models/job.model.ts";
+import type { AiChecklistStats } from "../../src/models/report.model.ts";
+import type { ReviewRecord } from "../../src/models/review.model.ts";
 
 export interface AiReportInput {
   calls: AiCall[];

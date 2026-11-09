@@ -4,7 +4,7 @@
 import ExcelJS from "exceljs";
 import { mkdirSync } from "node:fs";
 import path from "node:path";
-import { SAMPLES } from "../test/support/sample-workbooks.js";
+import { SAMPLES } from "../../test/support/sample-workbooks.js";
 
 const outDir = path.resolve(process.cwd(), "test/fixtures/sample");
 mkdirSync(outDir, { recursive: true });

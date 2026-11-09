@@ -1,5 +1,5 @@
 // `npm run ai:report` and `npm run ai:report:daily`: write the AI response report
-// (services/reports/ai-report.ts) from the ai_calls, jobs and reviews tables in Postgres (POSTGRES_* in .env).
+// (tools/reports/ai-report.ts) from the ai_calls, jobs and reviews tables in Postgres (POSTGRES_* in .env).
 // Days and times use REPORT_UTC_OFFSET_MINUTES (IST by default); files go under REPORT_DIR (reports/).
 //
 //   npm run ai:report                              last 30 days → reports/ai-report-<today>.md
@@ -18,14 +18,14 @@
 import "dotenv/config";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { REPORTS } from "../config/constants.ts";
-import { createPool, poolTarget } from "../config/db.ts";
-import { checkDatabase } from "../db/check.ts";
-import { pgRepositories } from "../repositories/index.ts";
-import type { AiCall } from "../models/ai-call.model.ts";
-import type { Job } from "../models/job.model.ts";
-import type { ReviewRecord } from "../models/review.model.ts";
-import { buildAiReport } from "../services/reports/ai-report.ts";
+import { REPORTS } from "../../src/config/constants.ts";
+import { createPool, poolTarget } from "../../src/config/db.ts";
+import { checkDatabase } from "../../src/db/check.ts";
+import { pgRepositories } from "../../src/repositories/index.ts";
+import type { AiCall } from "../../src/models/ai-call.model.ts";
+import type { Job } from "../../src/models/job.model.ts";
+import type { ReviewRecord } from "../../src/models/review.model.ts";
+import { buildAiReport } from "./ai-report.ts";
 
 /** Default period when neither --days nor --since is given. */
 const DEFAULT_DAYS = 30;

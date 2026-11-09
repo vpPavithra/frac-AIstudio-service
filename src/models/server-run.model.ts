@@ -1,5 +1,5 @@
 // One run of the service, from start to stop (migrations/007_server_runs.sql). Written by server.ts,
-// read by scripts/ai-report.ts for the per-run report (npm run ai:report:run).
+// read by tools/reports/run-ai-report.ts for the per-run report (npm run ai:report:run).
 
 export interface ServerRun {
   id: number;

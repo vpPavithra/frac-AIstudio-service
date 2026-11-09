@@ -1,4 +1,4 @@
-// `npm run review:report -- <id>`: the review analysis report (services/reports/review-report.ts) for one target,
+// `npm run review:report -- <id>`: the review analysis report (tools/reports/review-report.ts) for one target,
 // from Postgres (POSTGRES_* in .env), written to reports/reviews/review-<id>.md.
 //   <id> = a Reviewer upload's review id  → that review (and how many times it was run)
 //   <id> = a FRAC id                      → every expert check of that FRAC, latest first, with a history table
@@ -8,13 +8,13 @@
 import "dotenv/config";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { REPORTS } from "../config/constants.ts";
-import { createPool, poolTarget } from "../config/db.ts";
-import { checkDatabase } from "../db/check.ts";
-import type { Job } from "../models/job.model.ts";
-import type { ReviewRecord } from "../models/review.model.ts";
-import { pgRepositories } from "../repositories/index.ts";
-import { buildReviewReport, type ReviewAnalysisItem, type ReviewReportInput } from "../services/reports/review-report.ts";
+import { REPORTS } from "../../src/config/constants.ts";
+import { createPool, poolTarget } from "../../src/config/db.ts";
+import { checkDatabase } from "../../src/db/check.ts";
+import type { Job } from "../../src/models/job.model.ts";
+import type { ReviewRecord } from "../../src/models/review.model.ts";
+import { pgRepositories } from "../../src/repositories/index.ts";
+import { buildReviewReport, type ReviewAnalysisItem, type ReviewReportInput } from "./review-report.ts";
 
 type Repos = ReturnType<typeof pgRepositories>;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

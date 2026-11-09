@@ -1,5 +1,5 @@
 // Storage for the per-call AI log (`ai_calls` table). Written by services/queue/job-runner.ts after each
-// model call, read by scripts/ai-report.ts. Built by index.ts. Insert-only: rows are never updated.
+// model call, read by tools/reports/run-ai-report.ts. Built by index.ts. Insert-only: rows are never updated.
 import type { Pool } from "pg";
 import type { AiCall } from "../models/ai-call.model.ts";
 import { clone, iso } from "./row-helpers.ts";

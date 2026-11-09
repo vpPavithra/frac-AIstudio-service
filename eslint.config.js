@@ -1,4 +1,4 @@
-// ESLint flat config for `npm run lint` (src/**/*.ts): ESLint and typescript-eslint recommended
+// ESLint flat config for `npm run lint` (src/**/*.ts and tools/**/*.ts): ESLint and typescript-eslint recommended
 // rules, with formatting rules turned off for Prettier. Unused vars warn; a leading "_" marks one as intended.
 import js from "@eslint/js";
 import tseslint from "typescript-eslint";

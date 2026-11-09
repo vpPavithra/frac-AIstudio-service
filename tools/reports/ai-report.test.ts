@@ -1,7 +1,7 @@
-import type { AiCall } from "../../models/ai-call.model.ts";
-import type { Job } from "../../models/job.model.ts";
-import type { Report } from "../../models/report.model.ts";
-import type { ReviewRecord } from "../../models/review.model.ts";
+import type { AiCall } from "../../src/models/ai-call.model.ts";
+import type { Job } from "../../src/models/job.model.ts";
+import type { Report } from "../../src/models/report.model.ts";
+import type { ReviewRecord } from "../../src/models/review.model.ts";
 import { buildAiReport } from "./ai-report.ts";
 
 const call = (over: Partial<AiCall>): AiCall => ({

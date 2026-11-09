@@ -3,9 +3,9 @@
 // coded error otherwise. Costs a few hundred tokens (nothing on a free tier). With AI_PROVIDER=mock it
 // says so and makes no call.
 import "dotenv/config";
-import { createAi } from "../providers/registry.ts";
-import type { ModelTier } from "../providers/text/types.ts";
-import { ApiError } from "../utils/response.ts";
+import { createAi } from "../../src/providers/registry.ts";
+import type { ModelTier } from "../../src/providers/text/types.ts";
+import { ApiError } from "../../src/utils/response.ts";
 
 const PROMPT = 'Reply with exactly this JSON object and nothing else: {"ok": true}';
 

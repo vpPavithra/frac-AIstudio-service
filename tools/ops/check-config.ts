@@ -5,7 +5,7 @@
 // Prints the resolved non-secret settings. Reads config/service.json and service.<NODE_ENV>.json; it does
 // not check config/frac-sizes.json, review-rules.json or outdated.json (those are checked when loaded).
 import path from "node:path";
-import { readSettingsFile, SettingsError } from "../config/settings.ts";
+import { readSettingsFile, SettingsError } from "../../src/config/settings.ts";
 
 /** Setting names whose value must parse as a number, recognised by suffix/prefix (e.g. LLM_TIMEOUT_MS, MAX_ROLES). */
 const NUMERIC = /(_MS|_MB|_CHARS|_RETRIES|_USD_PER_1M|_USD_PER_1K|_MULTIPLIER|_TOKENS|_RESUMES|_USES|_SIZE|_PARALLEL|_ITEMS|_WORDS|_MINUTES|_USD|^MAX_|^PORT$|_TEMPERATURE$)/;
@@ -15,8 +15,8 @@ async function main(): Promise<number> {
   const configDir = path.resolve(process.cwd(), "config");
   const files = ["service.json", ...(process.env.NODE_ENV ? [`service.${process.env.NODE_ENV}.json`] : [])];
   // Imported lazily: loading constants.ts applies service.json, which would throw before we could report on it
-  const { KNOWN_SETTINGS, ...groups } = await import("../config/constants.ts");
-  const { loadAiProfiles } = await import("../config/ai-providers.ts");
+  const { KNOWN_SETTINGS, ...groups } = await import("../../src/config/constants.ts");
+  const { loadAiProfiles } = await import("../../src/config/ai-providers.ts");
   const profiles = loadAiProfiles();
   const known = new Set<string>(KNOWN_SETTINGS);
   const problems: string[] = [];

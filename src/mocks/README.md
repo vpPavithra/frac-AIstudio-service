@@ -116,7 +116,7 @@ with orgportal's local proxy rule, or the person's user id behind the uiproxy. A
 1. Delete this folder (`src/mocks`). No other file imports it; tests outside it use
    `test/support/stub-provider.ts`.
 2. Optional tidy-up: remove `MOCK_DELAY_MS` and `MOCK_PRICED_AS` from `config/service.json`, `MOCK` plus the
-   `MOCK_*` names from `src/config/constants.ts` and its check in `src/scripts/check-config.ts`, and the
+   `MOCK_*` names from `src/config/constants.ts` and its check in `tools/ops/check-config.ts`, and the
    `dev:mock*` / `start:mock` scripts from `package.json`.
 
 After that `AI_PROVIDER` must name a profile whose key is set; `AI_PROVIDER=mock` stops startup with

@@ -1,5 +1,5 @@
 // AI PROVIDER REGISTRY: picks the one TextProvider every AI call uses (Creator steps and the Reviewer).
-// Called once by src/server.ts at startup (and by scripts/ai-check.ts). AI_PROVIDER names a profile in
+// Called once by src/server.ts at startup (and by tools/ops/ai-check.ts). AI_PROVIDER names a profile in
 // config/ai-providers.json, or "mock". The profile's `kind` picks the implementation from FACTORIES and its
 // `keyEnv` names the environment variable holding the key.
 // To add a provider: write src/providers/text/<kind>.ts implementing TextProvider, add it to FACTORIES and

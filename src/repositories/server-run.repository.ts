@@ -1,5 +1,5 @@
 // Storage for server runs (`server_runs` table): a row when the service starts, closed when it stops.
-// Written by server.ts, read by scripts/ai-report.ts. Built by index.ts.
+// Written by server.ts, read by tools/reports/run-ai-report.ts. Built by index.ts.
 import type { Pool } from "pg";
 import type { ServerRun } from "../models/server-run.model.ts";
 import { clone, iso } from "./row-helpers.ts";

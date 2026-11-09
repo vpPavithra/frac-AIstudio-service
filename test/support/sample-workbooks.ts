@@ -1,6 +1,6 @@
 // Synthetic stand-ins for the real dictionaries in spec 6.1 / 6.6. Every defect is planted at a known
 // count so the tests can assert exact numbers. Not clinical content: do not use as a reference FRAC.
-// Used by test/sample.test.ts, test/api.test.ts, test/pg.test.ts and scripts/make-sample-fixtures.ts.
+// Used by test/sample.test.ts, test/api.test.ts, test/pg.test.ts and tools/fixtures/make-sample-fixtures.ts.
 import type { SheetData } from "../../src/services/review-engine/parse-workbook.ts";
 
 const TOPICS = [
@@ -174,7 +174,7 @@ export function staffNurseSample(): SheetData[] {
   ];
 }
 
-/** Output file name to builder, used by scripts/make-sample-fixtures.ts and the sample tests. */
+/** Output file name to builder, used by tools/fixtures/make-sample-fixtures.ts and the sample tests. */
 export const SAMPLES = {
   "sample-GNM-dictionary.xlsx": gnmSample,
   "sample-ANM-competencies.xlsx": anmSample,

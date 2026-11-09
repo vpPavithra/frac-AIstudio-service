@@ -142,7 +142,7 @@ export const REVIEW = Object.freeze({
   reuseAnswers: env.REVIEW_REUSE_ANSWERS !== "false",
 });
 
-/** The AI response report (scripts/ai-report.ts): which clock its days and times are in. */
+/** The AI response report (tools/reports/run-ai-report.ts): which clock its days and times are in. */
 export const REPORTS = Object.freeze({
   /** Minutes ahead of UTC; 330 = IST. A "day" in the daily report runs midnight to midnight on this clock. */
   utcOffsetMinutes: num("REPORT_UTC_OFFSET_MINUTES", 330),

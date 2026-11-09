@@ -1,6 +1,6 @@
-import type { AiCall } from "../../models/ai-call.model.ts";
-import type { Finding, Report } from "../../models/report.model.ts";
-import type { ReviewRecord } from "../../models/review.model.ts";
+import type { AiCall } from "../../src/models/ai-call.model.ts";
+import type { Finding, Report } from "../../src/models/report.model.ts";
+import type { ReviewRecord } from "../../src/models/review.model.ts";
 import { buildReviewReport } from "./review-report.ts";
 
 const finding = (over: Partial<Finding>): Finding => ({ check: "context", sev: "M", title: "t", detail: "d", refs: ["C1"], fix: "f", source: "computed", ...over });

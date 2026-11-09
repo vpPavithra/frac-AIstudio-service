@@ -1,0 +1,17 @@
+{
+  "//": "Type-checks the tools (reports, ops scripts) together with the service they import. Emits nothing: tools run with ts-node and are not part of dist. tools/fixtures is transpile-only (it imports test helpers).",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": [
+    "src/**/*",
+    "tools/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "**/*.test.ts",
+    "tools/fixtures/**"
+  ]
+}

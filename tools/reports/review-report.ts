@@ -2,11 +2,11 @@
 // a FRAC's expert checks (by FRAC id). It explains a review: what was reviewed, the verdict and triage and
 // why, each check's status, every finding (severity, found by a rule or the AI, the competencies cited), what
 // the AI checklist raised, kept and dropped, and what the review cost, call by call. Pure: it gets the
-// reviews and their calls and returns text. scripts/review-report.ts reads them (`npm run review:report`).
-import type { AiCall } from "../../models/ai-call.model.ts";
-import type { Finding, Report, Severity } from "../../models/report.model.ts";
-import type { ReviewRecord } from "../../models/review.model.ts";
-import { TITLES } from "../review-engine/checks.ts";
+// reviews and their calls and returns text. tools/reports/run-review-report.ts reads them (`npm run review:report`).
+import type { AiCall } from "../../src/models/ai-call.model.ts";
+import type { Finding, Report, Severity } from "../../src/models/report.model.ts";
+import type { ReviewRecord } from "../../src/models/review.model.ts";
+import { TITLES } from "../../src/services/review-engine/checks.ts";
 
 /** One review and the model calls that produced its report (and any earlier runs of an upload). */
 export interface ReviewAnalysisItem {

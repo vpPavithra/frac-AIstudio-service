@@ -1,6 +1,6 @@
 // One AI model call as recorded for the AI response report (migrations/004_ai_calls.sql). Built by
 // services/ai/ask-model.ts, stored by the job runner through repositories/ai-call.repository.ts, read by
-// scripts/ai-report.ts. Holds measurements only: no prompt or answer text.
+// tools/reports/run-ai-report.ts. Holds measurements only: no prompt or answer text.
 
 /** "ok", "invalid" (the answer failed the step's schema) or the provider's error code (AI_BUSY, AI_AUTH, ...). */
 export type AiCallOutcome = "ok" | "invalid" | (string & {});
