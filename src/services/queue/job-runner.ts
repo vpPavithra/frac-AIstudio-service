@@ -11,9 +11,20 @@ import type { JobRepository } from "../../repositories/job.repository.ts";
 import { jobContext } from "../../utils/context.ts";
 import { ApiError } from "../../utils/response.ts";
 import { describeError, logger } from "../../utils/logger.ts";
+import { INTERRUPTED_MESSAGE, JOB_INTERRUPTED } from "../job-watchdog.service.ts";
 
 /** Code for a job that threw something other than an ApiError (an ApiError keeps its own code, e.g. AI_OUTPUT_INVALID). */
 export const JOB_FAILED = "JOB_FAILED";
+/** 409 when a target already has a live job; `details` carries its jobId and kind so the portal can follow it. */
+export const JOB_RUNNING = "JOB_RUNNING";
+
+/** The 409 for a target that already has a live job. */
+const jobRunning = (job: Job) =>
+  new ApiError(409, JOB_RUNNING, "A step is already running on this FRAC. Wait for it to finish.", { jobId: job.id, kind: job.kind });
+
+/** Postgres unique violation on jobs_one_active_per_target (two starts in the same moment). */
+const isActiveJobClash = (err: unknown) =>
+  (err as { code?: string; constraint?: string })?.code === "23505" && (err as { constraint?: string }).constraint === "jobs_one_active_per_target";
 
 export interface JobProgress {
   /** Updates the message shown in the UI and, optionally, the x-of-y counter. */
@@ -88,6 +99,28 @@ export class JobRunner {
     const run = this.run(job.id, job.kind, job.msg, task).finally(() => this.running.delete(run));
     this.running.add(run);
     return job;
+  }
+
+  /**
+   * Like start, but refuses a second live job on the same target (409 JOB_RUNNING with the live job's id).
+   * A live job touches its row every heartbeat; one silent for two heartbeats is taken as dead, marked
+   * JOB_INTERRUPTED, and the new job starts, so a crashed job never blocks its FRAC for long.
+   */
+  async startExclusive(spec: StartJob, task: JobTask, now = Date.now()): Promise<Job> {
+    if (!spec.targetId) return this.start(spec, task);
+    const active = await this.jobs.activeFor(spec.targetId);
+    if (active) {
+      if (now - Date.parse(active.updatedAt) < 2 * this.heartbeatMs) throw jobRunning(active);
+      await this.jobs.update(active.id, { status: "error", error: INTERRUPTED_MESSAGE, errorCode: JOB_INTERRUPTED });
+      logger.warn("Replaced a silent job", { jobId: active.id, kind: active.kind, targetId: spec.targetId });
+    }
+    try {
+      return await this.start(spec, task);
+    } catch (err) {
+      const live = isActiveJobClash(err) ? await this.jobs.activeFor(spec.targetId) : null;
+      if (live) throw jobRunning(live);
+      throw err;
+    }
   }
 
   /** Resolves once every started job has settled. Used by tests and graceful shutdown. */

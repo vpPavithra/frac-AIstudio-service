@@ -159,7 +159,8 @@ export class FracService {
    * Runs one generation step as a job (spec 5.2–5.5). The step reads the FRAC as it was when the job
    * started; its result is merged into the latest saved FRAC, so edits made meanwhile are kept. Then
    * the step and its feedback are logged and a version is snapshotted, so a bad revise can be undone.
-   * Throws 409 STEP_NOT_READY (before any job starts) when an earlier step is missing. Returns the queued job;
+   * Throws 409 STEP_NOT_READY (before any job starts) when an earlier step is missing, and 409 JOB_RUNNING when
+   * a step or check is already running on this FRAC (JobRunner.startExclusive). Returns the queued job;
    * step errors (AI_OUTPUT_INVALID, AI_* from the provider) end up on the job, not here.
    */
   async startStep(ownerId: string, id: string, step: GenerationStep, body: StepInput) {
@@ -168,7 +169,7 @@ export class FracService {
     const reason = spec.notReady(frac);
     if (reason) throw conflict("STEP_NOT_READY", reason);
 
-    return this.runner.start({ ownerId, kind: step, targetId: id, msg: spec.msg }, async (progress, recordUsage) => {
+    return this.runner.startExclusive({ ownerId, kind: step, targetId: id, msg: spec.msg }, async (progress, recordUsage) => {
       // Re-reads before each write so team edits saved during the job are kept (ladders save per batch)
       const save = async (update: (latest: Frac) => Partial<Frac>) => {
         const latest = await this.get(ownerId, id);
@@ -200,6 +201,12 @@ export class FracService {
     return frac;
   }
 
+  /** The id of the step or check running on this FRAC, if any, so a reloaded page can follow it. */
+  async activeJobId(ownerId: string, id: string): Promise<string | null> {
+    await this.get(ownerId, id);
+    return (await this.repos.jobs.activeFor(id))?.id ?? null;
+  }
+
   async list(ownerId: string): Promise<FracSummary[]> {
     return (await this.repos.fracs.listByOwner(ownerId)).map(summarise);
   }
@@ -222,7 +229,7 @@ export class FracService {
       throw badRequest("NO_COMPETENCIES", "Derive competencies before running the expert check");
     }
 
-    return this.runner.start({ ownerId, kind: "check", targetId: id, msg: JOB_MESSAGES.check }, async (_progress, recordUsage) => {
+    return this.runner.startExclusive({ ownerId, kind: "check", targetId: id, msg: JOB_MESSAGES.check }, async (_progress, recordUsage) => {
       const model = fracToModel(frac);
       const report = await this.reviews.review(model, { cadre: frac.cadre, state: frac.state, notes: EXPERT_CHECK_NOTES }, recordUsage);
       // Re-read so edits saved while the check ran are kept

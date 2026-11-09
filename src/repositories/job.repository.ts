@@ -9,6 +9,8 @@ export interface JobRepository {
   insert(job: Job): Promise<void>;
   update(id: string, patch: JobPatch): Promise<void>;
   get(id: string): Promise<Job | null>;
+  /** The newest queued or running job on a FRAC or review, if any (one active job per target). */
+  activeFor(targetId: string): Promise<Job | null>;
   /** Marks queued/running jobs last updated before `before` as failed; returns how many. */
   failStale(before: Date, error: string, errorCode: string): Promise<number>;
   /** Every job created at or after `since`, oldest first (the AI response report). */
@@ -81,6 +83,14 @@ export class PgJobRepository implements JobRepository {
     const { rows } = await this.pool.query<JobRow>(`SELECT * FROM jobs WHERE created_at >= $1 ORDER BY created_at`, [since]);
     return rows.map(toJob);
   }
+
+  async activeFor(targetId: string): Promise<Job | null> {
+    const { rows } = await this.pool.query<JobRow>(
+      `SELECT * FROM jobs WHERE target_id = $1 AND status IN ('queued', 'running') ORDER BY created_at DESC LIMIT 1`,
+      [targetId],
+    );
+    return rows[0] ? toJob(rows[0]) : null;
+  }
 }
 
 /** Postgres row → Job. */
@@ -127,6 +137,13 @@ export class MemoryJobRepository implements JobRepository {
       }
     }
     return failed;
+  }
+
+  async activeFor(targetId: string): Promise<Job | null> {
+    const active = [...this.rows.values()]
+      .filter((j) => j.targetId === targetId && (j.status === "queued" || j.status === "running"))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return active[0] ? clone(active[0]) : null;
   }
 
   async listSince(since: Date): Promise<Job[]> {

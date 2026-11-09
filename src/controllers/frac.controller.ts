@@ -28,8 +28,11 @@ export function fracController(fracs: FracService) {
       res.json({ fracs: await fracs.list(ownerOf(res)) });
     },
 
+    /** `activeJobId`: the step or check still running on it, so a reloaded page can show its progress. */
     async get(req: Request, res: Response) {
-      res.json({ frac: await fracs.get(ownerOf(res), param(req.params.id)) });
+      const id = param(req.params.id);
+      const [frac, activeJobId] = await Promise.all([fracs.get(ownerOf(res), id), fracs.activeJobId(ownerOf(res), id)]);
+      res.json({ frac, activeJobId });
     },
 
     async patch(req: Request, res: Response) {

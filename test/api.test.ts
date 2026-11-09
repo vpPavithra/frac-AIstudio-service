@@ -23,7 +23,7 @@ function setup() {
   const reviews = new ReviewService(repos, runner, new ComputedOnlyReviewer(), () => loadReviewRules());
   const provider = stubProvider();
   const fracs = new FracService(repos, runner, reviews, () => "Method text", provider);
-  return { app: createApp({ fracs, reviews, jobs: repos.jobs, provider }), runner };
+  return { app: createApp({ fracs, reviews, jobs: repos.jobs, provider }), runner, repos };
 }
 
 async function xlsx(sheets: SheetData[]): Promise<Buffer> {
@@ -205,6 +205,38 @@ describe("creator", () => {
     await request(app).post(`/v1/fracs/${id}/steps/research`).set(OTHER).send({}).expect(404);
     const info = await request(app).get("/v1/info").set(OWNER).expect(200);
     expect(info.body).toEqual({ aiProvider: "stub" });
+  });
+
+  it("allows one running job per FRAC and lets a reloaded page find it", async () => {
+    const { app, runner, repos } = setup();
+    const id = await createWithCompetencies(app);
+    const now = new Date().toISOString();
+    const live = "00000000-0000-4000-8000-000000000002";
+    await repos.jobs.insert({ id: live, ownerId: "user-1", kind: "check", targetId: id, status: "running",
+      msg: "", done: 0, total: 0, error: null, errorCode: null, usage: {}, createdAt: now, updatedAt: now });
+
+    // A check or any step while that job reports in: 409 with the live job to follow
+    const again = await request(app).post(`/v1/fracs/${id}/steps/check`).set(OWNER).expect(409);
+    expect(again.body.error).toMatchObject({ code: "JOB_RUNNING", details: { jobId: live, kind: "check" } });
+    const step = await request(app).post(`/v1/fracs/${id}/steps/ladders`).set(OWNER).send({ codes: ["C1"] }).expect(409);
+    expect(step.body.error.code).toBe("JOB_RUNNING");
+    expect((await request(app).get(`/v1/fracs/${id}`).set(OWNER)).body.activeJobId).toBe(live);
+
+    await repos.jobs.update(live, { status: "done" });
+    expect((await request(app).get(`/v1/fracs/${id}`).set(OWNER)).body.activeJobId).toBeNull();
+    await request(app).post(`/v1/fracs/${id}/steps/check`).set(OWNER).expect(202);
+    await runner.idle();
+  });
+
+  it("replaces a job that has gone silent instead of blocking the FRAC", async () => {
+    const { app, runner, repos } = setup();
+    const id = await createWithCompetencies(app);
+    const old = new Date(Date.now() - 10 * 60_000).toISOString();
+    await repos.jobs.insert({ id: "00000000-0000-4000-8000-000000000001", ownerId: "user-1", kind: "ladders", targetId: id, status: "running",
+      msg: "", done: 0, total: 1, error: null, errorCode: null, usage: {}, createdAt: old, updatedAt: old });
+    await request(app).post(`/v1/fracs/${id}/steps/check`).set(OWNER).expect(202);
+    await runner.idle();
+    expect(await repos.jobs.get("00000000-0000-4000-8000-000000000001")).toMatchObject({ status: "error", errorCode: "JOB_INTERRUPTED" });
   });
 
   it("runs the expert check, snapshots it, records it as a review and can roll back", async () => {

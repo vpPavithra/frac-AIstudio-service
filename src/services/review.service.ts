@@ -104,7 +104,7 @@ export class ReviewService {
 
   /** Runs the review of a stored upload as a job and replaces its report when done. */
   private async runReviewJob(ownerId: string, review: ReviewRecord, model: ReviewModel, fresh = false): Promise<string> {
-    const job = await this.runner.start(
+    const job = await this.runner.startExclusive(
       { ownerId, kind: "review", targetId: review.id, msg: JOB_MESSAGES.review },
       async (_progress, recordUsage) => {
         review.report = await this.review(model, review.ctx, recordUsage, fresh);
