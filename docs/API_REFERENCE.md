@@ -369,6 +369,7 @@ cut the ladders step to well under a cent in a test (4 ladders for $0.004). Repo
 | `AI_BUSY` | job | Rate limit or used-up quota (Gemini free tier: 20 requests a day per model) |
 | `AI_UNAVAILABLE` | job | The provider is overloaded (503/504); the message names the model and status |
 | `AI_REQUEST_REJECTED` | job | The provider rejected the request (e.g. unknown model) |
+| `AI_BUDGET_EXCEEDED` | job | The step reached its spending limit (`JOB_MAX_COST_USD`, default $3; estimates never count). Finished batches are saved; run it again to continue |
 | `JOB_INTERRUPTED` | job | The service restarted or the job went silent for 15 minutes; run it again |
 | `JOB_FAILED` | job | Any other failure; the server log has the request and job id |
 
@@ -397,11 +398,11 @@ easier to use.
 
 | # | Change | Why | Where |
 | --- | --- | --- | --- |
-| B1 | **Prompt caching** (`cache_control` on the fixed head of each prompt: persona, METHOD, brief, research) | The 8 ladder calls and 6–7 review calls repeat the same long head. Cached reads bill at 10% of input. Only input is affected, and input is about 30% of a FRAC's cost ($0.25 of $0.84), so the saving is about $0.06–0.09 per FRAC (estimate; measure with `npm run ai:report`). Not used today (`cache_read_tokens` is always 0) | `providers/text/claude.ts`, prompt order in `prompts.ts` (fixed parts first) |
+| B1 | Prompt caching, only with the first batch sent alone | Measured 9 Nov: the shared prompt start is about 3,000 tokens (ladders, activities). Batches start together, so with caching as is every call misses and pays the 1.25x write price: cost goes up. It pays only if one batch goes first and the rest follow, which saves about $0.04 per FRAC and adds one call's wait to ladders and activities. Low value; not done | `providers/text/claude.ts`, `services/ai/batching.ts` |
 | B2 | Switch the default profile to `claude-mixed` after a quality comparison | Activities and ladders on Haiku cost about a twentieth as much. Known risk: the MgSO4 slip persisted on Haiku ladders, so compare on the expert check first | `config/service.json` `AI_PROVIDER` |
 | B3 | Find out why research made 0 web searches in the Claude run | The research step is meant to cite government sources; without search it relies on the model's memory | `claude.ts` web search tool, research prompt |
 | B4 | Effort comparison: run the same FRAC on `claude` and `claude-fast` | Thinking is 51% of competencies output and 75% of the expert check; lower effort may give the same quality faster and cheaper | `npm run ai:report` on both runs |
-| B5 | Spending caps: a per-job and per-day dollar limit that stops new calls | A loop or a large "full" FRAC can't run up an unexpected bill. The report already warns at `REPORT_DAILY_BUDGET_USD` | `JobRunner`, `askModel` |
+| B5 | ✅ Done 9 Nov (per job): a job stops with `AI_BUDGET_EXCEEDED` once its billed spend reaches `JOB_MAX_COST_USD` ($3). A daily limit is still open; the daily report warns at `REPORT_DAILY_BUDGET_USD` | A runaway or a large "full" FRAC cannot run up an unexpected bill | `JobRunner` |
 | B6 | Message Batches API for the expert check and "Rewrite all ladders" | 50% cheaper for work the user doesn't watch live; the trade-off is minutes-to-hours latency, so only for background runs | new provider method |
 | B7 | Write ladders only for changed competencies after a competencies revise, and say so in the progress | Already true for unchanged code and label; make the saving visible ("8 of 32 need new ladders") | `ladders.step.ts`, job message |
 | B8 | Build the "already checked in code" sentence of the review prompt from `config/outdated.json` | It lists the outdated names by hand, so a new entry in the file doesn't reach Vidya's prompt | `prompts.ts` `CODE_CHECKS` |
