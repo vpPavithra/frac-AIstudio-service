@@ -1,6 +1,6 @@
 # frac-studio-service <X.Y.Z>: <one-line name>
 
-<!-- Copy to RELEASE_NOTES/release-<X.Y.Z>.md at release-cut time. Fill every section; write "None." where
+<!-- Copy to docs/releases/release-<X.Y.Z>.md at release-cut time. Fill every section; write "None." where
      nothing changed rather than deleting the heading. Short SHAs on every bullet. Delete these comments. -->
 
 | | |
@@ -11,7 +11,7 @@
 | **Baseline** | `v<previous X.Y.Z>` or "first release" |
 | **Commits** | <n> |
 | **AI provider in this release** | `<AI_PROVIDER profile>`: <complex model> / <default model> |
-| **AI response report** | [`reports/ai-report-<date>.md`](../reports/ai-report-<date>.md) |
+| **AI response report** | [`reports/ai-report-<date>.md`](../../reports/ai-report-<date>.md) |
 | **Author** | <name> |
 
 ## Summary

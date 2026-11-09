@@ -6,6 +6,18 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design and [docs/CODEBA
 [docs/FRAC_STUDIO_GUIDE.md](docs/FRAC_STUDIO_GUIDE.md) explains each Creator step and the Reviewer, how to run mock, Gemini or
 Claude, the pricing and the configuration.
 
+## Repository layout
+
+| Folder | What it is |
+| --- | --- |
+| `src/` | **The service**: the only code that runs in production (compiled to `dist/`) |
+| `config/` | Settings, AI provider profiles, review rule tables (shipped with the service) |
+| `migrations/` | Numbered SQL (shipped) |
+| `tools/` | **Not the service**: report generators (`tools/reports/`), ops checks (`tools/ops/`), fixture builders. See [tools/README.md](tools/README.md) |
+| `test/` | API, Postgres-path and acceptance tests |
+| `docs/` | **Documentation**. Start with [docs/CODE_FLOW.md](docs/CODE_FLOW.md) for where the code starts and how each flow runs; index in [docs/README.md](docs/README.md) |
+| `reports/` | **Generated report files** written by the tools |
+
 ## Run
 
 ```bash
@@ -22,7 +34,7 @@ orgportal's `proxy/localhost.proxy.json`.
 Settings live in `config/service.json` (provider choice, limits, timeouts, CORS) and `config/ai-providers.json` (models, prices); the environment overrides
 any of them, and `.env` holds secrets and per-deployment values only. After editing config, run
 `npm run config:check`. `npm run check` runs typecheck, lint, config check and tests. New here? Read
-`ONBOARDING.md` and `CLAUDE.md`.
+`docs/ONBOARDING.md` and `CLAUDE.md`.
 
 ## AI provider: switchable, mock or a real model
 
@@ -84,9 +96,9 @@ What switching affects, how to edit the sample data, and how to delete the mocks
 
 Every model call is logged to `ai_calls` (provider, model, task, time, tokens, cost, outcome; no prompt or
 answer text), and every review stores how many AI flags it raised, kept and dropped.
-Reports keep only the providers in `REPORT_PROVIDERS` (`claude` by default; `-- --provider all` for every provider). `npm run ai:report` turns that into a Markdown report and `npm run ai:report:daily` writes one per day. The server log also prints an "AI call started" and an "AI call finished" line for every call, with its job, task, model, time, tokens and cost. To keep daily reports, schedule `npm run ai:report:daily -- --yesterday` after midnight IST (cron or a Jenkins job), on a machine that can reach the database. Release notes live in `RELEASE_NOTES/`: copy
-[TEMPLATE.md](RELEASE_NOTES/TEMPLATE.md) per release, and keep updates, blockers and AI quality over time in
-[AI_SERVICE_TRACKER.md](RELEASE_NOTES/AI_SERVICE_TRACKER.md).
+Reports keep only the providers in `REPORT_PROVIDERS` (`claude` by default; `-- --provider all` for every provider). `npm run ai:report` turns that into a Markdown report and `npm run ai:report:daily` writes one per day. The server log also prints an "AI call started" and an "AI call finished" line for every call, with its job, task, model, time, tokens and cost. To keep daily reports, schedule `npm run ai:report:daily -- --yesterday` after midnight IST (cron or a Jenkins job), on a machine that can reach the database. Release notes live in `docs/releases/`: copy
+[TEMPLATE.md](docs/releases/TEMPLATE.md) per release, and keep updates, blockers and AI quality over time in
+[AI_SERVICE_TRACKER.md](docs/releases/AI_SERVICE_TRACKER.md).
 
 ## Deploy
 

@@ -46,7 +46,7 @@ npm run check                            # typecheck, lint, config check, tests
 npm run migrate                          # against a real Postgres (POSTGRES_* in .env)
 ```
 
-Which AI answers, how to switch, and what each costs: [docs/FRAC_STUDIO_GUIDE.md](docs/FRAC_STUDIO_GUIDE.md).
+Which AI answers, how to switch, and what each costs: [FRAC_STUDIO_GUIDE.md](FRAC_STUDIO_GUIDE.md).
 
 Every `/v1` call needs the header `x-aastrika-creator: <user id>` (the uiproxy sets it in real use).
 
@@ -77,4 +77,4 @@ From the AI provider: `AI_OUTPUT_INVALID` (answer in the wrong shape), `AI_AUTH`
 Layered (routes → controllers → services → repositories), Zod at the boundary, `ApiError` with codes,
 settings in `config/service.json` and `config/ai-providers.json`, secrets only in the environment, owner header required, numbered
 migrations, no `console.*`, no Claude trailer, no commit unless asked, deploy once after full testing.
-See `CLAUDE.md`, `docs/ARCHITECTURE.md` and `docs/CODEBASE_GUIDE.md`.
+See `CLAUDE.md`, `docs/ARCHITECTURE.md`, `docs/CODEBASE_GUIDE.md` and `docs/CODE_FLOW.md`.

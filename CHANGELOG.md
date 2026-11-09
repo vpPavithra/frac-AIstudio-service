@@ -10,8 +10,8 @@ full pre-deploy test checklist passes.
 or the provider's error code). No prompt or answer text is stored. Each review also records how many AI
 flags it raised, kept and dropped, by reason (`report.aiChecklist`).
 
-**Report.** `npm run ai:report` writes `reports/ai-report-<date>.md`. **Releases.** `RELEASE_NOTES/TEMPLATE.md`,
-`RELEASE_NOTES/AI_SERVICE_TRACKER.md` (updates, blockers, AI quality over time) and a draft `release-0.2.0.md`.
+**Report.** `npm run ai:report` writes `reports/ai-report-<date>.md`. **Releases.** `docs/releases/TEMPLATE.md`,
+`docs/releases/AI_SERVICE_TRACKER.md` (updates, blockers, AI quality over time) and a draft `release-0.2.0.md`.
 
 ## Unreleased: switchable AI providers (6 Nov 2026, `58d2441`)
 
@@ -60,7 +60,7 @@ migrations.
 
 **Errors.** Before: `{ error: "message" }`, so a client could only match on English text. Now every
 failure is `{ error: { code, message, details? } }` through one `ApiError`, with codes listed in
-ONBOARDING.md. Status codes are deliberate: a locked brief or an unfinished review is 409, not 400.
+docs/ONBOARDING.md. Status codes are deliberate: a locked brief or an unfinished review is 409, not 400.
 
 **Validation.** Before: hand-written checks inside the services. Now every request body has a Zod
 schema in `src/validations/`; services receive typed, validated input. `rolesDirty: true` from a client

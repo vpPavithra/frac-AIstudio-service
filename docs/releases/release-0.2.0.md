@@ -8,7 +8,7 @@
 | **Baseline** | `0.1.0` (`5a58030`, 2 Nov 2026, never deployed) |
 | **Commits** | 5 so far (`127ddc7` … this change) |
 | **AI provider in this release** | `gemini-free`: `gemini-3.6-flash` / `gemini-3.6-flash` (key verified 6 Nov 2026; Claude is one setting away) |
-| **AI response report** | [`reports/ai-report-2026-11-06.md`](../reports/ai-report-2026-11-06.md) (mock only so far) |
+| **AI response report** | [`reports/ai-report-2026-11-06.md`](../../reports/ai-report-2026-11-06.md) (mock only so far) |
 | **Author** | Pavithra Prakash |
 
 ## Summary

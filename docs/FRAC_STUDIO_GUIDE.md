@@ -380,7 +380,7 @@ Two repos: the service holds the logic, AI and storage; the portal holds the scr
 | `src/services/excel/` | Workbook reader and writer |
 | `src/services/queue/` | Job runner, progress and spend per job |
 | `src/mocks/` | The sample-data provider; deletable without a code change |
-| `src/scripts/` | `config:check`, `ai:check` |
+| `tools/` | Not part of the running service: `reports/` (ai:report, review:report), `ops/` (config:check, ai:check), `fixtures/` |
 | orgportal, branch `feat/frac-studio`, `project/ws/app/src/lib/routes/frac-studio/` | The Creator, Reviewer and My FRACs screens; `services/frac-studio-api.service.ts` calls the service through the uiproxy |
 
-**Repo docs:** `README.md` (run, switch provider, tuning), `docs/CODEBASE_GUIDE.md` (every file, request and job flow, known gaps), `docs/ARCHITECTURE.md` (layers and spec gaps), `src/mocks/README.md` (mock vs real provider), `docs/spec/R3_GAP_ANALYSIS.md` (review engine r3 status), and orgportal's `FRAC_STUDIO_BUILD_TRACKER.html` (build status and the pre-deploy checklist).
+**Repo docs:** `README.md` (run, switch provider, tuning), `docs/CODEBASE_GUIDE.md` (every file, request and job flow, known gaps), `docs/ARCHITECTURE.md` (layers and spec gaps), `src/mocks/README.md` (mock vs real provider), `docs/CODE_FLOW.md` (where the code starts and how each flow runs), `docs/spec/R3_GAP_ANALYSIS.md` (review engine r3 status), and orgportal's `FRAC_STUDIO_BUILD_TRACKER.html` (build status and the pre-deploy checklist).

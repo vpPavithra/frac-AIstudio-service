@@ -52,7 +52,7 @@ src/utils/             response (ApiError, one error shape), logger, context (re
 src/services/ai/       prompt builders, step logic, output schemas, batching                         ← done
 src/providers/         TextProvider seam: AI_PROVIDER picks a profile (gemini.ts, claude.ts) or mock ← done
 src/mocks/             sample-data provider for `npm run dev:mock`; deletable                      ← done
-src/scripts/           config:check, ai:check, ai:report                                                     ← done
+tools/                 not the running service: reports/ (ai:report, review:report), ops/ (config:check, ai:check), fixtures/ ← done
 ```
 
 ## Review engine r3 (docs/spec/FRAC_Reviewer_rules_r3.md)
