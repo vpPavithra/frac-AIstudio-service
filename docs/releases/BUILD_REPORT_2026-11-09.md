@@ -58,7 +58,10 @@ rules and prompts, the acceptance tests on real workbooks, and a full app walkth
 
 - `/apis/protected/v8/fracStudio/*` forwards to the service and sets `x-aastrika-creator` from the session.
 
-## Changes in this build (9 Nov, not yet committed)
+## Changes in this build (9 Nov)
+
+Service commits `e2c85ee` (review rules), `0c67832` (out-of-date expert check), `a12ad3f` (docs), `9a2a254`
+(reports). Orgportal: see its branch `feat/frac-studio`.
 
 | Repo | Change | Why |
 | --- | --- | --- |
@@ -107,12 +110,11 @@ flow on the mock provider.
 
 ## Next steps
 
-1. Commit today's changes in the service and orgportal (on "commit").
-2. Decide on items 1 and 2 above, then build them.
-3. Prompt caching, then a `claude` vs `claude-mixed` quality comparison on 2–3 FRACs (about $5).
-4. Clinical sign-off on items 3–5; acceptance tests with the real workbooks (item 6).
-5. Orgportal Jest specs for the Creator page and the API service.
-6. Full app walkthrough including the view-only role, then the single deploy.
+1. Decide on items 1 and 2 above, then build them.
+2. Prompt caching, then a `claude` vs `claude-mixed` quality comparison on 2–3 FRACs (about $5).
+3. Clinical sign-off on items 3–5; acceptance tests with the real workbooks (item 6).
+4. Orgportal Jest specs for the Creator page and the API service.
+5. Full app walkthrough including the view-only role, then the single deploy.
 
 ## Pre-deploy checklist
 
