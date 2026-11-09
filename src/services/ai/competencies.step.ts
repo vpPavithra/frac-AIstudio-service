@@ -33,7 +33,7 @@ export function competenciesPatch(frac: Frac, out: z.infer<typeof competenciesOu
     return { ...c, levels: keepLadder ? old.levels : null };
   });
   const roles = frac.roles.map((r) => ({ ...r, activities: r.activities.map((a) => ({ ...a, comp: byActivity.get(a.code) ?? "" })) }));
-  return { competencies, roles, rolesDirty: false, review: null };
+  return { competencies, roles, rolesDirty: false, review: null, reviewStale: false };
 }
 
 /**

@@ -72,5 +72,5 @@ export async function runRoles(ctx: StepContext): Promise<Partial<Frac>> {
     ],
   }));
 
-  return { roles: renumberRoles(built), rolesDirty: frac.competencies.length > 0, review: null };
+  return { roles: renumberRoles(built), rolesDirty: frac.competencies.length > 0, review: null, reviewStale: false };
 }

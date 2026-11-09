@@ -47,7 +47,8 @@ export async function runLadders(ctx: StepContext): Promise<Partial<Frac>> {
     },
     async (ladders, done) => {
       ladders.forEach((l) => written.set(l.code, l.levels));
-      await ctx.save((latest) => ({ competencies: withLadders(latest.competencies, written) }));
+      // Marks an earlier expert check out of date at every batch, so a fix that fails part-way still counts
+      await ctx.save((latest) => ({ competencies: withLadders(latest.competencies, written), reviewStale: !!latest.review }));
       await ctx.progress(JOB_MESSAGES.ladders(targets.length), done, targets.length);
     },
   );

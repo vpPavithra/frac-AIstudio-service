@@ -166,6 +166,32 @@ describe("full flow on the mock AI provider", () => {
     expect(frac.competencies[0].levels).toEqual(before);
   });
 
+  it("marks the expert check out of date after a fix or a hand edit, until it is run again", async () => {
+    const { app, runner } = setup();
+    const id = (await request(app).post("/v1/fracs").set(OWNER).send({ cadre: "ANM", size: "compact" })).body.id as string;
+    for (const s of ["research", "roles", "competencies", "ladders", "check"]) await step(app, runner, id, s);
+    let frac = await getFrac(app, id);
+    expect(frac.review).not.toBeNull();
+    expect(frac.reviewStale).toBe(false);
+
+    // "Fix these competencies" rewrites ladders; the old findings stay visible but out of date
+    await step(app, runner, id, "ladders", { codes: ["ANM2"], feedback: "Competencies are too broadly defined" });
+    frac = await getFrac(app, id);
+    expect(frac.review).not.toBeNull();
+    expect(frac.reviewStale).toBe(true);
+
+    await step(app, runner, id, "check");
+    expect((await getFrac(app, id)).reviewStale).toBe(false);
+
+    // Re-sending unchanged content is not a change; renaming a competency is
+    frac = await getFrac(app, id);
+    const same = await request(app).patch(`/v1/fracs/${id}`).set(OWNER).send({ competencies: frac.competencies }).expect(200);
+    expect(same.body.frac.reviewStale).toBe(false);
+    const renamed = frac.competencies.map((c: { label: string }, i: number) => (i === 0 ? { ...c, label: "Antenatal contacts to protocol" } : c));
+    const edited = await request(app).patch(`/v1/fracs/${id}`).set(OWNER).send({ competencies: renamed }).expect(200);
+    expect(edited.body.frac.reviewStale).toBe(true);
+  });
+
   it("follows the brief's scope: postings it names, matching roles and competencies first", async () => {
     const { app, runner } = setup();
     const scope = "Village outreach and delivery point PHC; focus on immunisation and NCD screening";

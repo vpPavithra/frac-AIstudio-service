@@ -35,6 +35,8 @@ export interface FracSummary {
 
 /** Brief fields (spec 5.1) that lock once research exists. */
 const BRIEF_FIELDS = ["cadre", "state", "size", "prompt"] as const;
+/** Edits to these after an expert check make its findings out of date. */
+const CONTENT_FIELDS = ["research", "postings", "roles", "competencies"] as const;
 
 /**
  * A new FRAC at step 1 (brief only). cadreFull starts as the cadre and codePrefix as "C" until research
@@ -67,6 +69,7 @@ export function newFrac(ownerId: string, brief: CreateFracInput, id = randomUUID
 /**
  * Applies validated team edits (spec 8, PATCH). The brief locks once research exists (5.1; 409 BRIEF_LOCKED);
  * editing roles after competencies exist sets rolesDirty (5.3); the team may clear it. codePrefix is sanitised.
+ * A content change after an expert check sets reviewStale, so the portal asks for a re-run before the download.
  * Pure: the caller saves the result.
  */
 export function applyEdits(frac: Frac, edits: PatchFracInput, now = new Date()): Frac {
@@ -82,6 +85,9 @@ export function applyEdits(frac: Frac, edits: PatchFracInput, now = new Date()):
     if (changed && next.competencies.length) next.rolesDirty = true;
   } else if (rolesDirty === false) {
     next.rolesDirty = false;
+  }
+  if (frac.review && CONTENT_FIELDS.some((k) => edits[k] !== undefined && JSON.stringify(edits[k]) !== JSON.stringify(frac[k]))) {
+    next.reviewStale = true;
   }
   return next;
 }
@@ -221,7 +227,8 @@ export class FracService {
       const report = await this.reviews.review(model, { cadre: frac.cadre, state: frac.state, notes: EXPERT_CHECK_NOTES }, recordUsage);
       // Re-read so edits saved while the check ran are kept
       const latest = await this.get(ownerId, id);
-      const checked: Frac = { ...latest, review: report, step: 6, updatedAt: new Date().toISOString() };
+      // Still out of date if the team saved edits while the check ran
+      const checked: Frac = { ...latest, review: report, reviewStale: latest.updatedAt !== frac.updatedAt, step: 6, updatedAt: new Date().toISOString() };
       await this.repos.fracs.update(checked);
       await this.repos.fracs.snapshot(checked, "Expert check");
       await this.reviews.recordExpertCheck(ownerId, checked, model, report);

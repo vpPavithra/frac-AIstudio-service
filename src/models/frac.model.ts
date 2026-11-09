@@ -78,7 +78,8 @@ export interface FracLogEntry {
 
 /**
  * The FRAC document. `step` is the furthest Creator step reached. `rolesDirty` is set by the server when
- * roles are edited after competencies exist, so the activity→competency mappings need a look. `review` is the last expert check.
+ * roles are edited after competencies exist, so the activity→competency mappings need a look. `review` is the last expert check;
+ * `reviewStale` is set by the server when the content changes after it (a fix, a revise or a hand edit) and cleared by the next check.
  */
 export interface Frac {
   id: string;
@@ -99,6 +100,7 @@ export interface Frac {
   competencies: FracCompetency[];
   rolesDirty: boolean;
   review: Report | null;
+  reviewStale?: boolean;
   log: FracLogEntry[];
 }
 
