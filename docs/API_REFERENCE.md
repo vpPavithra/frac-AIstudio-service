@@ -100,7 +100,8 @@ Portal client: `project/ws/app/src/lib/routes/frac-studio/services/frac-studio-a
 ### 5. `GET /v1/fracs/:id` — open a FRAC
 
 - **When:** a FRAC is opened from My FRACs, and after each job finishes, to reload the result.
-- **Answer:** `{ "frac": { … } }`. The document has `cadre`, `state`, `size`, `prompt`, `cadreFull`, `codePrefix`,
+- **Answer:** `{ "frac": { … }, "activeJobId": "<uuid>" | null }`. `activeJobId` is the step or check still
+  running on it, so a reloaded page (or a second tab) follows that job instead of offering the buttons again. The document has `cadre`, `state`, `size`, `prompt`, `cadreFull`, `codePrefix`,
   `postings`, `research`, `roles[].activities[]`, `competencies[].levels`, `review`, `reviewStale`, `rolesDirty`, `log`, `step`.
   `reviewStale` is `true` when the content changed after the expert check (a fix, a revise or a hand edit); the
   portal then shows the old findings as out of date, offers "Re-run expert check" and holds the download until it runs.
@@ -152,6 +153,9 @@ Portal client: `project/ws/app/src/lib/routes/frac-studio/services/frac-studio-a
   - `409 STEP_NOT_READY` when an earlier step is missing: roles need research (or an imported FRAC),
     competencies need a role with activities, ladders need a competency.
   - `404 NOT_FOUND` for an unknown step name.
+  - `409 JOB_RUNNING` when a step or check is already running on this FRAC; `error.details` has its `jobId` and
+    `kind`, and the portal follows that job. A job silent for two heartbeats (2 minutes) is taken as dead, marked
+    `JOB_INTERRUPTED`, and the new one starts. Migration 009 enforces one active job per FRAC or review.
 - **What the job does:** reads the FRAC, calls the AI, then merges the result into the latest saved FRAC (edits made
   meanwhile are kept), appends to `frac.log`, saves a version (e.g. "Level ladders (revised)"), and records the
   tokens and cost. Running research locks the brief.
@@ -354,6 +358,7 @@ cut the ladders step to well under a cent in a test (4 ladders for $0.004). Repo
 | `NOT_FOUND` | 404 | No such FRAC, review, job or step, or it belongs to another user |
 | `BRIEF_LOCKED` | 409 | The brief can't change once research exists; start a new FRAC |
 | `STEP_NOT_READY` | 409 | An earlier step is missing |
+| `JOB_RUNNING` | 409 | A step, check or review re-run is already running on this target; `details.jobId` names it |
 | `NO_COMPETENCIES` | 400 | The expert check needs at least one competency |
 | `FILE_REQUIRED`, `FILE_TYPE_NOT_ALLOWED` | 400 | Upload one `.xlsx` as `file` |
 | `PAYLOAD_TOO_LARGE` | 413 | File over 15 MB or body over 5 MB |
@@ -378,7 +383,7 @@ easier to use.
 
 | # | Change | Why | Where |
 | --- | --- | --- | --- |
-| A1 | **bug** Refuse a second job on the same FRAC while one runs (`409 JOB_RUNNING`, returning the running `jobId`) | Today nothing stops it: a double click, or "Revise" pressed during a running step, starts two jobs that both write the FRAC and both bill | `FracService.startStep` / `startCheck`, check `jobs` for `queued`/`running` with that `target_id` |
+| A1 | ✅ Done 9 Nov: refuse a second job on the same FRAC while one runs (`409 JOB_RUNNING`, returning the running `jobId`) | Today nothing stops it: a double click, or "Revise" pressed during a running step, starts two jobs that both write the FRAC and both bill | `FracService.startStep` / `startCheck`, check `jobs` for `queued`/`running` with that `target_id` |
 | A2 | Optimistic locking on `PATCH` (send `updatedAt`, answer `409 STALE` if it changed) | Two tabs, or two people with the same login, overwrite each other's edits without warning | `frac.service.patch`, portal `patchFrac` |
 | A3 | Paging on `GET /v1/fracs`, `/v1/frac-reviews` and `/versions` (`?limit&cursor`) | Lists return everything; slow once a user has many FRACs or versions | repositories `list*` |
 | A4 | Return the job in the `202` answer (`{ jobId, job }`) | Saves the first poll and shows the starting message at once | `JobRunner.start` |
