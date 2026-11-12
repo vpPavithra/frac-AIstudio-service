@@ -34,7 +34,7 @@ how the AI answered compared with the last release.>
 
 | Area | Change | Expected effect | SHA |
 | --- | --- | --- | --- |
-| Provider / models | <e.g. gemini-free → claude; model id change> | | |
+| Provider / models | <e.g. claude → claude-mixed; model id change> | | |
 | Prompts | <METHOD / SOURCE_LIBRARY / step prompt change> | | |
 | Review rules | <config/review-rules.json, config/outdated.json edits> | | |
 | Limits and batching | <AI_BATCH_*, REVIEW_*, LLM_* changes> | | |
@@ -78,7 +78,7 @@ how the AI answered compared with the last release.>
 
 - **Migrations:** <none | `migrations/00N_….sql`: what it adds; runs once, safe to re-run>
 - **New or changed settings:** <none | keys in config/service.json or config/ai-providers.json>
-- **Secrets:** <none | e.g. `GEMINI_API_KEY` must be in the secret store>
+- **Secrets:** <none | e.g. `ANTHROPIC_API_KEY` must be in the secret store>
 - **Outbound network:** <none | e.g. `generativelanguage.googleapis.com`, `api.anthropic.com`>
 - **API contract with orgportal / uiproxy:** <none | change + which orgportal version needs it>
 - **Breaking changes:** <none | describe + migration step>

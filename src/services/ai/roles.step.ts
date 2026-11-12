@@ -27,26 +27,13 @@ export function renumberRoles(roles: FracRole[]): FracRole[] {
   }));
 }
 
-/**
- * Step 3, roles (complex, one call) then activities (default tier, BATCH.size roles per call, BATCH.parallel
- * calls at once). Afterwards: renumber, clear every competency@level, clear the review. Gap 2 fix (spec 10.2):
- * the competencies are kept and rolesDirty is set, instead of wiping them, so step 4 re-maps them.
- *
- * Kept on revise: activities with source ADDED_BY_TEAM, re-attached to the role with the same title
- * (case-insensitive); a renamed role loses them. Earlier model-written activities are only offered to the
- * model as "keep the good ones" (activitiesPrompt). Throws AI_OUTPUT_INVALID on a malformed answer.
- */
-export async function runRoles(ctx: StepContext): Promise<Partial<Frac>> {
+type SizeTarget = (typeof SIZE_TARGETS)[keyof typeof SIZE_TARGETS];
+
+/** 3b: activities for `roles` (default tier, BATCH.size roles per call, BATCH.parallel at once), as FracActivity rows without codes. */
+async function writeActivities(ctx: StepContext, roles: { code: string; title: string }[], target: SizeTarget) {
   const { frac, feedback } = ctx;
-  const target = SIZE_TARGETS[frac.size];
-
-  await ctx.progress(JOB_MESSAGES.roles);
-  const drafted = await callModel(ctx, "roles", "complex", rolesPrompt(frac, target.roles, feedback),
-    { cadre: frac.cadre, state: frac.state, scope: frac.prompt, count: target.roles, feedback }, rolesOutput);
-  const roles = drafted.roles.map((r, i) => ({ code: `R${i + 1}`, title: r.title.trim(), source: r.source }));
-
-  // An imported FRAC may have no postings yet; ask for one column so every activity still gets a Yes/No
-  const postings = frac.postings.length ? frac.postings.map((p) => p.key) : ["P1"];
+  // No postings is allowed (the brief named none); activities then have no Yes/No values until the team adds some
+  const postings = frac.postings.map((p) => p.key);
   await ctx.progress(JOB_MESSAGES.activities(roles.length), 0, roles.length);
   const written = await runInBatches(
     roles,
@@ -60,17 +47,70 @@ export async function runRoles(ctx: StepContext): Promise<Partial<Frac>> {
     },
     (_, done) => ctx.progress(JOB_MESSAGES.activities(roles.length), done, roles.length),
   );
+  return new Map(written.map(({ role, activities }) => [
+    role.code,
+    activities.map((a): FracActivity => ({ code: "", text: a.text.trim(), postings: a.postings, source: a.source, tier: a.tier, comp: "" })),
+  ]));
+}
+
+/**
+ * Whether the roles already on the FRAC are kept (fillGaps) instead of built from the research. A Roles sheet is
+ * always kept. Roles copied from a matched position are kept only while no job description is attached: with one,
+ * the roles come from the research and the document, not from another FRAC (review, Nov 2026).
+ */
+export function keepGivenRoles(frac: Frac, briefDocuments: number): boolean {
+  if (!frac.roles.length) return false;
+  if (frac.uploads?.roles) return true;
+  return !!frac.seededFrom && frac.seededFrom.withRoles !== false && briefDocuments === 0;
+}
+
+/**
+ * Roles from a team's Roles sheet or a matched position (review decisions, Nov 2026): kept as they are, and
+ * only the roles with no activities get them written (3b alone, no roles call). No AI call when every role has
+ * activities. Competency mappings stay; new activities have none, so rolesDirty is set when competencies exist.
+ */
+async function fillGaps(ctx: StepContext): Promise<Partial<Frac>> {
+  const { frac } = ctx;
+  const empty = frac.roles.filter((r) => !r.activities.length);
+  if (!empty.length) return { roles: renumberRoles(frac.roles) };
+  const written = await writeActivities(ctx, empty.map((r) => ({ code: r.code, title: r.title })), SIZE_TARGETS[frac.size]);
+  const roles = frac.roles.map((r) => (r.activities.length ? r : { ...r, activities: written.get(r.code) ?? [] }));
+  return { roles: renumberRoles(roles), rolesDirty: frac.competencies.length > 0, review: null, reviewStale: false };
+}
+
+/**
+ * Step 3, roles (complex, one call) then activities (default tier, BATCH.size roles per call, BATCH.parallel
+ * calls at once). Afterwards: renumber, clear every competency@level, clear the review. Gap 2 fix (spec 10.2):
+ * the competencies are kept and rolesDirty is set, instead of wiping them, so step 4 re-maps them.
+ *
+ * Kept on revise: activities with source ADDED_BY_TEAM, re-attached to the role with the same title
+ * (case-insensitive); a renamed role loses them. Earlier model-written activities are only offered to the
+ * model as "keep the good ones" (activitiesPrompt). Throws AI_OUTPUT_INVALID on a malformed answer.
+ *
+ * Roles from a Roles sheet, or from a matched position when no job description is attached, are kept
+ * (keepGivenRoles, fillGaps) unless the team asks for a revise with feedback, which rebuilds them as above.
+ */
+export async function runRoles(ctx: StepContext): Promise<Partial<Frac>> {
+  const { frac, feedback } = ctx;
+  const briefDocuments = (ctx.documents ?? []).filter((d) => d.kind === "brief").length;
+  if (!feedback && keepGivenRoles(frac, briefDocuments)) return fillGaps(ctx);
+  const target = SIZE_TARGETS[frac.size];
+
+  await ctx.progress(JOB_MESSAGES.roles);
+  const drafted = await callModel(ctx, "roles", "complex", rolesPrompt(frac, target.roles, feedback),
+    { cadre: frac.cadre, state: frac.state, scope: frac.prompt, count: target.roles, feedback }, rolesOutput);
+  const roles = drafted.roles.map((r, i) => ({ code: `R${i + 1}`, title: r.title.trim(), source: r.source }));
+  const written = await writeActivities(ctx, roles, target);
 
   // Team-typed activities from the FRAC as it was when the job started, found by role title
   const teamAdded = (title: string): FracActivity[] =>
     frac.roles.find((r) => r.title.toLowerCase() === title.toLowerCase())?.activities.filter((a) => a.source === ADDED_BY_TEAM) ?? [];
-  const built: FracRole[] = written.map(({ role, activities }) => ({
+  const built: FracRole[] = roles.map((role) => ({
     ...role,
-    activities: [
-      ...activities.map((a) => ({ code: "", text: a.text.trim(), postings: a.postings, source: a.source, tier: a.tier, comp: "" })),
-      ...teamAdded(role.title).map((a) => ({ ...a, comp: "" })),
-    ],
+    activities: [...(written.get(role.code) ?? []), ...teamAdded(role.title).map((a) => ({ ...a, comp: "" }))],
   }));
 
-  return { roles: renumberRoles(built), rolesDirty: frac.competencies.length > 0, review: null, reviewStale: false };
+  // Copied roles, if any, are replaced now
+  const seededFrom = frac.seededFrom ? { seededFrom: { ...frac.seededFrom, withRoles: false } } : {};
+  return { roles: renumberRoles(built), ...seededFrom, rolesDirty: frac.competencies.length > 0, review: null, reviewStale: false };
 }

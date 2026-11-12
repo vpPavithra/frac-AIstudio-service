@@ -22,7 +22,7 @@ export const JOB_RUNNING = "JOB_RUNNING";
 export const AI_BUDGET_EXCEEDED = "AI_BUDGET_EXCEEDED";
 
 /** The 409 for a target that already has a live job. */
-const jobRunning = (job: Job) =>
+export const jobRunning = (job: Job) =>
   new ApiError(409, JOB_RUNNING, "A step is already running on this FRAC. Wait for it to finish.", { jobId: job.id, kind: job.kind });
 
 /** Postgres unique violation on jobs_one_active_per_target (two starts in the same moment). */

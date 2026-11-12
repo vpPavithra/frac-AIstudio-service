@@ -56,6 +56,15 @@ Portal client: `project/ws/app/src/lib/routes/frac-studio/services/frac-studio-a
 | 19 | `POST /v1/frac-reviews/:id/open-in-creator` | `openInCreator` | 200 | none |
 | 20 | `POST /v1/frac-reviews/:id/rerun` | `rerunReview` | 202 job | as #15 |
 | 21 | `GET /v1/jobs/:id` | `getJob` / `pollJob` | 200 | none |
+| 22 | `GET /v1/fracs/match?cadre=&state=` | `matchPosition` | 200 | none |
+| 23 | `GET /v1/fracs/:id/documents` | `listDocuments` | 200 | none |
+| 24 | `POST /v1/fracs/:id/documents` | `uploadDocument` | 201 | none |
+| 25 | `DELETE /v1/fracs/:id/documents/:documentId` | `removeDocument` | 200 | none |
+| 26 | `GET /v1/templates/:kind` | `downloadTemplate` | 200 file | none |
+
+Rows 22–26 and the `seed` on #3 were added for the Nov 2026 review decisions
+(`docs/releases/REVIEW_DECISIONS_2026-11.md`). With documents or a seed, steps 7–10 make fewer AI calls; see
+"Fewer calls with documents or a match" in section 5.
 
 ---
 
@@ -69,7 +78,7 @@ Portal client: `project/ws/app/src/lib/routes/frac-studio/services/frac-studio-a
 
 ### 2. `GET /v1/info`
 
-- **When:** to confirm which AI is answering (mock, Gemini or Claude) before a test run.
+- **When:** to confirm which AI is answering (mock or a Claude profile) before a test run.
 - **Answer:** `{ "aiProvider": "claude-mixed" }`, the `AI_PROVIDER` profile name, or `"mock"`.
 
 ### 3. `POST /v1/fracs` — create a FRAC (Step 1, Brief)
@@ -80,13 +89,14 @@ Portal client: `project/ws/app/src/lib/routes/frac-studio/services/frac-studio-a
 
 | Field | Type | Rule |
 | --- | --- | --- |
-| `cadre` | string | Required, 1–200 characters (e.g. `"ANM"`) |
+| `cadre` | string | Required, 1–200 characters (e.g. `"ANM"`). The portal labels it "Position" |
 | `state` | string | Optional; blank becomes `"India (national baseline)"` |
-| `size` | `"compact"` \| `"standard"` \| `"full"` | Default `"standard"`; sets the role, activity and competency targets (`config/frac-sizes.json`) |
+| `size` | `"compact"` \| `"standard"` \| `"full"` | Optional. Omitted (what the portal sends): the research step chooses the size (`sizeBy: "agent"`; `"standard"` until then). Sent: kept as given (`sizeBy: "team"`) |
 | `prompt` | string | Optional scope note, up to 20,000 characters; passed into every later prompt |
+| `seed` | object | Optional, position matching. `{ "from": "frac", "fracId": "<uuid>" }` copies the caller's own FRAC's postings and roles (competency mappings cleared; someone else's id gives 404). `{ "from": "positions", "code", "name", "roles": [{ "title", "activities": ["…"] }] }` starts from a Positions-master entry the portal read. Recorded as `seededFrom` |
 
 ```json
-{ "cadre": "ANM", "state": "Bihar", "size": "standard", "prompt": "Sub-centre posting; include HBNC." }
+{ "cadre": "ANM", "state": "Bihar", "prompt": "Sub-centre posting; include HBNC.", "seed": { "from": "frac", "fracId": "6b1e…" } }
 ```
 
 - **Answer `201`:** `{ "id": "<uuid>", "frac": { …the whole FRAC… } }`.
@@ -102,7 +112,8 @@ Portal client: `project/ws/app/src/lib/routes/frac-studio/services/frac-studio-a
 - **When:** a FRAC is opened from My FRACs, and after each job finishes, to reload the result.
 - **Answer:** `{ "frac": { … }, "activeJobId": "<uuid>" | null }`. `activeJobId` is the step or check still
   running on it, so a reloaded page (or a second tab) follows that job instead of offering the buttons again. The document has `cadre`, `state`, `size`, `prompt`, `cadreFull`, `codePrefix`,
-  `postings`, `research`, `roles[].activities[]`, `competencies[].levels`, `review`, `reviewStale`, `rolesDirty`, `log`, `step`.
+  `postings`, `research` (each source may have a `url`), `roles[].activities[]`, `competencies[].levels`, `review`, `reviewStale`, `rolesDirty`, `log`, `step`,
+  and since Nov 2026 `sizeBy`, `sizeReason`, `seededFrom` and `uploads` (the standard sheets in use, by kind, with the file name).
   `reviewStale` is `true` when the content changed after the expert check (a fix, a revise or a hand edit); the
   portal then shows the old findings as out of date, offers "Re-run expert check" and holds the download until it runs.
 - **Errors:** `404 NOT_FOUND` if it doesn't exist or belongs to someone else.
@@ -244,16 +255,44 @@ Portal client: `project/ws/app/src/lib/routes/frac-studio/services/frac-studio-a
 
 ```json
 {
-  "status": "running", "msg": "Kaushal and Vidya are writing level ladders for 32 competencies…", "done": 8, "total": 32,
+  "status": "running", "msg": "The agent is writing level ladders for 32 competencies…", "done": 8, "total": 32,
   "error": null, "errorCode": null, "kind": "ladders", "targetId": "<frac or review id>",
   "usage": { "calls": 2, "inputTokens": 9300, "outputTokens": 5800, "webSearches": 0, "costUsd": 0.077 }
 }
 ```
 
-`usage.estimated` is `1` when the cost is an estimate (mock or Gemini free tier) and absent otherwise.
+`usage.estimated` is `1` when the cost is an estimate (the mock) and absent otherwise.
 
 - `status` is `queued`, `running`, `done` or `error`. On `error`, `errorCode` says why (section 6).
 - A job that stops reporting for `JOB_STALE_AFTER_MS` (15 min) is marked `JOB_INTERRUPTED` by the watchdog.
+
+### 22. `GET /v1/fracs/match` — position matching
+
+- **When:** the brief form, half a second after the position is typed or the state changes.
+- **Why:** finds the caller's own FRAC for exactly this position, so its postings and roles can be reused.
+- **Query:** `cadre` (required), `state` (optional; a FRAC in the same state ranks first).
+- **Answer:** `{ "match": { id, cadre, state, postings: ["label"], counts: { roles, activities }, updatedAt } | null }`.
+  Exact match only, ignoring case and spaces; only FRACs that have activities. When it is `null`, the portal checks
+  the FRAC module's Positions master itself (`/apis/proxies/v8/entity/v1/search` and `/hierarchy`).
+
+### 23–25. Documents on a FRAC
+
+- **`GET /v1/fracs/:id/documents`:** `{ "documents": [{ id, kind, filename, mime, bytes, chars, parsed: { counts, warnings }, createdAt }] }`, oldest first. The extracted text is never returned.
+- **`POST /v1/fracs/:id/documents`:** multipart `file` plus `kind`:
+  - `brief`: PDF, DOCX or TXT, up to 3, before research only.
+  - `roles`, `competencies`, `sources`: .xlsx or .csv.
+  - **Answer `201`:** `{ document, frac }`, the FRAC after the import.
+  - A sheet replaces that part of the FRAC, saves a version first, and sets `uploads[kind]`.
+  - **Errors:** `FILE_REQUIRED`, `FILE_TYPE_NOT_ALLOWED`, `FILE_UNREADABLE`, `SHEET_NOT_RECOGNISED`, `TOO_MANY_DOCUMENTS`, `BRIEF_LOCKED`, `JOB_RUNNING`.
+- **`DELETE /v1/fracs/:id/documents/:documentId`:** `{ frac }`. For a sheet, the content stays and `uploads[kind]` is cleared, so the step uses the AI again.
+
+### 26. `GET /v1/templates/:kind` — upload templates
+
+- **When:** "Download template" next to any upload slot.
+- **Answer:**
+  - `roles`, `competencies`, `sources`: an .xlsx with the sheet layout, an example and an "Instructions" sheet;
+  - `brief`: a text guide to what a job description should contain.
+- The layouts are the Creator's own Excel download, so a downloaded FRAC re-imports.
 
 ---
 
@@ -262,7 +301,9 @@ Portal client: `project/ws/app/src/lib/routes/frac-studio/services/frac-studio-a
 | User action | Calls |
 | --- | --- |
 | Open FRAC Studio | `GET /v1/fracs`, `GET /v1/frac-reviews` |
-| Fill the brief, continue | `POST /v1/fracs` |
+| Type the position on the brief | `GET /v1/fracs/match`; if no match, the entity API's position search and hierarchy |
+| Fill the brief, continue | `POST /v1/fracs` (with `seed` when a match is ticked), then `POST …/documents` per attached file |
+| Upload a standard sheet / Download template | `POST /v1/fracs/:id/documents` / `GET /v1/templates/:kind` |
 | Type anywhere | `PATCH /v1/fracs/:id` (autosave) |
 | Research the job / Revise | `POST …/steps/research` → poll `GET /v1/jobs/:id` → `GET /v1/fracs/:id` |
 | Build roles and activities | `POST …/steps/roles` → poll → reload |
@@ -297,10 +338,10 @@ All of them go through one function, `askModel` (`src/services/ai/ask-model.ts`)
 4. Network and rate-limit errors are retried up to 3 times (`LLM_RETRIES`), each call with a 10-minute timeout.
 5. Tokens, thinking tokens, web searches, cost and time are recorded per call in `ai_calls` and added to the job's
    `usage`, even when the answer is rejected. No prompt or answer text is stored.
-6. Batched tasks run `AI_BATCH_PARALLEL` (6) calls at once (the review checklist: `REVIEW_BATCH_PARALLEL`, 6); `maxConcurrent` in the profile caps calls across all
-   jobs (1 on the Gemini free tier).
+6. Batched tasks run `AI_BATCH_PARALLEL` (6) calls at once (the review checklist: `REVIEW_BATCH_PARALLEL`, 6); an optional `maxConcurrent` in the profile caps calls
+   across all jobs.
 
-### The seven AI tasks
+### The eight AI tasks
 
 | Task | Started by | Persona | Tier | Calls | Input | Answer (schema) |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -308,15 +349,32 @@ All of them go through one function, `askModel` (`src/services/ai/ask-model.ts`)
 | `roles` | #8 | Kaushal | complex | 1 | Brief, research, target role count | `roles: [{ title, source }]` (at least 1) |
 | `activities` | #8, after roles | Kaushal | default | one per 4 roles (`AI_BATCH_SIZE`) | Those roles, postings, target activities per role | `roles: [{ code, activities: [{ text, postings, source, tier }] }]` |
 | `competencies` | #9 | Kaushal | complex | 1 | Every activity, target competency count, codes already used | `competencies: [{ code, label, description, type, area, kcm }]`, `mapping: [{ a, c, l(1–5) }]` |
+| `mapping` | #9 when a Competencies sheet is in use | Kaushal | default | 1 | Every activity and the sheet's competencies (fixed) | `mapping: [{ a, c, l(1–5) }]` |
 | `ladders` | #10, and "Fix these competencies" | Kaushal and Vidya | default | one per 4 competencies | Those competencies, research, feedback | `ladders: [{ code, levels: [{ label, desc }] ×5 }]` |
 | `review-competencies` | #11, #15, #20 | Vidya | complex | one per 6 competencies (`REVIEW_BATCH_SIZE`) | Cadre, state, those competencies, the rule-based scope hits ("do NOT repeat") | `items: [{ code, scope: [{ quote, act, basis }], accuracy: [{ quote, issue, correct }] }]` |
 | `review-state` | #11, #15, #20 | Vidya | complex | 1, skipped for national, blank or "India" | Cadre, state, the competencies | `items: [{ category, item, refs[] }]`, at most 6 |
 
+### Fewer calls with documents or a match (Nov 2026)
+
+| Given | Step | Calls instead |
+| --- | --- | --- |
+| Brief document | research | Same call, document text in the prompt, 1 web search instead of 3 |
+| Sources sheet | research | Same call, no web search, no sources in the answer |
+| Roles sheet or matched position, every role with activities | roles | **None** |
+| …some roles without activities | roles | Activity batches for those roles only, no roles call |
+| Competencies sheet | competencies | One `mapping` call instead of `competencies` |
+| Competencies sheet with all 5 levels | ladders | Only competencies without a ladder |
+
+Research also returns `citations` from Claude's web search: the pages it opened. The prompt tells the agent to open
+the JD and main guidelines with the search and to give each source the address it opened. `source-links.ts` keeps a
+source's `url` only when it is a searched page, or an address on `RESEARCH_SEARCH_DOMAINS` or `SOURCE_LINK_DOMAINS`
+that answers a quick check (`SOURCE_LINK_CHECK_TIMEOUT_MS`, at most `SOURCE_LINK_MAX_CHECKS` per run); a source with
+no link is matched to a searched page by title. Cost effect of all of this: `docs/COST_IMPACT_REVIEW_DECISIONS.md`.
+
 ### What happens to each answer
 
-- **research:** prefix and postings cleaned (see #7–10). Runs Google/Claude web search limited to `nhm.gov.in`,
-  `mohfw.gov.in`, `igotkarmayogi.gov.in`, `cbc.gov.in`, up to `RESEARCH_SEARCH_MAX_USES` (3) searches. No search on the
-  Gemini free tier.
+- **research:** prefix and postings cleaned (see #7–10). Runs Claude's web search limited to `nhm.gov.in`,
+  `mohfw.gov.in`, `igotkarmayogi.gov.in`, `cbc.gov.in`, up to `RESEARCH_SEARCH_MAX_USES` (3) searches.
 - **roles + activities:** progress "x of y roles"; codes renumbered across the whole FRAC.
 - **competencies:** a mapping that names a competency not in the answer fails the step (`AI_OUTPUT_INVALID`) and
   nothing is saved.
@@ -360,13 +418,16 @@ cut the ladders step to well under a cent in a test (4 ladders for $0.004). Repo
 | `STEP_NOT_READY` | 409 | An earlier step is missing |
 | `JOB_RUNNING` | 409 | A step, check or review re-run is already running on this target; `details.jobId` names it |
 | `NO_COMPETENCIES` | 400 | The expert check needs at least one competency |
-| `FILE_REQUIRED`, `FILE_TYPE_NOT_ALLOWED` | 400 | Upload one `.xlsx` as `file` |
+| `FILE_REQUIRED`, `FILE_TYPE_NOT_ALLOWED` | 400 | Upload one file as `file`: `.xlsx` for a review; for documents PDF/DOCX/TXT (brief) or .xlsx/.csv (sheets) |
+| `FILE_UNREADABLE` | 400 | The file could not be read, or a PDF has no text layer |
+| `SHEET_NOT_RECOGNISED` | 400 | A standard sheet without the expected header row; download the template |
+| `TOO_MANY_DOCUMENTS` | 400 | Already 3 brief documents on this FRAC |
 | `PAYLOAD_TOO_LARGE` | 413 | File over 15 MB or body over 5 MB |
 | `AI_OUTPUT_INVALID` | job | The answer had the wrong shape twice; nothing from that call is saved. Run again |
 | `AI_OUTPUT_TRUNCATED` | job | The answer was cut off; use a smaller size or fewer competencies |
 | `AI_REFUSED` | job | The model declined; rephrase the brief or feedback |
 | `AI_AUTH` | job | Bad or missing API key |
-| `AI_BUSY` | job | Rate limit or used-up quota (Gemini free tier: 20 requests a day per model) |
+| `AI_BUSY` | job | Rate limit or used-up quota |
 | `AI_UNAVAILABLE` | job | The provider is overloaded (503/504); the message names the model and status |
 | `AI_REQUEST_REJECTED` | job | The provider rejected the request (e.g. unknown model) |
 | `AI_BUDGET_EXCEEDED` | job | The step reached its spending limit (`JOB_MAX_COST_USD`, default $3; estimates never count). Finished batches are saved; run it again to continue |

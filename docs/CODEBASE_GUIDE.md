@@ -32,7 +32,7 @@ flowchart LR
   controllers --> svc[services/<br/>FracService, ReviewService]
   svc --> runner[queue/job-runner<br/>background jobs]
   runner --> ai[services/ai steps<br/>ai-review.service]
-  ai --> provider[providers/text<br/>Gemini, Claude or mock]
+  ai --> provider[providers/text<br/>Claude or mock]
   runner --> engine[review-engine/<br/>rules, checks, report]
   svc --> repos[repositories/<br/>Postgres or memory]
   svc --> excel[excel/<br/>read and write .xlsx]
@@ -74,7 +74,7 @@ flowchart LR
 | `constants.ts` | Every tunable as a frozen group (`SERVER`, `MODELS`, `RATES`, `LLM`, `LIMITS`, `JOBS`, `DB`, `CORS`, `LOG`, `PATHS`, `AI`, `REVIEW`, `MOCK`) plus `KNOWN_SETTINGS`. Importing it loads the settings. The only place that reads `process.env`, apart from `db.ts`. | `process.env` |
 | `db.ts` | The Postgres pool and the `host:port/db` string used in messages. | `POSTGRES_*` (env only), `DB` pool sizing |
 | `frac-sizes.ts` | Loads and validates the per-size targets; stops startup on a bad entry. | `config/frac-sizes.json` |
-| `ai-providers.ts` | Loads and validates the provider profiles with Zod (kind, key variable, models, thinking, prices, web search, free tier, concurrency); stops startup naming the profile and field at fault. | `config/ai-providers.json` |
+| `ai-providers.ts` | Loads and validates the provider profiles with Zod (kind, key variable, models, thinking, prices, web search, optional free-tier flag and concurrency cap); stops startup naming the profile and field at fault. | `config/ai-providers.json` |
 | `review-rules.ts` | Loads the r3 rule tables plus the OUTDATED list. Called on every review, so rule edits apply without a restart. | `config/review-rules.json`, `config/outdated.json` |
 | `outdated.ts` | Loads the OUTDATED list (superseded laws, programmes, terms). | `config/outdated.json` |
 | `method.ts` | Loads the method paragraph for the Excel "Method & Sources" sheet; empty when the file is missing (it does not exist yet). | `config/method.txt` |
@@ -92,7 +92,7 @@ flowchart LR
 | `routes/index.ts` | The `/v1` router: `/fracs`, `/frac-reviews`, `/jobs/:id`, `/info` (which AI provider is on). |
 | `routes/frac.routes.ts` | `/v1/fracs` wiring and validation. `/steps/check` is registered before `/steps/:step`. |
 | `routes/review.routes.ts` | `/v1/frac-reviews` wiring: upload, then validation. |
-| `controllers/frac.controller.ts` | Creator handlers. Steps and the check answer 202 `{ jobId }`. |
+| `controllers/frac.controller.ts` | Creator handlers. Steps and the check answer 202 `{ jobId }`; `GET /fracs/:id` also returns `activeJobId`. |
 | `controllers/review.controller.ts` | Reviewer handlers. Upload answers 200 with the saved review when the fingerprint matches, else 202 with a job. |
 | `controllers/job.controller.ts` | `GET /v1/jobs/:id`: status, message, x of y, error code, usage (calls, tokens, cost). Another owner's job is 404. |
 | `controllers/http.ts` | Excel download helper and the route-param helper. |
@@ -104,7 +104,8 @@ flowchart LR
 
 | File | Holds |
 |---|---|
-| `frac.model.ts` | The FRAC document (spec 4.1): roles, activities, competencies, levels, postings, research, versions. |
+| `frac.model.ts` | The FRAC document (spec 4.1): roles, activities, competencies, levels, postings, research (sources with an optional `url`), versions, and `reviewStale` (the content changed after the expert check). Since Nov 2026: `sizeBy`/`sizeReason` (the agent chose the size), `seededFrom` (position matching) and `uploads` (standard sheets in use). |
+| `document.model.ts` | A document attached to a FRAC: a brief document's text, or a standard sheet's import summary. |
 | `review.model.ts` | `ReviewModel` (spec 4.2), the review engine's input, and `ReviewRecord`, a stored review. |
 | `report.model.ts` | `Report`, `Finding`, `Stats`, severities (B, M, m), triage. |
 | `job.model.ts` | A job row and the patch type. |
@@ -116,9 +117,10 @@ runs without a database).
 
 | File | Owns |
 |---|---|
-| `repositories/frac.repository.ts` | `fracs` and `frac_versions` (the FRAC is a JSONB document). |
+| `repositories/frac.repository.ts` | `fracs` and `frac_versions` (the FRAC is a JSONB document); `findByCadre` for position matching. |
+| `repositories/document.repository.ts` | `frac_documents` (migration 010): insert, list for a FRAC, delete. |
 | `repositories/review.repository.ts` | `reviews`, including `findByFingerprint` for "same file, same review". |
-| `repositories/job.repository.ts` | `jobs`: insert, patch update (column allowlist), get, `failStale` for the watchdog. |
+| `repositories/job.repository.ts` | `jobs`: insert, patch update (column allowlist), get, `activeFor` (the live job on a FRAC or review), `failStale` for the watchdog. |
 | `repositories/index.ts` | Builds the Postgres or memory bundle. |
 | `repositories/row-helpers.ts` | `clone`, `byNewest`, `iso`. |
 | `db/migrate.ts` | Runs each pending migration once, in its own transaction, under an advisory lock, recorded in `schema_migrations`. |
@@ -129,6 +131,11 @@ runs without a database).
 | `001_init.sql` | `fracs`, `frac_versions`, `reviews`, `jobs` and their indexes |
 | `002_job_error_code.sql` | `jobs.error_code` and a `(status, updated_at)` index for the watchdog |
 | `003_review_fingerprint.sql` | `reviews.fingerprint` and an `(owner_id, fingerprint)` index |
+| `004_ai_calls.sql`, `005_…`, `006_…` | `ai_calls`, one row per model call, with its start time and thinking tokens |
+| `007_server_runs.sql` | `server_runs`, one row per server start and stop |
+| `008_review_answer_cache.sql` | `review_answer_cache`, stored checklist answers for repeat checks |
+| `009_one_active_job.sql` | At most one queued or running job per FRAC or review |
+| `010_frac_documents.sql` | `frac_documents`: brief documents and standard sheet imports per FRAC |
 
 ### Creator: `services/frac.service.ts` and `services/ai/`
 
@@ -144,9 +151,10 @@ a version.
 | `ai/schemas.ts` | The Zod output shape of every AI call. |
 | `ai/sizes.ts` | `SIZE_TARGETS` from `config/frac-sizes.json` and `BATCH` from `AI_BATCH_SIZE` / `AI_BATCH_PARALLEL`. |
 | `ai/batching.ts` | `runInBatches`: N items per call, M calls at once, results in the original order. |
-| `ai/research.step.ts` | Step 2: one call; code prefix cleaned, at most 3 postings (P1–P3), `VERIFY:` items added to assumptions. |
-| `ai/roles.step.ts` | Step 3: one roles call, then activities in batches; global R/A numbering; team-added activities kept; competencies kept and flagged "roles changed". |
-| `ai/competencies.step.ts` | Step 4: one call; writes `competency@level` on each activity; keeps a ladder only when code and label are unchanged. |
+| `ai/research.step.ts` | Step 2: one call; code prefix cleaned, at most 3 postings (P1–P3), `VERIFY:` items added to assumptions. Reads attached documents (fewer searches), keeps a Sources sheet's rows and fixed postings, checks each source link (`source-links.ts` `linkSources`), applies an agent-chosen size. |
+| `ai/source-links.ts` | Research source links: keeps a link only when it is a searched page or an address on the research domains or `SOURCE_LINK_DOMAINS` that answers a quick check (`SOURCE_LINK_CHECK_TIMEOUT_MS`, at most `SOURCE_LINK_MAX_CHECKS` per run); a source with no link is matched to a searched page by title; never reaches internal addresses (`webLink`). |
+| `ai/roles.step.ts` | Step 3: one roles call, then activities in batches; global R/A numbering; team-added activities kept; competencies kept and flagged "roles changed". Roles from a sheet or a match: `fillGaps` writes activities only for empty roles. |
+| `ai/competencies.step.ts` | Step 4: one call; writes `competency@level` on each activity; keeps a ladder only when code and label are unchanged. With a Competencies sheet: `mapToSheet`, one `mapping` call to the fixed codes. |
 | `ai/ladders.step.ts` | Step 5: batches of competencies, saved after each batch; `codes` limits it to "Revise {code}" / "Fix these competencies" / "Rewrite all". |
 
 | Step | Tier | Calls |
@@ -158,6 +166,18 @@ a version.
 | Expert check | complex | laddered competencies ÷ `REVIEW_BATCH_SIZE`, + 1 state call |
 
 Each provider profile in `config/ai-providers.json` sets the model and thinking level per tier.
+
+### Documents: `services/document.service.ts` and `services/documents/`
+
+Review decisions of Nov 2026 (`docs/releases/REVIEW_DECISIONS_2026-11.md`).
+
+| File | Purpose |
+|---|---|
+| `document.service.ts` | Upload, list and remove documents on a FRAC; applies a sheet import to the FRAC (version first; refused while a step runs); serves the templates. |
+| `documents/extract-text.ts` | PDF (unpdf), DOCX (mammoth) and TXT to text, capped at `DOC_MAX_CHARS`. |
+| `documents/sheet-formats.ts` | The Roles, Competencies and Sources layouts, shared by the importer and the templates, plus the brief guide. |
+| `documents/import-sheets.ts` | Reads those sheets, reusing the Reviewer's header helpers and `parseCompetencies`. |
+| `excel/csv-reader.ts` | CSV upload to the same sheet shape as a workbook. |
 
 ### Reviewer: `services/review.service.ts`, `services/ai-review.service.ts`, `services/review-engine/`
 
@@ -180,7 +200,7 @@ record, list, export and "Open in Creator".
 
 | File | Purpose |
 |---|---|
-| `queue/job-runner.ts` | Runs a task in-process and records status, progress and usage on its `jobs` row. Writes are chained so parallel batches never overwrite a newer total; a heartbeat (`JOB_HEARTBEAT_MS`) keeps a job fresh during a long model call; one "Job spend" log line per job. |
+| `queue/job-runner.ts` | Runs a task in-process and records status, progress and usage on its `jobs` row. Writes are chained so parallel batches never overwrite a newer total; a heartbeat (`JOB_HEARTBEAT_MS`) keeps a job fresh during a long model call; one "Job spend" log line per job. `startExclusive` allows one live job per target (409 `JOB_RUNNING`; a job silent for two heartbeats is replaced), and a job stops with `AI_BUDGET_EXCEEDED` at `JOB_MAX_COST_USD` of billed spend. |
 | `queue/job-messages.ts` | The progress text shown in the portal, and the expert-check note. |
 | `job-watchdog.service.ts` | Marks jobs left running by a restart as `JOB_INTERRUPTED` after `JOB_STALE_AFTER_MS`. |
 
@@ -190,7 +210,6 @@ record, list, export and "Open in Creator".
 |---|---|
 | `providers/text/types.ts` | The `TextProvider` seam: task, tier, prompt in; JSON, usage and cost out. |
 | `providers/text/claude.ts` | Claude (profile kind `claude`): streaming, the profile's thinking level as `effort`, web search for research, `pause_turn` resume, refusals and truncation mapped to coded errors. |
-| `providers/text/gemini.ts` | Gemini (profile kind `gemini`, free or paid): JSON mode, `thinkingLevel` per tier, Google Search for research when the profile allows it, SDK retries with a 5 s first wait, usage incl. thinking and search queries, errors mapped to the same codes. |
 | `services/ai/ask-model.ts` | `askModel`: the one call path for Creator steps and the review checklist. Times the call, validates the answer, and reports it once (tokens, cost, outcome) so the job total and `ai_calls` both see it. |
 | `tools/reports/review-report.ts` | Builds the review analysis report for one upload or one FRAC's expert checks. Pure. |
 | `tools/reports/run-review-report.ts` | `npm run review:report -- <id>`: loads a review or a FRAC's expert checks and their calls, writes `reports/reviews/review-<id>.md`. |
@@ -199,7 +218,7 @@ record, list, export and "Open in Creator".
 | `repositories/server-run.repository.ts` | Server starts and stops, for the per-run report. |
 | `repositories/ai-call.repository.ts` | The `ai_calls` per-call log: Postgres and memory. Insert-only. |
 | `providers/text/json.ts` | `extractJson`: the one JSON object in a model's final text; shared by every provider. |
-| `providers/text/limit.ts` | `limitConcurrency`: caps calls in flight for a profile's `maxConcurrent` (1 on the Gemini free tier). |
+| `providers/text/limit.ts` | `limitConcurrency`: caps calls in flight for a profile's `maxConcurrent` (none of the current profiles set one). |
 | `providers/text/pricing.ts` | USD per call from tokens, cache reads and writes, and web searches, at the given profile's `rates`. |
 | `providers/registry.ts` | Builds the provider `AI_PROVIDER` names: `mock` loads `src/mocks` dynamically; anything else is a profile whose `kind` picks a factory and whose `keyEnv` names the key. Stops startup with what to set otherwise. |
 | `mocks/mock-text-provider.ts` | Answers every task with sample data in the real shapes; estimates tokens and prices them at the `MOCK_PRICED_AS` profile's rates, marked `estimated`. |
@@ -211,7 +230,7 @@ record, list, export and "Open in Creator".
 | File | Purpose |
 |---|---|
 | `workbook-reader.ts` | Upload → sheets of plain text; falls back to the streaming reader for files the full loader refuses. |
-| `workbook-writer.ts` | The Creator export (FRAC, Competencies, Method & Sources, Expert check) and the Reviewer export (Review). "Found by" says only "Rule-based check" or "AI judgement (quoted)". |
+| `workbook-writer.ts` | The Creator export (FRAC, Competencies, Method & Sources with a URL column, Expert check), the Reviewer export (Review) and `buildTemplateWorkbook` for the upload templates. "Found by" says only "Rule-based check" or "AI judgement (quoted)". |
 
 ### Shared: `utils/`
 
@@ -228,9 +247,11 @@ record, list, export and "Open in Creator".
 
 1. `requestContext` → `requestLogger` → `requireOwner` → `validateBody(stepSchema)`.
 2. `frac.controller` → `FracService.startStep`: loads the FRAC (404 if another owner's), checks the
-   prerequisite (409), and asks `JobRunner` to start a job. Answers 202 `{ jobId }` at once.
+   prerequisite (409 `STEP_NOT_READY`), and asks `JobRunner.startExclusive` to start a job (409 `JOB_RUNNING` if one
+   is already live on this FRAC; migration 009's unique index covers two starts at once). Answers 202 `{ jobId }` at once.
 3. In the background: `runLadders` → `runInBatches` → `callModel` → provider. Each call records usage; each
-   batch saves into the latest FRAC and reports "x of y".
+   batch saves into the latest FRAC and reports "x of y"; a ladders batch also marks an earlier expert check out
+   of date (`reviewStale`). The job stops if its billed spend reaches `JOB_MAX_COST_USD`.
 4. On finish: merge, raise `step`, log, snapshot a version, mark the job done, log "Job spend".
 5. The portal polls `GET /v1/jobs/:id` until done, then reloads the FRAC.
 
@@ -283,8 +304,8 @@ ladders are incomplete; **revise** on any Blocker or 3+ Majors; otherwise **use*
 
 | To change | Edit | Takes effect |
 |---|---|---|
-| Provider choice, call limits, batching, request limits, jobs, Postgres pool | `config/service.json` (an env var of the same name wins) | Restart |
-| Models, thinking levels, prices, key variable, web search, free tier per provider | `config/ai-providers.json` | Restart |
+| Provider choice, call limits, batching, research search and source-link domains (`SOURCE_LINK_DOMAINS`), request limits, jobs (incl. the `JOB_MAX_COST_USD` spending limit), Postgres pool | `config/service.json` (an env var of the same name wins) | Restart |
+| Models, thinking levels, prices, key variable, web search per provider | `config/ai-providers.json` | Restart |
 | Roles, activities and competencies per brief size | `config/frac-sizes.json` | Restart |
 | Scope rules, ladder-shift rules, core areas | `config/review-rules.json` | Next review |
 | Outdated laws, programmes and terms | `config/outdated.json` | Next review |
@@ -303,8 +324,9 @@ patterns, the five state categories, `ENGINE_VERSION`, and the Excel layout.
 | Where | Covers |
 |---|---|
 | `src/**/*.test.ts` | Unit tests next to the code: settings, sizes, migrations, pricing, every review check and r3 rule, the checklist reviewer, report, refs, parser, Excel, job runner and watchdog |
-| `src/mocks/mock-flow.test.ts` | The whole Creator flow on the mock, the expert check, "same file, same review" and rerun |
-| `test/api.test.ts` | Every route through HTTP on the memory store |
+| `src/mocks/review-decisions.test.ts` | Agent-chosen size, brief documents, each standard sheet, templates, uploads while a step runs, position matching; asserts which AI calls each case makes |
+| `src/mocks/mock-flow.test.ts` | The whole Creator flow on the mock, the expert check, "same file, same review", rerun, and the check going out of date after a fix or edit |
+| `test/api.test.ts` | Every route through HTTP on the memory store, including one live job per FRAC and replacing a silent job |
 | `test/pg.test.ts` | The real migrations and the API on pg-mem (in-memory Postgres) |
 | `test/sample.test.ts` | Three synthetic workbooks with defects planted at known counts |
 | `test/acceptance.test.ts` | Spec §6.6 on the real dictionaries; skipped until they are in `test/fixtures/` |
@@ -315,9 +337,14 @@ patterns, the five state categories, `ENGINE_VERSION`, and the Excel layout.
 
 - **Prompts:** the METHOD and SOURCE_LIBRARY text in `ai/prompts.ts` are stand-ins until the verbatim text
   from the prototype arrives.
-- **Spec 5.2:** uploaded JDs and government orders are not yet passed to the research prompt.
+- **Position matching** covers only the owner's FRACs (FRACs carry no organisation yet), then the portal checks
+  the Positions master. A sheet is used as it is; its quality becomes the FRAC's.
 - **Batching:** when one batch fails, batches already running finish (their spend is recorded); there is no
   cancellation.
+- **"Fix these competencies"** always rewrites ladders, so it cannot clear a finding about a label (too broad, KCM
+  name) or about the whole FRAC (state fit). Proposed: a `fixWith` per finding that routes it to the step that can fix it.
+- **Prompt caching** is not used: batches start together, so every call would miss and pay the cache-write price.
+- **Spending limit** is per job only; there is no daily limit yet (the daily report warns at `REPORT_DAILY_BUDGET_USD`).
 - **Usage totals:** `jobs.usage` counts input tokens including cache tokens; the cost already prices them at
   their own rates.
 - **Mock:** generic activities for unknown roles are labelled "Added by team", so a mock revise keeps them as
@@ -326,10 +353,8 @@ patterns, the five state categories, `ENGINE_VERSION`, and the Excel layout.
 - **Rule flags:** `allow`, `onlyIfAbsent` and `unlessNear` patterns are always case-insensitive; there is no
   per-pattern flag for them yet.
 - **Lint scope:** `test/` and the `*.config.js` files are not linted or type-checked; `tools/fixtures/` is transpile-only.
-- **Gemini web search:** Gemini cannot limit Google Search to named sites, so `RESEARCH_SEARCH_DOMAINS` is
-  asked for in the instructions rather than enforced (Claude's tool enforces it). The Gemini free tier has no
-  search at all, so research there relies on the model's own knowledge plus the team's notes.
-- **Free-tier quota:** a full FRAC is several dozen calls. On the Gemini free tier they run one at a time with
-  retries on 429; when the daily quota is gone, jobs fail with `AI_BUSY` until it resets.
-- **Prompts were written against Claude.** They ask for JSON in a fixed shape and every answer is validated, so
-  they work on Gemini, but answer quality per provider should be compared on the acceptance fixtures.
+- **Research web search** is Claude's `web_search` tool, which enforces `RESEARCH_SEARCH_DOMAINS`. The prompt
+  tells the agent to search for the JD and main guidelines before listing them; a run that searched 0 times
+  still finishes, but its sources may have no links.
+- **Prompts were written against Claude.** They ask for JSON in a fixed shape and every answer is validated;
+  answer quality of `claude-mixed` and `claude-fast` should be compared on the acceptance fixtures before go-live.

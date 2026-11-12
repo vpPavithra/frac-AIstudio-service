@@ -1,5 +1,5 @@
 // Caps how many calls a provider has in flight across every job, for keys with a low requests-per-minute
-// quota (a profile's `maxConcurrent`, e.g. 1 on the Gemini free tier). Applied by registry.ts. The steps'
+// quota (a profile's `maxConcurrent`). Applied by registry.ts. The steps'
 // own batching (AI_BATCH_PARALLEL, REVIEW_BATCH_PARALLEL) still decides the order; extra calls just wait.
 import type { CompletionRequest, CompletionResult, TextProvider } from "./types.ts";
 

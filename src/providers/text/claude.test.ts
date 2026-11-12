@@ -61,3 +61,25 @@ describe("Claude structured output", () => {
     expect(structuredFormat("ladders", undefined)).toBeNull();
   });
 });
+
+describe("Claude web search citations", () => {
+  it("collects retrieved and cited pages once each, skipping anything that is not a web link", async () => {
+    const { searchCitations } = await import("./claude.ts");
+    const content = [
+      { type: "server_tool_use", name: "web_search" },
+      {
+        type: "web_search_tool_result",
+        content: [
+          { type: "web_search_result", url: "https://nhm.gov.in/a.pdf", title: "ASHA guidelines" },
+          { type: "web_search_result", url: "javascript:alert(1)", title: "bad" },
+        ],
+      },
+      { type: "web_search_tool_result", content: { type: "web_search_tool_result_error", error_code: "unavailable" } },
+      { type: "text", text: "…", citations: [{ type: "web_search_result_location", url: "https://nhm.gov.in/a.pdf", title: "ASHA guidelines" }, { url: "https://mohfw.gov.in/b", title: "IPHS" }] },
+    ];
+    expect(searchCitations(content)).toEqual([
+      { url: "https://nhm.gov.in/a.pdf", title: "ASHA guidelines" },
+      { url: "https://mohfw.gov.in/b", title: "IPHS" },
+    ]);
+  });
+});

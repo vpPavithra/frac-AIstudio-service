@@ -38,6 +38,7 @@ values and keep them in pgAdmin's saved password or your `.env` only.
 | `ai_calls` | One row per model call: provider, model, task, tokens, cost, latency. |
 | `server_runs` | When each server run started and stopped. |
 | `review_answer_cache` | Saved checklist answers reused for an identical review. |
+| `frac_documents` | Documents attached to a FRAC (migration 010): `kind` is `brief` (a job description or order; its extracted text is in `text`) or `roles` / `competencies` / `sources` (a standard sheet; `parsed` holds the counts and warnings, and for sources the rows). The uploaded file itself is never stored. |
 | `schema_migrations` | Which files in `migrations/` have been applied. |
 
 The tables come from `migrations/` (`npm run migrate`, or on server start when `MIGRATE_ON_START` is on). If a table is
@@ -46,7 +47,7 @@ missing, the migrations have not run against this database.
 ## View the data
 
 - Right-click a table → **View/Edit Data** → **All Rows** (or **Last 100 Rows** for a long table).
-- `doc`, `report`, `ctx` and `usage` are JSON. Double-click a cell to open it in a larger viewer.
+- `doc`, `report`, `ctx`, `usage` and `parsed` are JSON. In `fracs.doc`, `uploads` names the standard sheets in use and `seededFrom` the matched position. Double-click a cell to open it in a larger viewer.
 - To see the columns and types, expand the table's **Columns** node, or select the table and open **Properties**.
 - New rows from the app do not appear on their own: press **Refresh** (F5) in the data grid.
 
@@ -54,4 +55,4 @@ missing, the migrations have not run against this database.
 
 The data grid is editable. Changing or deleting a cell and pressing **Save Data Changes** writes straight to the
 database and changes what the app shows (a deleted `fracs` row also deletes its versions). Use pgAdmin to look, and
-make changes through the app or the API.
+make changes through the app or the API. A deleted `fracs` row also deletes its `frac_documents` rows.

@@ -10,6 +10,7 @@ import { loadReviewRules } from "../src/config/review-rules.ts";
 import { loadMigrations, runMigrations } from "../src/db/migrate.ts";
 import { JobRunner } from "../src/services/queue/job-runner.ts";
 import { pgRepositories } from "../src/repositories/index.ts";
+import { DocumentService } from "../src/services/document.service.ts";
 import { FracService } from "../src/services/frac.service.ts";
 import { ReviewService } from "../src/services/review.service.ts";
 import { stubProvider } from "./support/stub-provider.ts";
@@ -34,7 +35,7 @@ async function setup() {
   const reviews = new ReviewService(repos, runner, new ComputedOnlyReviewer(), () => loadReviewRules());
   const provider = stubProvider();
   const fracs = new FracService(repos, runner, reviews, () => "Method", provider);
-  return { app: createApp({ fracs, reviews, jobs: repos.jobs, provider }), runner, pool, applied };
+  return { app: createApp({ fracs, documents: new DocumentService(repos, fracs), reviews, jobs: repos.jobs, provider }), runner, pool, applied };
 }
 
 const roles = [
@@ -52,7 +53,7 @@ const competencies = [
 describe("Postgres path (pg-mem)", () => {
   it("applies every migration once and is a no-op the second time", async () => {
     const { pool, applied } = await setup();
-    expect(applied).toEqual(["001_init.sql", "002_job_error_code.sql", "003_review_fingerprint.sql", "004_ai_calls.sql", "005_ai_call_started_at.sql", "006_ai_call_thinking_tokens.sql", "007_server_runs.sql", "008_review_answer_cache.sql", "009_one_active_job.sql"]);
+    expect(applied).toEqual(["001_init.sql", "002_job_error_code.sql", "003_review_fingerprint.sql", "004_ai_calls.sql", "005_ai_call_started_at.sql", "006_ai_call_thinking_tokens.sql", "007_server_runs.sql", "008_review_answer_cache.sql", "009_one_active_job.sql", "010_frac_documents.sql"]);
     expect(await runMigrations(pool, loadMigrations())).toEqual([]);
   });
 

@@ -11,7 +11,7 @@ import { AI, LLM } from "../../config/constants.ts";
 import { ApiError } from "../../utils/response.ts";
 import { extractJson } from "./json.ts";
 import { priceUsd } from "./pricing.ts";
-import type { CallUsage, CompletionRequest, CompletionResult, ModelTier, TextProvider } from "./types.ts";
+import type { CallUsage, Citation, CompletionRequest, CompletionResult, ModelTier, TextProvider } from "./types.ts";
 
 type Message = Anthropic.Beta.BetaMessage;
 
@@ -39,6 +39,26 @@ const finalText = (message: Message) =>
   message.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("\n");
 
 /**
+ * The pages a turn's web search returned (web_search_tool_result blocks) and the ones its text cites, by URL,
+ * first seen first. Read loosely (no SDK block types) so a new block shape is skipped rather than breaking a call.
+ */
+export function searchCitations(content: unknown[]): Citation[] {
+  const found = new Map<string, Citation>();
+  const add = (url: unknown, title: unknown) => {
+    if (typeof url === "string" && /^https?:\/\//i.test(url) && !found.has(url)) found.set(url, { url, title: typeof title === "string" ? title : "" });
+  };
+  for (const block of content as { type?: string; content?: unknown; citations?: unknown }[]) {
+    if (block?.type === "web_search_tool_result" && Array.isArray(block.content)) {
+      for (const r of block.content as { url?: unknown; title?: unknown }[]) add(r?.url, r?.title);
+    }
+    if (block?.type === "text" && Array.isArray(block.citations)) {
+      for (const c of block.citations as { url?: unknown; title?: unknown }[]) add(c?.url, c?.title);
+    }
+  }
+  return [...found.values()];
+}
+
+/**
  * TextProvider backed by the Anthropic Messages API (beta endpoint, for server-side fallback and effort).
  * Created by registry.ts createAi for a profile of kind "claude".
  */
@@ -57,24 +77,28 @@ export class ClaudeTextProvider implements TextProvider {
 
   /**
    * One step's call. Only the research task gets the web_search tool (spec 5.2), limited to
-   * AI.researchSearchDomains and AI.researchSearchMaxUses. Usage is summed across pause_turn resumes.
+   * AI.researchSearchDomains and AI.researchSearchMaxUses (or the request's searchMaxUses; 0 = no search).
+   * The pages it retrieved come back as `citations`. Usage is summed across pause_turn resumes.
    * Throws AI_REFUSED or AI_OUTPUT_TRUNCATED on those stop reasons, and the codes from describeApiError.
    * Fixed-shape tasks use structured output (structuredFormat), so their JSON is always valid. Invalid or missing
    * JSON from a free-form task is not an error here: `json` is null and askModel retries, then fails the step.
    */
   async complete(request: CompletionRequest): Promise<CompletionResult> {
     const model = this.profile.models[request.tier];
+    const maxUses = request.searchMaxUses ?? AI.researchSearchMaxUses;
     const tools: Anthropic.Beta.BetaToolUnion[] =
-      request.task === "research" && this.profile.webSearch && AI.researchWebSearch
-        ? [{ type: "web_search_20260209", name: "web_search", max_uses: AI.researchSearchMaxUses, allowed_domains: AI.researchSearchDomains }]
+      request.task === "research" && this.profile.webSearch && AI.researchWebSearch && maxUses > 0
+        ? [{ type: "web_search_20260209", name: "web_search", max_uses: maxUses, allowed_domains: AI.researchSearchDomains }]
         : [];
     const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: "user", content: request.prompt }];
     const format = structuredFormat(request.task, request.schema);
     const usage: Required<CallUsage> = { inputTokens: 0, outputTokens: 0, thinkingTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, webSearches: 0 };
 
     let message: Message | null = null;
+    const citations: Citation[] = [];
     for (let turn = 0; turn <= LLM.maxResumes; turn++) {
       message = await this.send(model, request.tier, messages, tools, format);
+      if (tools.length) citations.push(...searchCitations(message.content));
       // Summed over resumed turns: each pause_turn resend is billed again
       const u = message.usage;
       usage.cacheReadTokens += u.cache_read_input_tokens ?? 0;
@@ -101,7 +125,15 @@ export class ClaudeTextProvider implements TextProvider {
       throw new ApiError(502, "AI_OUTPUT_TRUNCATED", "The model's answer was cut off. Try a smaller size or fewer competencies.");
     }
     const text = finalText(message);
-    return { json: extractJson(text), text, model: message.model, usage, costUsd: priceUsd(this.profile.rates, request.tier, usage), estimated: this.profile.freeTier };
+    return {
+      json: extractJson(text),
+      text,
+      model: message.model,
+      usage,
+      costUsd: priceUsd(this.profile.rates, request.tier, usage),
+      estimated: this.profile.freeTier,
+      ...(citations.length ? { citations } : {}),
+    };
   }
 
   /** Streams (long answers would otherwise hit HTTP timeouts) and returns the finished message. */

@@ -6,6 +6,7 @@ import type { ModelActivity, ModelCompetency, ModelRole, ReviewModel } from "../
 // to text by excel/workbook-reader.ts, into the ReviewModel the checks, the AI checklist and the
 // fingerprint all read. Called by ReviewService.startUploadReview. Sheets are found by their header
 // row, not by name or position, because every state lays its FRAC out differently. Reads no config.
+// The header helpers and parseCompetencies are also used by documents/import-sheets.ts (standard sheets).
 
 /** Reader-agnostic sheet: every cell already flattened to trimmed text. */
 export interface SheetData {
@@ -23,30 +24,30 @@ export const NO_FRAC_SHEET_WARNING = "No FRAC sheet found: structure and coverag
 /** Header rows and the "Position:" line are looked for only in a sheet's first 12 rows (rules r3 §2). */
 const HEADER_SCAN_ROWS = 12;
 // Hindi copies of the English sheets are skipped so each competency is read once (spec 11: Hindi is open)
-const HINDI_SHEET = /\(H\)|hindi/i;
+export const HINDI_SHEET = /\(H\)|hindi/i;
 // Header patterns, tested on lower-cased, trimmed header cells (rules r3 §2)
-const COMP_CODE = /competenc.*code|^code$/;
+export const COMP_CODE = /competenc.*code|^code$/;
 // Rules r3 §2: a competency sheet is either laddered (Level 1…) or KCM format (Applicable Level, Theme n)
-const COMP_SHEET = /level\s*1|applicable level|theme\s*1/;
-const ROLE = /^role/;
-const ACTIVITY = /^activit/;
+export const COMP_SHEET = /level\s*1|applicable level|theme\s*1/;
+export const ROLE = /^role/;
+export const ACTIVITY = /^activit/;
 // The Meghalaya layout: one "Roles/Activities" column of R1/A1 codes plus a "Description" column
 const ROLE_ACTIVITY = /role.*activit/;
 const DESCRIPTION = /^desc/;
 // The activity → competency mapping column; when absent, hasMapping is false (rules r3 §2, §4.6)
-const MAPPING = /compe?t|mapping/;
+export const MAPPING = /compe?t|mapping/;
 // Every other FRAC column is a posting (Sub-Centre, PHC …) unless its header matches this (rules r3 §2)
-const NOT_POSTING = /source|tier|applicab|note|desc/;
+export const NOT_POSTING = /source|tier|applicab|note|desc/;
 const POSITION = /^position\s*:\s*(.+)$/i;
 
-interface HeaderHit {
+export interface HeaderHit {
   sheet: SheetData;
   headerRow: number;
   headers: string[];
 }
 
 /** The header row of `sheet` (first 12 rows) that has a column matching each of `required`. */
-function headerIn(sheet: SheetData, ...required: RegExp[]): HeaderHit | null {
+export function headerIn(sheet: SheetData, ...required: RegExp[]): HeaderHit | null {
   const limit = Math.min(sheet.rows.length, HEADER_SCAN_ROWS);
   for (let r = 0; r < limit; r++) {
     const headers = sheet.rows[r].map((c) => (c ?? "").trim().toLowerCase());
@@ -86,11 +87,11 @@ function typeFromSheet(name: string): string {
 }
 
 /** First column whose header matches `re` and none of `exclude`. */
-function col(headers: string[], re: RegExp, exclude?: RegExp): number {
+export function col(headers: string[], re: RegExp, exclude?: RegExp): number {
   return headers.findIndex((h) => h !== "" && re.test(h) && !(exclude && exclude.test(h)));
 }
 
-function cell(row: string[], idx: number): string {
+export function cell(row: string[], idx: number): string {
   return idx >= 0 ? (row[idx] ?? "").trim() : "";
 }
 
@@ -98,7 +99,7 @@ function cell(row: string[], idx: number): string {
  * Reads one competency sheet. A laddered sheet gives five {label, desc} levels per row; a KCM-format sheet
  * gives `format: "kcm"`, themes and the applicable level, with no ladder (rules r3 §2). Rows with no code are skipped.
  */
-function parseCompetencies(hit: HeaderHit): ModelCompetency[] {
+export function parseCompetencies(hit: HeaderHit): ModelCompetency[] {
   const h = hit.headers;
   // Label/description/type/area must not grab "Competency Level n …" columns (spec gap 8)
   const notLevel = /level/;

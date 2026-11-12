@@ -11,14 +11,12 @@ import type { FracService } from "../services/frac.service.ts";
 import type { JobRunner } from "../services/queue/job-runner.ts";
 import type { ReviewService } from "../services/review.service.ts";
 import { ClaudeTextProvider } from "./text/claude.ts";
-import { GeminiTextProvider } from "./text/gemini.ts";
 import { limitConcurrency } from "./text/limit.ts";
 import type { TextProvider } from "./text/types.ts";
 
 /** One constructor per provider kind. */
 const FACTORIES: Record<ProviderKind, (profile: AiProfile, apiKey: string) => TextProvider> = {
   claude: (profile, key) => new ClaudeTextProvider(profile, key),
-  gemini: (profile, key) => new GeminiTextProvider(profile, key),
 };
 
 /** The value of AI_PROVIDER that selects the sample-data mock. */

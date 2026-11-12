@@ -63,6 +63,29 @@ export const LIMITS = Object.freeze({
   maxCompetencies: num("MAX_COMPETENCIES", 500),
 });
 
+/**
+ * Documents a team attaches to a FRAC (services/document.service.ts). A job description or government order
+ * is reduced to its text, capped, and read by the research step; standard sheets replace an AI step.
+ */
+export const DOCUMENTS = Object.freeze({
+  /** Most characters kept from one brief document, and most sent to research from all of them (about 4 per token). */
+  maxChars: int("DOC_MAX_CHARS", 30_000),
+  /** Most brief documents on one FRAC. */
+  maxBriefFiles: int("DOC_MAX_BRIEF_FILES", 3),
+  /** Web searches research may run when the team attached a brief document (the document is the main source). 0 = none. */
+  searchesWithDocs: int("RESEARCH_SEARCH_MAX_USES_WITH_DOCS", 1, 0),
+});
+
+/** Research source links (services/ai/source-links.ts): checks that an address the model gave really answers. */
+export const SOURCE_LINKS = Object.freeze({
+  /** Time allowed for one link check, redirects included. */
+  checkTimeoutMs: int("SOURCE_LINK_CHECK_TIMEOUT_MS", 3000),
+  /** Most link checks in one research run. 0 = keep only pages the web search returned. */
+  maxChecks: int("SOURCE_LINK_MAX_CHECKS", 10, 0),
+  /** Sites a link may point to besides AI.researchSearchDomains: they host guidelines but are not searched. */
+  domains: list("SOURCE_LINK_DOMAINS"),
+});
+
 /** Stuck-job watchdog (services/job-watchdog.service.ts), started by server.ts. */
 const staleAfterMs = num("JOB_STALE_AFTER_MS", 15 * 60_000);
 export const JOBS = Object.freeze({
@@ -113,7 +136,7 @@ export const PATHS = Object.freeze({
 });
 
 /**
- * Which provider the AI steps call: a profile name from config/ai-providers.json (e.g. "gemini-free",
+ * Which provider the AI steps call: a profile name from config/ai-providers.json (e.g. "claude",
  * "claude"), or "mock" for the sample data in src/mocks. `npm run dev:mock` / `dev:ai` set it per run.
  * The profile names the environment variable holding its key; keys never go in config files.
  */
@@ -167,7 +190,7 @@ export const MOCK = Object.freeze({
   seed: env.MOCK_SEED === "true",
   seedOwners: list("MOCK_SEED_OWNERS").length ? list("MOCK_SEED_OWNERS") : ["local-dev-user"],
   /** The profile whose list prices the mock's cost estimate uses, so it previews the real provider's bill. */
-  pricedAs: text("MOCK_PRICED_AS", "gemini-free"),
+  pricedAs: text("MOCK_PRICED_AS", "claude"),
 });
 
 /** Every setting name above, so config:check can reject unknown keys in service.json. */
@@ -175,6 +198,8 @@ export const KNOWN_SETTINGS = [
   "PORT", "FRAC_STUDIO_STORE", "MIGRATE_ON_START",
   "LLM_TIMEOUT_MS", "LLM_RETRIES", "LLM_MAX_TOKENS", "LLM_MAX_RESUMES", "LLM_MAX_RETRY_DELAY_MS", "LLM_INVALID_RETRIES",
   "MAX_UPLOAD_MB", "MAX_JSON_MB", "MAX_TEXT_CHARS", "MAX_ROLES", "MAX_ACTIVITIES_PER_ROLE", "MAX_COMPETENCIES",
+  "DOC_MAX_CHARS", "DOC_MAX_BRIEF_FILES", "RESEARCH_SEARCH_MAX_USES_WITH_DOCS",
+  "SOURCE_LINK_CHECK_TIMEOUT_MS", "SOURCE_LINK_MAX_CHECKS", "SOURCE_LINK_DOMAINS",
   "JOB_STALE_AFTER_MS", "JOB_SWEEP_EVERY_MS", "JOB_HEARTBEAT_MS", "JOB_MAX_COST_USD",
   "POSTGRES_POOL_MAX", "POSTGRES_CONNECT_TIMEOUT_MS", "POSTGRES_IDLE_TIMEOUT_MS", "CORS_ORIGINS", "LOG_FORMAT", "LOG_LEVEL",
   "OUTDATED_CONFIG_PATH", "REVIEW_RULES_CONFIG_PATH", "FRAC_SIZES_CONFIG_PATH", "AI_PROVIDERS_CONFIG_PATH", "METHOD_PARAGRAPH_PATH",

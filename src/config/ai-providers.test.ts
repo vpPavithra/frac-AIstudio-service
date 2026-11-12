@@ -11,19 +11,18 @@ function tempProfiles(body: unknown): string {
 }
 
 const valid = {
-  kind: "gemini",
-  keyEnv: "GEMINI_API_KEY",
+  kind: "claude",
+  keyEnv: "ANTHROPIC_API_KEY",
   models: { complex: "m1", default: "m2" },
   thinking: { complex: "high", default: "low" },
   rates: { complex: { inUsdPer1M: 1, outUsdPer1M: 2, cacheReadUsdPer1M: 0.1 }, default: { inUsdPer1M: 1, outUsdPer1M: 2, cacheReadUsdPer1M: 0.1 } },
 };
 
 describe("AI provider profiles", () => {
-  it("reads the committed profiles: Gemini free and paid, and Claude", () => {
+  it("reads the committed Claude profiles", () => {
     const profiles = loadAiProfiles();
-    expect(Object.keys(profiles)).toEqual(["gemini-free", "gemini-paid", "claude-mixed", "claude-fast", "claude"]);
-    expect(profiles["gemini-free"]).toMatchObject({ kind: "gemini", keyEnv: "GEMINI_API_KEY", freeTier: true, webSearch: false, maxConcurrent: 1 });
-    expect(profiles.claude).toMatchObject({ kind: "claude", keyEnv: "ANTHROPIC_API_KEY", freeTier: false });
+    expect(Object.keys(profiles)).toEqual(["claude-mixed", "claude-fast", "claude"]);
+    expect(profiles.claude).toMatchObject({ kind: "claude", keyEnv: "ANTHROPIC_API_KEY", freeTier: false, webSearch: true });
   });
 
   it("fills defaults and skips comment keys", () => {
@@ -34,7 +33,7 @@ describe("AI provider profiles", () => {
   it("names the profile and field at fault", () => {
     expect(() => loadAiProfiles(tempProfiles({ bad: { ...valid, kind: "other" } }))).toThrow(SettingsError);
     expect(() => loadAiProfiles(tempProfiles({ bad: { ...valid, thinking: { complex: "max", default: "low" } } }))).toThrow(/"bad" thinking.complex/);
-    expect(() => loadAiProfiles(tempProfiles({ bad: { ...valid, keyEnv: "GEMINI_KEY" } }))).toThrow(/_API_KEY/);
+    expect(() => loadAiProfiles(tempProfiles({ bad: { ...valid, keyEnv: "ANTHROPIC_KEY" } }))).toThrow(/_API_KEY/);
   });
 
   it("keeps the name mock for the sample-data provider", () => {

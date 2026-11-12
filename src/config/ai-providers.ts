@@ -9,7 +9,7 @@ import { PATHS } from "./constants.ts";
 import { SettingsError } from "./settings.ts";
 
 /** Implementations that exist in src/providers/text. A profile's `kind` must be one of these. */
-export const PROVIDER_KINDS = ["claude", "gemini"] as const;
+export const PROVIDER_KINDS = ["claude"] as const;
 export type ProviderKind = (typeof PROVIDER_KINDS)[number];
 
 const usd = z.number().min(0);
@@ -18,12 +18,12 @@ const level = z.enum(["low", "medium", "high"]);
 
 const profileSchema = z.object({
   kind: z.enum(PROVIDER_KINDS),
-  /** The environment variable holding this provider's key, e.g. GEMINI_API_KEY. */
+  /** The environment variable holding this provider's key, e.g. ANTHROPIC_API_KEY. */
   keyEnv: z
     .string()
     .regex(
       /^[A-Z][A-Z0-9_]*_API_KEY$/,
-      "must be the NAME of the environment variable that holds the key (e.g. GEMINI_API_KEY), not the key itself. Put the key in .env",
+      "must be the NAME of the environment variable that holds the key (e.g. ANTHROPIC_API_KEY), not the key itself. Put the key in .env",
     ),
   freeTier: z.boolean().default(false),
   maxConcurrent: z.number().int().min(1).optional(),

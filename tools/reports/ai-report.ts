@@ -203,7 +203,7 @@ function findingsSection(reviews: ReviewRecord[]): string {
 
 /**
  * Tokens, cost and time per step, from the per-call log: how many times the step ran, its calls, and the
- * per-run averages, one row per step and provider (a day can mix the mock, Gemini and Claude). A step's runs
+ * per-run averages, one row per step and provider (a day can mix the mock and the Claude profiles). A step's runs
  * include revisions, so per-run figures are what one click costs.
  */
 function byStepSection(calls: AiCall[], jobs: Job[]): string {

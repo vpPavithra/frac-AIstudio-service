@@ -8,8 +8,8 @@ import { askModel } from "./ask-model.ts";
 
 const shape = z.object({ roles: z.array(z.string()) });
 const answering = (json: unknown): TextProvider => ({
-  name: "gemini-free",
-  complete: async () => ({ json, model: "gemini-3.8-flash", usage: { inputTokens: 100, outputTokens: 20, cacheReadTokens: 10 }, costUsd: 0.001, estimated: true }),
+  name: "claude",
+  complete: async () => ({ json, model: "claude-sonnet-5-5", usage: { inputTokens: 100, outputTokens: 20, cacheReadTokens: 10 }, costUsd: 0.001, estimated: true }),
 });
 const ask = (provider: TextProvider) => (_progress: unknown, recordUsage: Parameters<typeof askModel>[2]) =>
   askModel({ provider, task: "roles", tier: "complex", prompt: "p", input: {} }, shape, recordUsage).then(() => undefined);
@@ -31,8 +31,8 @@ describe("askModel and the per-call AI log", () => {
     expect(calls[0]).toMatchObject({
       jobId: job?.id,
       jobKind: "roles",
-      provider: "gemini-free",
-      model: "gemini-3.8-flash",
+      provider: "claude",
+      model: "claude-sonnet-5-5",
       task: "roles",
       tier: "complex",
       outcome: "ok",
@@ -53,7 +53,7 @@ describe("askModel and the per-call AI log", () => {
   });
 
   it("logs a provider error with its code and no tokens, and passes the error on", async () => {
-    const busy: TextProvider = { name: "gemini-free", complete: () => Promise.reject(new ApiError(503, "AI_BUSY", "quota")) };
+    const busy: TextProvider = { name: "claude", complete: () => Promise.reject(new ApiError(503, "AI_BUSY", "quota")) };
     const { job, calls } = await runJob(busy);
     expect(job).toMatchObject({ status: "error", errorCode: "AI_BUSY" });
     expect(calls).toEqual([expect.objectContaining({ outcome: "AI_BUSY", model: "", inputTokens: 0, costUsd: 0 })]);
@@ -80,7 +80,7 @@ describe("askModel retry on an unreadable answer", () => {
 
   it("does not count the wait for a free slot as the model's time", async () => {
     const queued: TextProvider = {
-      name: "gemini-free",
+      name: "claude",
       complete: async () => ({ json: { roles: ["x"] }, model: "m", usage: { inputTokens: 1, outputTokens: 1 }, costUsd: 0, queuedMs: 60_000 }),
     };
     const { calls } = await runJob(queued);

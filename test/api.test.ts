@@ -8,6 +8,7 @@ import type { SheetData } from "../src/services/review-engine/parse-workbook.ts"
 import { NO_COMPETENCY_SHEET } from "../src/services/review-engine/parse-workbook.ts";
 import { JobRunner } from "../src/services/queue/job-runner.ts";
 import { memoryRepositories } from "../src/repositories/index.ts";
+import { DocumentService } from "../src/services/document.service.ts";
 import { FracService } from "../src/services/frac.service.ts";
 import { ReviewService } from "../src/services/review.service.ts";
 import { stubProvider } from "./support/stub-provider.ts";
@@ -23,7 +24,7 @@ function setup() {
   const reviews = new ReviewService(repos, runner, new ComputedOnlyReviewer(), () => loadReviewRules());
   const provider = stubProvider();
   const fracs = new FracService(repos, runner, reviews, () => "Method text", provider);
-  return { app: createApp({ fracs, reviews, jobs: repos.jobs, provider }), runner, repos };
+  return { app: createApp({ fracs, documents: new DocumentService(repos, fracs), reviews, jobs: repos.jobs, provider }), runner, repos };
 }
 
 async function xlsx(sheets: SheetData[]): Promise<Buffer> {
@@ -157,9 +158,9 @@ describe("creator", () => {
   it("creates from a brief with defaults and validates it", async () => {
     const { app } = setup();
     const missing = await request(app).post("/v1/fracs").set(OWNER).send({ state: "Bihar" }).expect(400);
-    expect(missing.body.error).toMatchObject({ code: "VALIDATION_FAILED", message: "cadre: Cadre is required" });
+    expect(missing.body.error).toMatchObject({ code: "VALIDATION_FAILED", message: "cadre: Position is required" });
     const blank = await request(app).post("/v1/fracs").set(OWNER).send({ cadre: "  " }).expect(400);
-    expect(blank.body.error.message).toBe("cadre: Cadre is required");
+    expect(blank.body.error.message).toBe("cadre: Position is required");
     await request(app).post("/v1/fracs").set(OWNER).send({ cadre: "ANM", size: "huge" }).expect(400);
     const res = await request(app).post("/v1/fracs").set(OWNER).send({ cadre: " ANM " }).expect(201);
     expect(res.body.frac).toMatchObject({ cadre: "ANM", state: "India (national baseline)", size: "standard", step: 1 });
@@ -169,7 +170,7 @@ describe("creator", () => {
     await request(app).get(`/v1/fracs/${res.body.id}`).set(OTHER).expect(404);
   });
 
-  it("marks roles dirty when roles change after competencies exist, and locks the brief after research", async () => {
+  it("marks roles dirty when roles change after competencies exist, and keeps the brief editable after research", async () => {
     const { app } = setup();
     const id = await createWithCompetencies(app);
     const edited = [{ ...roles[0], title: "Run VHSND sessions" }];
@@ -183,9 +184,9 @@ describe("creator", () => {
     expect(refused.body.error.code).toBe("VALIDATION_FAILED");
 
     await request(app).patch(`/v1/fracs/${id}`).set(OWNER).send({ research: { summary: "s" } }).expect(200);
-    const locked = await request(app).patch(`/v1/fracs/${id}`).set(OWNER).send({ cadre: "GNM" }).expect(409);
-    expect(locked.body.error.code).toBe("BRIEF_LOCKED");
-    // Re-sending the unchanged brief is fine
+    // The brief stays editable after research; the change is stamped so research shows as needing attention
+    const briefEdit = await request(app).patch(`/v1/fracs/${id}`).set(OWNER).send({ cadre: "GNM" }).expect(200);
+    expect(briefEdit.body.frac.changedAt.brief).toBeDefined();
     await request(app).patch(`/v1/fracs/${id}`).set(OWNER).send({ cadre: "ANM", codePrefix: "an-m9x" }).expect(200);
     const frac = await request(app).get(`/v1/fracs/${id}`).set(OWNER);
     expect(frac.body.frac.codePrefix).toBe("ANMX");

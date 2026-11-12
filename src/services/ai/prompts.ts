@@ -2,7 +2,8 @@
 // and the Reviewer's checklist (ai-review.service.ts, also run by the expert check). Pure string builders;
 // the step files call them and pass the text to the TextProvider. Brief size wording comes from
 // config/frac-sizes.json (via sizes.ts). Never edit the text inside the templates without the spec owner.
-import type { Frac } from "../../models/frac.model.ts";
+import type { Frac, FracSource, ResearchField } from "../../models/frac.model.ts";
+import { DOCUMENTS } from "../../config/constants.ts";
 import { loadReviewRules } from "../../config/review-rules.ts";
 import { cadreFamily } from "../review-engine/rules.ts";
 import { SIZE_TARGETS } from "./sizes.ts";
@@ -41,17 +42,28 @@ export const SOURCE_LIBRARY = `SOURCE LIBRARY (where JDs and duties are found)
 - INC syllabi: teaching scope only, never proof of authorisation.
 - KCM, the FRAC Introduction Pack and the Karmayogi Quality Framework.`;
 
-/** Closing line before every output shape; claude.ts and gemini.ts also send a JSON-only system instruction. */
+/** Closing line before every output shape; claude.ts also sends a JSON-only system instruction. */
 const JSON_ONLY = "Answer with this JSON object only, no prose:";
+
+/** True until research has chosen the size of a FRAC whose brief left it to the agent. */
+const sizeUndecided = (f: Frac) => f.sizeBy === "agent" && !f.research;
+const sizeChoices = () =>
+  (Object.keys(SIZE_TARGETS) as (keyof typeof SIZE_TARGETS)[]).map((k) => `${k} (${SIZE_TARGETS[k].ranges})`).join("; ");
 
 // Shared prompt blocks. `revise` is empty on a first run, so filter(Boolean) drops it.
 const brief = (f: Frac) =>
-  `BRIEF\nCadre: ${f.cadreFull || f.cadre}\nState: ${f.state}\nSize: ${f.size} (${SIZE_TARGETS[f.size].ranges})\nWhat this FRAC should cover: ${f.prompt || "-"}`;
+  `BRIEF\nCadre: ${f.cadreFull || f.cadre}\nState: ${f.state}\nSize: ${sizeUndecided(f) ? "decide from the research" : `${f.size} (${SIZE_TARGETS[f.size].ranges})`}\nWhat this FRAC should cover: ${f.prompt || "-"}`;
 const revise = (feedback?: string) =>
   feedback ? `TEAM FEEDBACK (apply it; keep what the team edited unless the feedback says otherwise):\n${feedback}` : "";
 const scope = (f: Frac) =>
   `AUTHORISED (treat as authoritative):\n${f.research?.authorised ?? ""}\nNOT AUTHORISED (must be referred):\n${f.research?.notAuthorised ?? ""}`;
-const postings = (f: Frac) => f.postings.map((p) => `${p.key} ${p.label}`).join("; ");
+const postings = (f: Frac) => f.postings.map((p) => `${p.key} ${p.label}`).join("; ") || "none (the job has no separate postings)";
+
+/**
+ * Postings come from the team (review, Nov 2026): only the places of work the brief or the team documents name, as
+ * many as they name up to 3, and none when they name none. The team adds or edits them on the Research tab.
+ */
+const POSTINGS_RULE = `Postings: list only the places of work the brief or the team documents name (up to 3, in their order; e.g. "ANM at Sub-Centre (outreach)"). They become the FRAC's Yes/No columns. Do not add postings they do not name, and return an empty list when they name none: the team adds postings themselves.`;
 
 /**
  * The Reviewer's own rule tables (config/review-rules.json scope, config/outdated.json), so the Creator writes
@@ -74,16 +86,102 @@ export const reviewGuard = (f: Frac): string => {
     .join("\n\n");
 };
 
+/**
+ * What the team gave research besides the brief (review decisions, Nov 2026): the text of attached job
+ * descriptions or orders, a standard source list, and postings fixed by an uploaded Roles sheet or a matched position.
+ */
+export interface ResearchExtras {
+  documents?: { name: string; text: string }[];
+  sources?: FracSource[] | null;
+  fixedPostings?: boolean;
+  /**
+   * Set when documentReadPrompt has already read the documents: what they say, and which parts are covered.
+   * Research then works on the gaps only, and the documents' text is not sent again.
+   */
+  known?: KnownResearch;
+}
+
+/** What the document read found, for the gap research call (research.step.ts). */
+export interface KnownResearch {
+  values: Record<string, unknown>;
+  found: ResearchField[];
+  partial: ResearchField[];
+  missing: ResearchField[];
+}
+
+/** How the prompts name each research part. */
+const FIELD_NAMES: Record<ResearchField, string> = {
+  cadreFull: "cadreFull (full position name)",
+  summary: "summary",
+  postings: "postings",
+  authorised: "authorised",
+  notAuthorised: "notAuthorised",
+  stateContext: "stateContext",
+  sources: "sources",
+};
+
+/** The documents' text, in upload order, within DOCUMENTS.maxChars in total. */
+const teamDocuments = (docs: { name: string; text: string }[], heading = "TEAM DOCUMENTS (the primary source: read these first, cite them by name in sources, and search only for what they leave out)") => {
+  let left = DOCUMENTS.maxChars;
+  const parts = docs.flatMap((d) => {
+    const text = d.text.slice(0, Math.max(0, left));
+    left -= text.length;
+    return text ? [`--- ${d.name} ---\n${text}`] : [];
+  });
+  return parts.length ? `${heading}:\n${parts.join("\n\n")}` : "";
+};
+
+/** The gap research block: what the documents already gave, and the parts left to research. */
+const knownBlock = (known: KnownResearch, docNames: string[]) => {
+  const names = (fields: ResearchField[]) => fields.map((k) => FIELD_NAMES[k]).join(", ") || "none";
+  return [
+    `ALREADY READ FROM THE TEAM DOCUMENTS (${docNames.join(", ")}). Treat these as authoritative and do not research them again:\n${JSON.stringify(known.values)}`,
+    `COVERED BY THE DOCUMENTS (leave these empty in your answer): ${names(known.found)}`,
+    `PARTLY COVERED (complete these, keeping everything already there): ${names(known.partial)}`,
+    `NOT COVERED (research these): ${names(known.missing)}`,
+    "POSTINGS: decided from the brief and the documents, not researched; leave them empty in your answer.",
+  ].join("\n");
+};
+
+/**
+ * Step 2, first part when the team attached documents (review, Nov 2026): read the documents alone, no web
+ * search, and say for each research part whether they cover it. research.step.ts then researches only the gaps.
+ */
+export const documentReadPrompt = (f: Frac, documents: { name: string; text: string }[], fixedPostings = false) => {
+  const decideSize = sizeUndecided(f);
+  return [KAUSHAL, brief(f), METHOD,
+    teamDocuments(documents, "TEAM DOCUMENTS (read these only)"),
+    fixedPostings && f.postings.length ? `POSTINGS (fixed by the team; return them unchanged): ${postings(f)}` : "",
+    decideSize ? `SIZE: choose the size that fits the breadth of this job as the documents describe it: ${sizeChoices()}.` : "",
+    POSTINGS_RULE,
+    `Read the team documents and fill each field with what they state. Use only the brief and the documents: no outside knowledge, no guesses. In "coverage" mark each field "found" when the documents cover it fully, "partial" when they cover some of it, and "missing" when they say nothing about it; leave a missing field empty. Postings are "found" when the brief or documents name where the position works, "missing" otherwise. Put anything stated but unclear or possibly outdated in "verify".`,
+    `${JSON_ONLY}
+{"cadreFull":"","codePrefix":"2–4 capital letters","summary":"what the documents say about the job",
+ "postings":[{"key":"P1","label":""}],
+ "authorised":[""],"notAuthorised":[""],"stateContext":[""],"sourceNotes":"","assumptions":[""],"verify":[""],
+ "coverage":{"cadreFull":"found | partial | missing","summary":"","postings":"","authorised":"","notAuthorised":"","stateContext":""}${decideSize ? ',\n "size":"compact | standard | full","sizeReason":"one sentence"' : ""}}`].filter(Boolean).join("\n\n");
+};
+
 /** Step 2 (spec 5.2). On revise it carries the whole previous research (team edits included) plus the feedback. */
-export const researchPrompt = (f: Frac, feedback?: string) =>
-  [KAUSHAL, brief(f), METHOD, SOURCE_LIBRARY,
+export const researchPrompt = (f: Frac, feedback?: string, extras: ResearchExtras = {}) => {
+  const decideSize = sizeUndecided(f);
+  const sources = extras.sources?.length ? extras.sources : null;
+  const known = extras.known;
+  const docs = extras.documents ?? [];
+  return [KAUSHAL, brief(f), METHOD, SOURCE_LIBRARY,
     f.research ? `PREVIOUS RESEARCH:\n${JSON.stringify(f.research)}` : "", revise(feedback),
-    `Research the job. Find the applicable JD documents; name 1–3 postings (these become the FRAC columns, e.g. "ANM at Sub-Centre (outreach)", "ANM at delivery-point PHC"); list what the cadre is and is not authorised to do; list what changes for this state (programmes, cadre names, endemic diseases, languages, portals). For the national baseline, say what each state must customise. Cite only documents you actually found; put anything unsure in "verify".`,
+    known ? knownBlock(known, docs.map((d) => d.name)) : teamDocuments(docs),
+    sources ? `SOURCES (the team's standard list: work from these only, do not search, and leave "sources" empty in the answer):\n${sources.map((x) => `- ${x.title} (${[x.issuer, x.year].filter(Boolean).join(", ")})`).join("\n")}` : "",
+    extras.fixedPostings && f.postings.length ? `POSTINGS (fixed by the team; return them unchanged): ${postings(f)}` : "",
+    decideSize ? `SIZE: choose the size that fits the breadth of this job: ${sizeChoices()}. A narrow, single-setting job is compact; a broad multi-programme job is full.` : "",
+    known ? "" : POSTINGS_RULE,
+    `Research the job. Find the applicable JD documents; list what the cadre is and is not authorised to do; list what changes for this state (programmes, cadre names, endemic diseases, languages, portals). For the national baseline, say what each state must customise. Cite only documents you actually found; put anything unsure in "verify".${known ? " Work only on the parts that are partly covered or not covered; in sources list what you used beyond the team documents." : ""}${sources ? "" : " When web search is available, use it to open the JD and the main programme guidelines before you list them, and give each source the address of the page you opened."}`,
     `${JSON_ONLY}
 {"cadreFull":"","codePrefix":"2–4 capital letters","summary":"6–10 sentences",
  "postings":[{"key":"P1","label":""}],
- "sources":[{"title":"","issuer":"","year":"","use":"","tier":""}],
- "authorised":[""],"notAuthorised":[""],"stateContext":[""],"sourceNotes":"","assumptions":[""],"verify":[""]}`].filter(Boolean).join("\n\n");
+ "sources":[${sources ? "" : '{"title":"","issuer":"","year":"","use":"","tier":"","url":"the exact address of the page your search opened for it, copied from the search result; empty if you did not open one"}'}],
+ "authorised":[""],"notAuthorised":[""],"stateContext":[""],"sourceNotes":"","assumptions":[""],"verify":[""]${decideSize ? ',\n "size":"compact | standard | full","sizeReason":"one sentence"' : ""}}`].filter(Boolean).join("\n\n");
+};
 
 /** Step 3a (spec 5.3): `count` roles from the edited research. On revise it lists the previous role titles. */
 export const rolesPrompt = (f: Frac, count: number, feedback?: string) =>
@@ -102,10 +200,11 @@ export const activitiesPrompt = (f: Frac, roles: { code: string; title: string }
     .filter((x) => x.acts.length)
     .map((x) => `${x.r.code}:\n${x.acts.map((a) => `- ${a.text}`).join("\n")}`);
   const keys = f.postings.map((p) => p.key);
+  const perPosting = keys.length ? ` give Yes or No for every posting (${keys.join(", ")}),` : "";
   return [KAUSHAL, brief(f), scope(f), reviewGuard(f), METHOD, `POSTINGS: ${postings(f)}`,
     `ROLES:\n${roles.map((r) => `${r.code} ${r.title}`).join("\n")}`,
     earlier.length ? `EARLIER ACTIVITIES (keep the good ones):\n${earlier.join("\n")}` : "", revise(feedback),
-    `For each role, write ${count} observable workplace activities with performance verbs. For each activity give Yes or No for every posting (${keys.join(", ")}), the source document and the source tier (JD | Programme guideline | Facility standard | Inferred – verify).`,
+    `For each role, write ${count} observable workplace activities with performance verbs. For each activity${perPosting} give the source document and the source tier (JD | Programme guideline | Facility standard | Inferred – verify).`,
     `${JSON_ONLY}\n{"roles":[{"code":"R1","activities":[{"text":"","postings":{${keys.map((k) => `"${k}":"Yes"`).join(",")}},"source":"","tier":""}]}]}`].filter(Boolean).join("\n\n");
 };
 
@@ -122,6 +221,18 @@ export const competenciesPrompt = (f: Frac, count: number, feedback?: string) =>
     `Derive ${count} competencies LAST, from the activities, coded ${prefix}1, ${prefix}2, …. Each has a label (noun phrase), a description (one sentence starting with a verb), a type (Domain, Functional or Behavioural), an area, and kcm (the KCM competency name, or "Domain – department-defined"). Every activity maps to exactly one competency at the level the job demands (l = 1–5, usually 3 or 4; 5 only for audit or mentoring), and every competency is used at least once.`,
     `${JSON_ONLY}\n{"competencies":[{"code":"${prefix}1","label":"","description":"","type":"Domain","area":"","kcm":""}],"mapping":[{"a":"A1","c":"${prefix}1","l":3}]}`].filter(Boolean).join("\n\n");
 };
+
+/**
+ * Step 4 with a team's Competencies sheet (review decisions, Nov 2026): the competencies are fixed, so the
+ * model only maps each activity to one of them at a level. Much shorter answer than competenciesPrompt.
+ */
+export const mappingPrompt = (f: Frac, feedback?: string) =>
+  [KAUSHAL, brief(f), METHOD,
+    `ACTIVITIES:\n${f.roles.flatMap((r) => r.activities.map((a) => `${a.code} ${a.text}`)).join("\n")}`,
+    `COMPETENCIES (the team's standard; use these codes only, do not add or rename any):\n${f.competencies.map((c) => `${c.code} ${c.label} [${c.type}]${c.description ? ` — ${c.description}` : ""}`).join("\n")}`,
+    revise(feedback),
+    `Map every activity to exactly one of these competencies at the level the job demands (l = 1–5, usually 3 or 4; 5 only for audit or mentoring). Use as many of the competencies as fit the activities.`,
+    `${JSON_ONLY}\n{"mapping":[{"a":"A1","c":"${f.competencies[0]?.code ?? "C1"}","l":3}]}`].filter(Boolean).join("\n\n");
 
 /**
  * Step 5 (spec 5.5) for one batch of competency codes: each competency with the activities that use it

@@ -9,7 +9,7 @@ export interface AiCall {
   jobId: string | null;
   /** The job's kind: research, roles, competencies, ladders, check, review. */
   jobKind: string | null;
-  /** The provider profile name, e.g. "gemini-free", "claude", "mock". */
+  /** The provider profile name, e.g. "claude", "claude-mixed", "mock". */
   provider: string;
   /** The model id the provider reported, or the profile's model when the call failed before answering. */
   model: string;

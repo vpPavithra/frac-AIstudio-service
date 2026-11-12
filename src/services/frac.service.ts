@@ -5,7 +5,7 @@
 // saved FRAC, logs it and snapshots a version. Called by controllers/frac.controller.ts; wired in server.ts.
 import { randomUUID } from "node:crypto";
 import { fracToModel } from "./review-engine/convert.ts";
-import type { Frac, FracVersion } from "../models/frac.model.ts";
+import type { Frac, FracRole, FracSeed, FracVersion } from "../models/frac.model.ts";
 import { buildFracWorkbook, fracWorkbookFilename } from "./excel/workbook-writer.ts";
 import type { JobRunner } from "./queue/job-runner.ts";
 import { EXPERT_CHECK_NOTES, JOB_MESSAGES } from "./queue/job-messages.ts";
@@ -13,13 +13,14 @@ import type { Repositories } from "../repositories/index.ts";
 import type { TextProvider } from "../providers/text/types.ts";
 import { sanitizeCodePrefix } from "../utils/codes.ts";
 import { badRequest, conflict, notFound } from "../utils/response.ts";
-import type { CreateFracInput, PatchFracInput, StepInput } from "../validations/frac.schema.ts";
+import type { CreateFracInput, FracSeedInput, MatchQuery, PatchFracInput, StepInput } from "../validations/frac.schema.ts";
 import { runCompetencies } from "./ai/competencies.step.ts";
 import { runLadders } from "./ai/ladders.step.ts";
 import { runResearch } from "./ai/research.step.ts";
-import { runRoles } from "./ai/roles.step.ts";
+import { renumberRoles, runRoles } from "./ai/roles.step.ts";
 import type { StepContext } from "./ai/step-context.ts";
 import { type ReviewService, worstSeverity } from "./review.service.ts";
+import { markChecked, stampChanges } from "./step-changes.ts";
 
 /** One row of My FRACs (GET /v1/fracs). `worst` is the most severe open review finding, if any. */
 export interface FracSummary {
@@ -33,16 +34,34 @@ export interface FracSummary {
   updatedAt: string;
 }
 
+/** GET /v1/fracs/match: the owner's earlier FRAC for the same position, as the brief form shows it. */
+export interface FracMatch {
+  id: string;
+  cadre: string;
+  state: string;
+  postings: string[];
+  /** So the portal can warn when the roles read as syllabus subjects rather than areas of work. */
+  roleTitles: string[];
+  counts: { roles: number; activities: number };
+  updatedAt: string;
+}
+
+/** Source label on activities copied from the FRAC module's Positions master. */
+export const FROM_POSITIONS = "Positions master";
+
+/** Exact position match: case and surrounding or repeated spaces are ignored, nothing else. */
+export const samePosition = (a: string, b: string) => a.trim().replace(/\s+/g, " ").toLowerCase() === b.trim().replace(/\s+/g, " ").toLowerCase();
+
 /** Brief fields (spec 5.1) that lock once research exists. */
-const BRIEF_FIELDS = ["cadre", "state", "size", "prompt"] as const;
 /** Edits to these after an expert check make its findings out of date. */
-const CONTENT_FIELDS = ["research", "postings", "roles", "competencies"] as const;
+const CONTENT_FIELDS = ["cadre", "state", "research", "postings", "roles", "competencies"] as const;
 
 /**
  * A new FRAC at step 1 (brief only). cadreFull starts as the cadre and codePrefix as "C" until research
- * sets them. `id` and `now` are parameters so tests can fix them.
+ * sets them. Without a size the research step chooses one (sizeBy "agent"); "standard" holds the place until
+ * then. `id` and `now` are parameters so tests can fix them.
  */
-export function newFrac(ownerId: string, brief: CreateFracInput, id = randomUUID(), now = new Date()): Frac {
+export function newFrac(ownerId: string, brief: Omit<CreateFracInput, "seed">, id = randomUUID(), now = new Date()): Frac {
   const at = now.toISOString();
   return {
     id,
@@ -53,7 +72,8 @@ export function newFrac(ownerId: string, brief: CreateFracInput, id = randomUUID
     cadre: brief.cadre,
     cadreFull: brief.cadre,
     state: brief.state,
-    size: brief.size,
+    size: brief.size ?? "standard",
+    sizeBy: brief.size ? "team" : "agent",
     prompt: brief.prompt,
     codePrefix: "C",
     postings: [],
@@ -67,17 +87,20 @@ export function newFrac(ownerId: string, brief: CreateFracInput, id = randomUUID
 }
 
 /**
- * Applies validated team edits (spec 8, PATCH). The brief locks once research exists (5.1; 409 BRIEF_LOCKED);
+ * Applies validated team edits (spec 8, PATCH). The brief stays editable after research (review, Nov 2026):
+ * a brief change stamps changedAt.brief, so research and the steps after it show as needing attention;
  * editing roles after competencies exist sets rolesDirty (5.3); the team may clear it. codePrefix is sanitised.
  * A content change after an expert check sets reviewStale, so the portal asks for a re-run before the download.
+ * Changed steps are stamped in changedAt; `checked` (or clearing rolesDirty, for competencies) marks a step checked.
  * Pure: the caller saves the result.
  */
 export function applyEdits(frac: Frac, edits: PatchFracInput, now = new Date()): Frac {
-  const changesBrief = BRIEF_FIELDS.some((k) => edits[k] !== undefined && edits[k] !== frac[k]);
-  if (changesBrief && frac.research) throw conflict("BRIEF_LOCKED", "The brief is locked once research exists");
-
-  const { codePrefix, roles, rolesDirty, ...rest } = edits;
-  const next: Frac = { ...frac, ...rest, updatedAt: now.toISOString() };
+  const { codePrefix, rolesDirty, checked, clearCopiedRoles, ...rest } = edits;
+  const roles = clearCopiedRoles ? [] : edits.roles;
+  delete rest.roles;
+  const at = now.toISOString();
+  let next: Frac = { ...frac, ...rest, updatedAt: at };
+  if (clearCopiedRoles && frac.seededFrom) next.seededFrom = { ...frac.seededFrom, withRoles: false };
   if (codePrefix !== undefined) next.codePrefix = sanitizeCodePrefix(codePrefix);
   if (roles) {
     const changed = JSON.stringify(roles) !== JSON.stringify(frac.roles);
@@ -89,7 +112,35 @@ export function applyEdits(frac: Frac, edits: PatchFracInput, now = new Date()):
   if (frac.review && CONTENT_FIELDS.some((k) => edits[k] !== undefined && JSON.stringify(edits[k]) !== JSON.stringify(frac[k]))) {
     next.reviewStale = true;
   }
+  next = stampChanges(frac, next, at);
+  if (rolesDirty === false && !roles) next = markChecked(next, "competencies", at);
+  for (const step of checked ?? []) next = markChecked(next, step, at);
+  // Checking competencies also confirms the mappings a roles edit asked about
+  if (checked?.includes("competencies")) next.rolesDirty = false;
   return next;
+}
+
+/**
+ * Position matching: the postings and roles a new FRAC starts from. From an earlier FRAC they are copied
+ * with every competency reference cleared (this FRAC derives its own); from the Positions master each role
+ * keeps the activities the position has, with no posting values yet. Pure.
+ */
+export function seedContent(seed: { source: FracSeed; postings: Frac["postings"]; roles: FracRole[] }): Pick<Frac, "postings" | "roles" | "seededFrom"> {
+  return {
+    seededFrom: seed.source,
+    postings: seed.postings.map((p) => ({ ...p })),
+    roles: renumberRoles(seed.roles.map((r) => ({ ...r, activities: r.activities.map((a) => ({ ...a, comp: "" })) }))),
+  };
+}
+
+/** Roles for a Positions-master seed: titles and activity texts only. */
+function positionRoles(roles: Extract<FracSeedInput, { from: "positions" }>["roles"]): FracRole[] {
+  return roles.map((r) => ({
+    code: "",
+    title: r.title,
+    source: FROM_POSITIONS,
+    activities: r.activities.map((text) => ({ code: "", text, postings: {}, source: FROM_POSITIONS, tier: "", comp: "" })),
+  }));
 }
 
 /** The My FRACs row for a FRAC: counts and the worst finding, without the full content. */
@@ -173,11 +224,15 @@ export class FracService {
       // Re-reads before each write so team edits saved during the job are kept (ladders save per batch)
       const save = async (update: (latest: Frac) => Partial<Frac>) => {
         const latest = await this.get(ownerId, id);
-        const next: Frac = { ...latest, ...update(latest), updatedAt: new Date().toISOString() };
+        const at = new Date().toISOString();
+        const next = stampChanges(latest, { ...latest, ...update(latest), updatedAt: at }, at);
         await this.repos.fracs.update(next);
         return next;
       };
-      const patch = await spec.run({ frac, feedback: body.feedback, codes: body.codes, provider: this.provider, progress, recordUsage, save });
+      // Research reads the team's uploaded documents (brief text, a standard source list); roles checks for a job
+      // description, which means roles copied from a matched position are rebuilt rather than kept
+      const documents = step === "research" || step === "roles" ? await this.repos.documents.listForFrac(id) : [];
+      const patch = await spec.run({ frac, feedback: body.feedback, codes: body.codes, documents, provider: this.provider, progress, recordUsage, save });
       const done = await save((latest) => ({
         ...patch,
         step: Math.max(latest.step, spec.number),
@@ -187,11 +242,43 @@ export class FracService {
     });
   }
 
-  /** Step 1: saves a new FRAC from the brief. */
+  /**
+   * Step 1: saves a new FRAC from the brief. With a `seed` (position matching) it starts with that
+   * position's postings and roles; an earlier FRAC is read through `get`, so only the owner's own can seed.
+   */
   async create(ownerId: string, brief: CreateFracInput): Promise<Frac> {
-    const frac = newFrac(ownerId, brief);
+    const { seed, ...rest } = brief;
+    const frac = newFrac(ownerId, rest);
+    if (seed?.from === "frac") {
+      const source = await this.get(ownerId, seed.fracId);
+      const roles = seed.withRoles ? source.roles : [];
+      Object.assign(frac, seedContent({ source: { from: "frac", ref: source.id, name: `${source.cadre} · ${source.state}`, withRoles: seed.withRoles },
+        postings: source.postings, roles }));
+    } else if (seed?.from === "positions") {
+      Object.assign(frac, seedContent({ source: { from: "positions", ref: seed.code, name: seed.name, withRoles: true }, postings: [], roles: positionRoles(seed.roles) }));
+    }
     await this.repos.fracs.insert(frac);
     return frac;
+  }
+
+  /**
+   * Position matching (GET /v1/fracs/match): the owner's most recent FRAC with the exact same position name
+   * that has roles to reuse, same state first. Only the owner's FRACs: FRACs carry no organisation yet.
+   */
+  async match(ownerId: string, query: MatchQuery): Promise<FracMatch | null> {
+    const hits = (await this.repos.fracs.findByCadre(ownerId, query.cadre))
+      .filter((f) => samePosition(f.cadre, query.cadre) && f.roles.some((r) => r.activities.length));
+    const best = hits.find((f) => query.state && f.state === query.state) ?? hits[0];
+    if (!best) return null;
+    return {
+      id: best.id,
+      cadre: best.cadre,
+      state: best.state,
+      postings: best.postings.map((p) => p.label),
+      roleTitles: best.roles.map((r) => r.title),
+      counts: { roles: best.roles.length, activities: best.roles.reduce((n, r) => n + r.activities.length, 0) },
+      updatedAt: best.updatedAt,
+    };
   }
 
   /** The FRAC if this owner has it; 404 NOT_FOUND otherwise, so other owners' ids are not revealed. */

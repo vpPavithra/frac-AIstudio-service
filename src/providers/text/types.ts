@@ -1,13 +1,15 @@
 // The one seam between FRAC Studio's AI steps and a model. Steps build the prompt and validate the
 // JSON; a provider only turns a request into JSON plus its spend. AI_PROVIDER picks a profile in
-// config/ai-providers.json (Gemini, Claude, ...) or the sample-data mock in src/mocks. See src/providers/registry.ts.
+// config/ai-providers.json (Claude) or the sample-data mock in src/mocks. See src/providers/registry.ts.
 import type { ZodType } from "zod/v4";
 
 /**
  * Which step is calling (spec 5.2–5.5, 6.4). A provider may use it to shape its answer.
  * The review has two (rules r3 §6): the per-competency scope/accuracy checklist and the state-fit call.
+ * "research-documents" reads the team's job descriptions before research, without web search, and says what they cover.
+ * "mapping" maps activities to a team's uploaded competencies (no new competencies are written).
  */
-export type AiTask = "research" | "roles" | "activities" | "competencies" | "ladders" | "review-competencies" | "review-state";
+export type AiTask = "research" | "research-documents" | "roles" | "activities" | "competencies" | "mapping" | "ladders" | "review-competencies" | "review-state";
 
 /**
  * Spec 9: complex tier for research, roles, competencies and review; default for activities and ladders.
@@ -25,6 +27,17 @@ export interface CompletionRequest {
   input: unknown;
   /** The step's output shape. A provider that can enforce it (Claude structured output) may; the step validates it either way. */
   schema?: ZodType;
+  /**
+   * Research only: most web searches for this call, overriding AI.researchSearchMaxUses. 0 turns search off
+   * (the team uploaded a Sources sheet); a brief document lowers it (DOCUMENTS.searchesWithDocs).
+   */
+  searchMaxUses?: number;
+}
+
+/** A page the web search actually retrieved: what a source's "View source" link may point to. */
+export interface Citation {
+  url: string;
+  title: string;
 }
 
 /** Tokens and searches one call consumed, as the API reports them. */
@@ -54,11 +67,13 @@ export interface CompletionResult {
   text?: string;
   /** Time spent waiting for a free slot (providers/text/limit.ts) before the call was sent; not the model's time. */
   queuedMs?: number;
+  /** Pages the call's web search retrieved or cited (Claude only), so sources get real links, never model-written ones. */
+  citations?: Citation[];
 }
 
-/** The provider seam. Implemented by ClaudeTextProvider, GeminiTextProvider and src/mocks' MockTextProvider; chosen by registry.ts. */
+/** The provider seam. Implemented by ClaudeTextProvider and src/mocks' MockTextProvider; chosen by registry.ts. */
 export interface TextProvider {
-  /** The profile name (e.g. "gemini-free", "claude") or "mock"; shown by GET /v1/info and in the startup log. */
+  /** The profile name (e.g. "claude", "claude-mixed") or "mock"; shown by GET /v1/info and in the startup log. */
   readonly name: string;
   complete(request: CompletionRequest): Promise<CompletionResult>;
 }

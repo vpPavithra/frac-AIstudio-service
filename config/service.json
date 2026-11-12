@@ -5,10 +5,10 @@
   "LOG_FORMAT": "pretty",
   "LOG_LEVEL": "info",
 
-  "// ai": "AI_PROVIDER is a profile in config/ai-providers.json (gemini-free, gemini-paid, claude, ...) or mock for the sample data in src/mocks. The profile names the key variable (e.g. GEMINI_API_KEY), which goes in .env locally or the secret store on a server, never here. `npm run dev:mock` forces mock; `npm run dev:ai` uses this value. MOCK_PRICED_AS: whose prices the mock's cost estimate uses.",
-  "AI_PROVIDER": "gemini-free",
+  "// ai": "AI_PROVIDER is a profile in config/ai-providers.json (claude, claude-mixed, claude-fast) or mock for the sample data in src/mocks. The profile names the key variable (ANTHROPIC_API_KEY), which goes in .env locally or the secret store on a server, never here. `npm run dev:mock` forces mock; `npm run dev:ai` uses this value. MOCK_PRICED_AS: whose prices the mock's cost estimate uses.",
+  "AI_PROVIDER": "claude",
   "MOCK_DELAY_MS": 1500,
-  "MOCK_PRICED_AS": "gemini-free",
+  "MOCK_PRICED_AS": "claude",
 
   "// llm": "Call policy for every provider. LLM_INVALID_RETRIES: extra attempts when an answer is unreadable or the wrong shape (each billed). Models, thinking levels and prices are per provider in config/ai-providers.json. LLM_MAX_RETRY_DELAY_MS caps the wait between retries after a rate limit.",
   "LLM_TIMEOUT_MS": 600000,
@@ -18,7 +18,7 @@
   "LLM_MAX_RETRY_DELAY_MS": 60000,
   "LLM_INVALID_RETRIES": 1,
 
-  "// batching": "Spec 5.3b / 5.5: roles (activities) or competencies (ladders) per call, and calls in flight. Calls in flight raised from 3 to 6 on 6 Nov 2026 to cut wall time (the Gemini free profile still runs 1 at a time through maxConcurrent). Rules r3 §6: competencies per review checklist call, calls in flight, most state-fit items kept, and the shortest quote (in words) the code will verify.",
+  "// batching": "Spec 5.3b / 5.5: roles (activities) or competencies (ladders) per call, and calls in flight. Calls in flight raised from 3 to 6 on 6 Nov 2026 to cut wall time. Rules r3 §6: competencies per review checklist call, calls in flight, most state-fit items kept, and the shortest quote (in words) the code will verify.",
   "AI_BATCH_SIZE": 4,
   "AI_BATCH_PARALLEL": 6,
   "REVIEW_BATCH_SIZE": 6,
@@ -27,10 +27,20 @@
   "REVIEW_MIN_QUOTE_WORDS": 4,
   "REVIEW_REUSE_ANSWERS": true,
 
-  "// research": "Spec 5.2: the research step searches only these government domains for the JD and cites what it retrieved. At most 3 searches (was 5): each adds tens of thousands of input tokens and about 15 s. Applies when the provider profile has webSearch: true; RESEARCH_WEB_SEARCH=false turns search off for every provider.",
+  "// research": "Spec 5.2: the research step searches only these government domains for the JD and cites what it retrieved. At most 3 searches (was 5): each adds tens of thousands of input tokens and about 15 s. Applies when the profile has webSearch: true; RESEARCH_WEB_SEARCH=false turns search off.",
   "RESEARCH_WEB_SEARCH": true,
   "RESEARCH_SEARCH_DOMAINS": "nhm.gov.in,mohfw.gov.in,igotkarmayogi.gov.in,cbc.gov.in",
   "RESEARCH_SEARCH_MAX_USES": 3,
+
+  "// documents": "Review decisions (Nov 2026). DOC_MAX_CHARS: characters kept from one uploaded JD or government order, and the most the research prompt carries from all of them (about 7,500 tokens). DOC_MAX_BRIEF_FILES: documents per FRAC. RESEARCH_SEARCH_MAX_USES_WITH_DOCS: web searches when a document is attached (it is the main source, so fewer searches are needed); a standard Sources sheet turns search off.",
+  "DOC_MAX_CHARS": 30000,
+  "DOC_MAX_BRIEF_FILES": 3,
+  "RESEARCH_SEARCH_MAX_USES_WITH_DOCS": 1,
+
+  "// source links": "The View button on each research source opens its page. A page the web search returned is kept; an address the model gave must be on RESEARCH_SEARCH_DOMAINS or SOURCE_LINK_DOMAINS (sites that host the guidelines but are not searched, such as nhsrcindia.org for IPHS and who.int) and answer a quick request (SOURCE_LINK_CHECK_TIMEOUT_MS, redirects included) or it is dropped. SOURCE_LINK_MAX_CHECKS caps the requests per research run; 0 keeps only searched pages.",
+  "SOURCE_LINK_CHECK_TIMEOUT_MS": 3000,
+  "SOURCE_LINK_MAX_CHECKS": 10,
+  "SOURCE_LINK_DOMAINS": "nhsrcindia.org,main.mohfw.gov.in,who.int,nhp.gov.in,nhsrc.gov.in",
 
   "MAX_UPLOAD_MB": 15,
   "MAX_JSON_MB": 5,

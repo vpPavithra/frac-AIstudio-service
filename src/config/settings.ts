@@ -10,7 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 /** Keys that must never appear in a committed config file. Checked at boot, not trusted. */
-export const SECRET_KEYS = ["GEMINI_API_KEY", "ANTHROPIC_API_KEY", "POSTGRES_PASSWORD", "DATABASE_URL"] as const;
+export const SECRET_KEYS = ["ANTHROPIC_API_KEY", "POSTGRES_PASSWORD", "DATABASE_URL"] as const;
 
 const SECRETS = new Set<string>(SECRET_KEYS);
 /** Any provider's key (the `keyEnv` of a profile in ai-providers.json) is a secret too, whatever the provider. */

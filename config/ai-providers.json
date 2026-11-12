@@ -1,39 +1,7 @@
 {
   "//": "AI provider profiles. AI_PROVIDER (config/service.json or the environment) names one of these, or `mock` for the sample data in src/mocks. Each profile says which implementation answers (`kind`: one file in src/providers/text), which environment variable holds its key (`keyEnv`; the key itself goes in .env or the secret store, never here), the model and thinking level per tier, and the list prices used to show cost. Switching provider is a change of AI_PROVIDER plus the key; no code change. Override the location with AI_PROVIDERS_CONFIG_PATH.",
-  "//tiers": "Spec section 9: the complex tier runs research, roles, competencies and the review checklist; the default tier runs activities and ladders. `thinking` is low | medium | high per tier and is mapped to each API's own setting (Claude effort, Gemini thinkingLevel).",
+  "//tiers": "Spec section 9: the complex tier runs research, roles, competencies and the review checklist; the default tier runs activities and ladders. `thinking` is low | medium | high per tier and is mapped to each API's own setting (Claude effort).",
   "//free": "`freeTier: true` means calls are not billed. The cost shown is then what the same tokens would cost at the listed paid prices, marked as an estimate. `maxConcurrent` caps calls in flight across all jobs, to stay under a low requests-per-minute quota; leave it out to use the batch settings only.",
-
-  "gemini-free": {
-    "kind": "gemini",
-    "keyEnv": "GEMINI_API_KEY",
-    "freeTier": true,
-    "maxConcurrent": 1,
-    "//": "Gemini API free tier (checked 6 Nov 2026): the Flash models are free; gemini-4-argon and Google Search grounding are not, so research runs without web search. gemini-3.6-flash because gemini-3.8-flash answered 503 (high demand) and 504 on 6 Nov 2026; switch back once `npm run ai:check` passes on it. Both have the same paid list price, used only for the estimate.",
-    "models": { "complex": "gemini-3.6-flash", "default": "gemini-3.6-flash" },
-    "thinking": { "complex": "high", "default": "medium" },
-    "webSearch": false,
-    "rates": {
-      "complex": { "inUsdPer1M": 0.75, "outUsdPer1M": 3.75, "cacheReadUsdPer1M": 0.075 },
-      "default": { "inUsdPer1M": 0.75, "outUsdPer1M": 3.75, "cacheReadUsdPer1M": 0.075 },
-      "cacheWriteMultiplier": 1,
-      "webSearchUsdPer1K": 14
-    }
-  },
-
-  "gemini-paid": {
-    "kind": "gemini",
-    "keyEnv": "GEMINI_API_KEY",
-    "//": "Gemini API paid tier (prices checked 6 Nov 2026; gemini-4-argon prices are due to rise on 1 Dec 2026). Google Search is billed per search query after 5,000 free a month; Gemini cannot limit search to named domains, so the research prompt asks for them instead.",
-    "models": { "complex": "gemini-4-argon", "default": "gemini-3.8-flash" },
-    "thinking": { "complex": "high", "default": "medium" },
-    "webSearch": true,
-    "rates": {
-      "complex": { "inUsdPer1M": 2, "outUsdPer1M": 10, "cacheReadUsdPer1M": 0.1 },
-      "default": { "inUsdPer1M": 0.75, "outUsdPer1M": 3.75, "cacheReadUsdPer1M": 0.075 },
-      "cacheWriteMultiplier": 1,
-      "webSearchUsdPer1K": 14
-    }
-  },
 
   "claude-mixed": {
     "kind": "claude",

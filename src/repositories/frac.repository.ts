@@ -13,6 +13,8 @@ export interface FracRepository {
   update(frac: Frac): Promise<void>;
   get(id: string): Promise<Frac | null>;
   listByOwner(ownerId: string): Promise<Frac[]>;
+  /** The owner's FRACs whose position (cadre) equals `cadre`, ignoring case and surrounding spaces; newest first. */
+  findByCadre(ownerId: string, cadre: string): Promise<Frac[]>;
   /** Saves a full copy of the FRAC as a new version, labelled with `reason` (e.g. "Expert check"). */
   snapshot(frac: Frac, reason: string): Promise<void>;
   /** Version list (no documents), newest first. */
@@ -48,6 +50,14 @@ export class PgFracRepository implements FracRepository {
     const { rows } = await this.pool.query<{ doc: Frac }>(
       `SELECT doc FROM fracs WHERE owner_id = $1 ORDER BY updated_at DESC`,
       [ownerId],
+    );
+    return rows.map((r) => r.doc);
+  }
+
+  async findByCadre(ownerId: string, cadre: string): Promise<Frac[]> {
+    const { rows } = await this.pool.query<{ doc: Frac }>(
+      `SELECT doc FROM fracs WHERE owner_id = $1 AND lower(trim(cadre)) = lower(trim($2)) ORDER BY updated_at DESC`,
+      [ownerId, cadre],
     );
     return rows.map((r) => r.doc);
   }
@@ -103,6 +113,11 @@ export class MemoryFracRepository implements FracRepository {
       .map((f) => ({ f, at: f.updatedAt }))
       .sort(byNewest)
       .map(({ f }) => clone(f));
+  }
+
+  async findByCadre(ownerId: string, cadre: string): Promise<Frac[]> {
+    const wanted = cadre.trim().toLowerCase();
+    return (await this.listByOwner(ownerId)).filter((f) => f.cadre.trim().toLowerCase() === wanted);
   }
 
   async snapshot(frac: Frac, reason: string): Promise<void> {

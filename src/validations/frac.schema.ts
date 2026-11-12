@@ -23,7 +23,15 @@ const levelSchema = z.object({ label: text(), desc: text() });
 
 const postingSchema = z.object({ key: shortText(20).min(1), label: text() });
 
-const sourceSchema = z.object({ title: text(), issuer: text(), year: text(), use: text(), tier: text() });
+/**
+ * A source link. Any text is accepted, because autosave sends it while it is being typed; the portal turns
+ * only http(s) addresses into a "View source" link.
+ */
+const sourceUrl = z.string().trim().max(2000).optional();
+
+const sourceSchema = z.object({ title: text(), issuer: text(), year: text(), use: text(), tier: text(), url: sourceUrl });
+
+const researchField = z.enum(["cadreFull", "summary", "postings", "authorised", "notAuthorised", "stateContext", "sources"]);
 
 const researchSchema = z.object({
   summary: text(),
@@ -33,6 +41,8 @@ const researchSchema = z.object({
   notAuthorised: text(),
   stateContext: text(),
   assumptions: text(),
+  // Set by research; the portal sends it back unchanged with the team's edits
+  origin: z.object({ documents: z.array(researchField).max(10), agent: z.array(researchField).max(10) }).optional(),
 });
 
 const activitySchema = z.object({
@@ -61,18 +71,41 @@ const competencySchema = z.object({
   levels: z.array(levelSchema).max(5).nullable().default(null),
 });
 
-/** POST /fracs: the brief (spec 5.1). */
+/**
+ * Position matching: start from the owner's earlier FRAC (copied by the service after its owner check), or
+ * from a FRAC module position whose roles and activities the portal read from the Positions master.
+ */
+const seedSchema = z.discriminatedUnion("from", [
+  // withRoles false copies the postings only (the portal leaves the roles unticked by default)
+  z.object({ from: z.literal("frac"), fracId: z.string().uuid("fracId must be a FRAC id"), withRoles: z.boolean().default(true) }),
+  z.object({
+    from: z.literal("positions"),
+    code: shortText(100, "Position code is required"),
+    name: shortText(200, "Position name is required"),
+    roles: z
+      .array(z.object({ title: shortText(500).min(1), activities: z.array(z.string().trim().min(1).max(LIMITS.maxTextChars)).max(LIMITS.maxActivitiesPerRole).default([]) }))
+      .min(1, "The matched position has no roles")
+      .max(LIMITS.maxRoles),
+  }),
+]);
+export type FracSeedInput = z.infer<typeof seedSchema>;
+
+/**
+ * POST /fracs: the brief (spec 5.1). `size` is no longer asked: without it the research step chooses one
+ * (sizeBy "agent"). `seed` copies a matched position's postings and roles.
+ */
 export const createFracSchema = z.object({
-  cadre: shortText(200, "Cadre is required"),
+  cadre: shortText(200, "Position is required"),
   state: shortText().optional().transform((s) => s || NATIONAL_BASELINE),
-  size: z.enum(FRAC_SIZES).default("standard"),
+  size: z.enum(FRAC_SIZES).optional(),
   prompt: text(),
+  seed: seedSchema.optional(),
 });
 export type CreateFracInput = z.infer<typeof createFracSchema>;
 
 /**
  * PATCH /fracs/:id: team edits. Every field optional. `rolesDirty` may only be cleared
- * (the team confirms mappings by hand); the server alone sets it.
+ * (the team confirms mappings by hand); the server alone sets it. `checked` marks a step checked.
  */
 export const patchFracSchema = z.object({
   cadre: shortText().min(1).optional(),
@@ -86,6 +119,10 @@ export const patchFracSchema = z.object({
   roles: z.array(roleSchema).max(LIMITS.maxRoles).optional(),
   competencies: z.array(competencySchema).max(LIMITS.maxCompetencies).optional(),
   rolesDirty: z.literal(false, { errorMap: () => ({ message: "rolesDirty can only be set to false" }) }).optional(),
+  /** Steps the team checked after an earlier one changed: they are no longer out of date. */
+  checked: z.array(z.enum(["research", "roles", "competencies", "ladders"])).max(4).optional(),
+  /** Removes roles copied from a matched position, so the roles step builds them from the research. */
+  clearCopiedRoles: z.literal(true).optional(),
 });
 export type PatchFracInput = z.infer<typeof patchFracSchema>;
 
@@ -99,5 +136,21 @@ export const stepSchema = z.object({
 });
 export type StepInput = z.infer<typeof stepSchema>;
 
+/** GET /fracs/match: the position typed on the brief, and its state to rank same-state FRACs first. */
+export const matchQuerySchema = z.object({
+  cadre: shortText(200, "Position is required"),
+  state: shortText().optional(),
+});
+export type MatchQuery = z.infer<typeof matchQuerySchema>;
+
 /** :versionId in POST /fracs/:id/versions/:versionId/restore. */
 export const versionIdSchema = z.coerce.number({ invalid_type_error: "versionId must be a number" }).int().positive();
+
+/** Kinds of document a FRAC accepts: a brief document (JD or order) for research, or a standard sheet. */
+export const DOCUMENT_KINDS = ["brief", "roles", "competencies", "sources"] as const;
+
+/** POST /fracs/:id/documents form field, and :kind in GET /templates/:kind. */
+export const documentKindSchema = z.object({
+  kind: z.enum(DOCUMENT_KINDS, { errorMap: () => ({ message: "kind must be brief, roles, competencies or sources" }) }),
+});
+export type DocumentKindInput = z.infer<typeof documentKindSchema>;

@@ -1,8 +1,10 @@
-// Builds the two Excel downloads: the Creator's FRAC workbook and the Reviewer's report workbook.
+// Builds the Excel downloads: the Creator's FRAC workbook, the Reviewer's report workbook and the
+// standard-sheet templates.
 // Called by frac.service.ts and review.service.ts when the portal asks for an export. Returns an .xlsx
 // Buffer and the download file name. Files go to outside experts, so AI personas are never named:
 // each finding says only "Rule-based check" or "AI judgement (quoted)".
 import ExcelJS from "exceljs";
+import type { SheetFormat } from "../documents/sheet-formats.ts";
 import { parseRefs } from "../review-engine/refs.ts";
 import type { Finding, Report } from "../../models/report.model.ts";
 import type { Frac } from "../../models/frac.model.ts";
@@ -105,9 +107,10 @@ async function finishWorkbook(workbook: ExcelJS.Workbook): Promise<Buffer> {
  * - "FRAC": Role, Activity, one "Pn: label" column per posting, Tentative Competency Label, Source,
  *   Source tier. Each role row (shaded) lists its activities' distinct competency codes; activity rows follow.
  * - "Competencies": code, label, description, type, area, label and description for levels 1-5, KCM alignment.
- * - "Method & Sources": cadre, state, build date, method paragraph and the research notes as label/value
- *   rows, then a Title / Issuer / Year / Use / Tier table of sources.
- * - "Expert check" (only when the FRAC has a review): the same rows as the Reviewer's "Review" sheet.
+ * - "Method & Sources": position, state, build date, method paragraph and the research notes as label/value
+ *   rows, then a Title / Issuer / Year / Use / Tier / URL table of sources.
+ * - "Expert check" (only when the FRAC has a review that is not out of date): the same rows as the Reviewer's
+ *   "Review" sheet. The "Built" row says whether the file was expert-checked.
  * The caller passes the method paragraph so the prototype's verbatim text is used, never invented here.
  */
 export async function buildFracWorkbook(frac: Frac, methodParagraph: string): Promise<Buffer> {
@@ -176,9 +179,11 @@ export async function buildFracWorkbook(frac: Frac, methodParagraph: string): Pr
 
   const sourceSheet = workbook.addWorksheet("Method & Sources");
   sourceSheet.addRow(["FRAC Studio"]);
-  sourceSheet.addRow(["Cadre", frac.cadreFull || frac.cadre]);
+  sourceSheet.addRow(["Position", frac.cadreFull || frac.cadre]);
   sourceSheet.addRow(["State", frac.state]);
-  sourceSheet.addRow(["Built", `Built ${frac.updatedAt.slice(0, 10)} in FRAC Studio (AI Studio) — draft for expert validation`]);
+  // A download before the expert check, or after edits that put it out of date, says so
+  const checked = !!frac.review && !frac.reviewStale;
+  sourceSheet.addRow(["Built", `Built ${frac.updatedAt.slice(0, 10)} in FRAC Studio (AI Studio) — ${checked ? "expert-checked; " : "not yet expert-checked; "}draft for expert validation`]);
   sourceSheet.addRow(["Method", methodParagraph]);
   sourceSheet.addRow(["Job summary", frac.research?.summary ?? ""]);
   sourceSheet.addRow(["Source notes", frac.research?.sourceNotes ?? ""]);
@@ -189,19 +194,47 @@ export async function buildFracWorkbook(frac: Frac, methodParagraph: string): Pr
   sourceSheet.addRow(["Assumptions & to verify", frac.research?.assumptions ?? ""]);
   sourceSheet.addRow([]);
   const sourceHeaderRow = sourceSheet.rowCount + 1;
-  sourceSheet.addRow(["Title", "Issuer", "Year", "Use", "Tier"]);
+  sourceSheet.addRow(["Title", "Issuer", "Year", "Use", "Tier", "URL"]);
   for (const source of frac.research?.sources ?? []) {
-    sourceSheet.addRow([source.title, source.issuer, source.year, source.use, source.tier]);
+    sourceSheet.addRow([source.title, source.issuer, source.year, source.use, source.tier, source.url ?? ""]);
   }
   styleSheet(sourceSheet, [sourceHeaderRow]);
 
-  if (frac.review) {
+  // An out-of-date check is left out, so a draft never shows findings that may already be fixed
+  if (frac.review && checked) {
     const reviewSheet = workbook.addWorksheet("Expert check");
     const rows = reportRows(frac.review);
     rows.forEach((row) => reviewSheet.addRow(row));
     styleSheet(reviewSheet, [reportHeaderRow(rows)]);
   }
 
+  return finishWorkbook(workbook);
+}
+
+/**
+ * A standard-sheet template (documents/sheet-formats.ts): the sheet with its header row and example rows,
+ * then an "Instructions" sheet with one row per column and the notes. The importer reads the same headers.
+ */
+export async function buildTemplateWorkbook(format: SheetFormat): Promise<Buffer> {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = "FRAC Studio";
+  const sheet = workbook.addWorksheet(format.sheet);
+  sheet.addRow(format.columns.map((c) => c.header));
+  format.example.forEach((row) => sheet.addRow(row));
+  sheet.columns.forEach((column) => {
+    column.width = 28;
+  });
+  styleSheet(sheet, [1]);
+
+  const help = workbook.addWorksheet("Instructions");
+  help.addRow(["Column", "What to write"]);
+  format.columns.forEach((c) => help.addRow([c.header, c.help]));
+  help.addRow([]);
+  format.notes.forEach((note) => help.addRow(["Note", note]));
+  help.addRow(["Note", "Replace the example rows with your own. Keep the header row as it is."]);
+  help.getColumn(1).width = 40;
+  help.getColumn(2).width = 90;
+  styleSheet(help, [1]);
   return finishWorkbook(workbook);
 }
 

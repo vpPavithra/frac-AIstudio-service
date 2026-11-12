@@ -2,10 +2,11 @@
 // competencies, ladders): what a step receives, and callModel, the one way a step calls the AI.
 // callModel is the step-side wrapper of ask-model.ts (call the TextProvider, record usage/cost, validate with Zod).
 import type { ZodType } from "zod/v4";
+import type { FracDocument } from "../../models/document.model.ts";
 import type { Frac } from "../../models/frac.model.ts";
 import type { AiTask, ModelTier, TextProvider } from "../../providers/text/types.ts";
 import type { JobProgress, RecordUsage } from "../queue/job-runner.ts";
-import { askModel } from "./ask-model.ts";
+import { askModel, type AskRequest } from "./ask-model.ts";
 
 /**
  * What every generation step gets: the FRAC as it was when the job started, and the job's hooks.
@@ -16,6 +17,8 @@ export interface StepContext {
   feedback?: string;
   /** Ladders only: the competencies to (re)write; omitted means every competency without a ladder. */
   codes?: string[];
+  /** Research and roles: documents the team attached (brief text, a standard Sources sheet). Empty for the other steps. */
+  documents?: FracDocument[];
   provider: TextProvider;
   progress: JobProgress;
   recordUsage: RecordUsage;
@@ -38,6 +41,7 @@ export function callModel<T>(
   prompt: string,
   input: unknown,
   schema: ZodType<T>,
+  extra: Pick<AskRequest, "searchMaxUses" | "onCitations"> = {},
 ): Promise<T> {
-  return askModel({ provider: ctx.provider, task, tier, prompt, input }, schema, ctx.recordUsage);
+  return askModel({ provider: ctx.provider, task, tier, prompt, input, ...extra }, schema, ctx.recordUsage);
 }

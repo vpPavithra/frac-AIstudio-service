@@ -20,23 +20,22 @@ Providers, pricing and run commands for every mode: [docs/FRAC_STUDIO_GUIDE.md](
 ## How the switch works
 
 ```
-AI_PROVIDER (config/service.json "gemini-free"; .env or the npm script override it)
+AI_PROVIDER (config/service.json "claude"; .env or the npm script override it)
   mock          → this folder; no key, no network          npm run dev:mock
   <profile>     → config/ai-providers.json, e.g.           npm run dev:ai
-                  gemini-free / gemini-paid → GEMINI_API_KEY
-                  claude                    → ANTHROPIC_API_KEY
+                  claude / claude-mixed / claude-fast → ANTHROPIC_API_KEY
                   startup stops if that profile's key is missing
 ```
 
 Startup logs `"ai":"mock"` or the profile name, and `GET /v1/info` returns `{"aiProvider": …}`.
-The mock's cost estimate uses the prices of the `MOCK_PRICED_AS` profile (default `gemini-free`), so a mock
+The mock's cost estimate uses the prices of the `MOCK_PRICED_AS` profile (default `claude`), so a mock
 run previews what the real provider would cost.
 
 ## Where the key goes
 
 | Where | How |
 |---|---|
-| Your machine | `GEMINI_API_KEY=…` (or the key the profile names) in the service's `.env` (gitignored; copy `.env.example`). Restart the service, then `npm run ai:check`. |
+| Your machine | `ANTHROPIC_API_KEY=…` in the service's `.env` (gitignored; copy `.env.example`). Restart the service, then `npm run ai:check`. |
 | A server | The deployment's secret store (Kubernetes secret / Jenkins credential), exposed to the container under the same variable name. Redeploy or restart. |
 | Never | Any file in `config/`. They are committed, and startup refuses any `*_API_KEY` placed in them. |
 
@@ -46,29 +45,30 @@ The steps, their order, batching (4 per call, 3 at a time), progress, revise wit
 team edits, logs, versions, autosave, computed checks, the report merge and the Excel export are the
 same code in both modes, and the portal needs no change. What changes:
 
-| Area | Mock | Real provider (Gemini, Claude, …) |
+| Area | Mock | Real provider (Claude) |
 |---|---|---|
 | Who answers each step | `content/cadres.json`, chosen by cadre | The profile's models; research, roles, competencies and the review checklist use the complex tier at higher thinking (`models`, `thinking` in `config/ai-providers.json`) |
 | Review checklist (rules r3 §6) | Nothing flagged except one "check this" accuracy flag per batch of 6, quoting a protocol/schedule/dose line; two "(verify)" state-fit items | Vidya answers Q1 scope, Q2 accuracy, Q3 state fit; code keeps only flags whose quote is in the file |
 | Prompts | Ignored; the mock reads the structured input | Sent as written in `src/services/ai/prompts.ts` (spec section 3 rules, the brief, the edited research, team feedback) |
 | "What should this FRAC cover?" | Picks postings named in it (`postingKeywords`) and puts matching roles and competencies first | Read by the model as part of the brief |
-| Job research | Fixed sample sources | With `webSearch: true` in the profile, also searches government domains (`RESEARCH_SEARCH_DOMAINS`, spec 5.2): enforced by Claude's tool, asked for in the instructions on Gemini. The Gemini free tier has no search. |
+| Job research | Fixed sample sources | With `webSearch: true` in the profile, also searches government domains (`RESEARCH_SEARCH_DOMAINS`, spec 5.2), enforced by Claude's search tool. Source links are checked before they are kept (`SOURCE_LINK_*`). |
 | Time per step | About 1.5 s per call (`MOCK_DELAY_MS`) | Seconds to minutes; the progress bar shows each batch |
-| Cost | Estimate at the `MOCK_PRICED_AS` prices, marked `est.` | Tokens × the profile's `rates`, recorded on every job (`usage` in `GET /v1/jobs/:id`); a free-tier profile marks it `est.` |
+| Cost | Estimate at the `MOCK_PRICED_AS` prices, marked `est.` | Tokens × the profile's `rates`, recorded on every job (`usage` in `GET /v1/jobs/:id`) |
 | Answer quality checks | Always valid | Each answer is validated against `src/services/ai/schemas.ts`; a bad shape fails the job with `AI_OUTPUT_INVALID` and the spend is still recorded |
 | New errors a job can show | None | `AI_AUTH` (key rejected), `AI_BUSY` (rate limit), `AI_REFUSED`, `AI_OUTPUT_TRUNCATED`, `AI_REQUEST_REJECTED`, `AI_UNAVAILABLE` |
-| Retries | Not needed | The SDK retries 408/429/5xx `LLM_RETRIES` times (Gemini waits 5 s, then longer, up to `LLM_MAX_RETRY_DELAY_MS`); on Claude a policy decline is re-run on the fallback model |
+| Retries | Not needed | The SDK retries 408/409/429/5xx `LLM_RETRIES` times; a policy decline is re-run on the fallback model |
 | Sample seed (`MOCK_SEED`) | Works (memory store) | Ignored |
-| Network | None | Outbound HTTPS to the provider (`generativelanguage.googleapis.com`, `api.anthropic.com`) must be allowed from the container |
+| Network | None | Outbound HTTPS to the provider (`api.anthropic.com`), and to the source-link domains for the link check must be allowed from the container |
 
 Settings that only matter with a real provider: the profile in `config/ai-providers.json`, and
 `LLM_TIMEOUT_MS`, `LLM_RETRIES`, `LLM_MAX_TOKENS`, `LLM_MAX_RETRY_DELAY_MS`, `RESEARCH_WEB_SEARCH`,
-`RESEARCH_SEARCH_DOMAINS`, `RESEARCH_SEARCH_MAX_USES`.
+`RESEARCH_SEARCH_DOMAINS`, `RESEARCH_SEARCH_MAX_USES`, `SOURCE_LINK_DOMAINS`, `SOURCE_LINK_CHECK_TIMEOUT_MS`,
+`SOURCE_LINK_MAX_CHECKS`.
 There is no temperature setting: the spec's 0.2–0.4 predates these models, which reject it.
 
 ### Testing the AI layer after adding the key
 
-1. `npm run ai:check` (one tiny call per tier), then `npm run dev:ai` and check the log names the profile, e.g. `"ai":"gemini-free"`.
+1. `npm run ai:check` (one tiny call per tier), then `npm run dev:ai` and check the log names the profile, e.g. `"ai":"claude"`.
 2. Run one compact FRAC through every step in the portal, then a revise with feedback on each step.
 3. Run the expert check, then upload the exported Excel through Review a FRAC.
 4. Check `usage` and cost on the jobs, and that no job failed with `AI_OUTPUT_INVALID`.

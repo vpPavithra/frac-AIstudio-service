@@ -31,7 +31,7 @@ flowchart LR
 | --- | --- | --- |
 | `src/` | The service: HTTP API, AI steps, review engine, jobs, storage. `src/` never imports `tools/` | Yes, compiled to `dist/` |
 | `config/` | `service.json` (settings), `ai-providers.json` (models and prices), `review-rules.json` and `outdated.json` (rule tables), `frac-sizes.json`, `method.txt` | Yes |
-| `migrations/` | `001`–`008` numbered SQL, applied once each | Yes |
+| `migrations/` | `001`–`010` numbered SQL, applied once each | Yes |
 | `tools/reports/` | The report builders and their command-line entry points (`npm run ai:report`, `ai:report:daily`, `ai:report:run`, `review:report`) | No |
 | `tools/ops/` | `npm run config:check` (CI) and `npm run ai:check` (one tiny real call) | No |
 | `tools/fixtures/` | `npm run fixtures:sample` (sample workbooks for tests) | No |
@@ -46,13 +46,13 @@ flowchart LR
 | # | What happens | Where |
 | --- | --- | --- |
 | 1 | `.env` is loaded, then `config/service.json` is merged into the environment (importing `config/constants.ts` does it) | `src/server.ts:1`, `src/config/settings.ts` |
-| 2 | Postgres pool, or the in-memory store when `FRAC_STUDIO_STORE=memory` | `src/server.ts:26-27` |
-| 3 | The job runner, which also writes each AI call to `ai_calls` | `src/server.ts:29` |
-| 4 | The AI provider: `AI_PROVIDER` names a profile in `config/ai-providers.json` (or `mock`); `dev:ai` refuses the mock | `src/server.ts:33` → `src/providers/registry.ts:65` |
-| 5 | The services: `ReviewService` (with Vidya's checklist and its answer store) and `FracService` | `src/server.ts:35-37` |
-| 6 | Startup stops if Postgres is unreachable; migrations run when `MIGRATE_ON_START=true` | `src/server.ts:39-41` |
-| 7 | The stuck-job watchdog starts | `src/server.ts:45` → `src/services/job-watchdog.service.ts:28` |
-| 8 | A `server_runs` row records this run (for `npm run ai:report:run`) | `src/server.ts:48` |
+| 2 | Postgres pool, or the in-memory store when `FRAC_STUDIO_STORE=memory` | `src/server.ts:27-28` |
+| 3 | The job runner, which also writes each AI call to `ai_calls` | `src/server.ts:30` |
+| 4 | The AI provider: `AI_PROVIDER` names a profile in `config/ai-providers.json` (or `mock`); `dev:ai` refuses the mock | `src/server.ts:34` → `src/providers/registry.ts:65` |
+| 5 | The services: `ReviewService` (with Vidya's checklist and its answer store), `FracService` and `DocumentService` (attached documents and templates) | `src/server.ts:36-39` |
+| 6 | Startup stops if Postgres is unreachable; migrations run when `MIGRATE_ON_START=true` | `src/server.ts:41-43` |
+| 7 | The stuck-job watchdog starts | `src/server.ts:47` → `src/services/job-watchdog.service.ts:28` |
+| 8 | A `server_runs` row records this run (for `npm run ai:report:run`) | `src/server.ts:50` |
 | 9 | The HTTP app (`src/app.ts`) listens on `PORT`; the log prints `"ai":"<provider>"` and the run id | `src/server.ts` (`listen`) |
 | 10 | Ctrl+C or SIGTERM: stop taking requests, let running jobs finish, close the run row, exit | `src/server.ts` (`shutdown`) |
 
@@ -72,7 +72,7 @@ flowchart LR
 | Layer | Files | Rule |
 | --- | --- | --- |
 | App and middleware | `src/app.ts:24-44`, `src/middleware/` | Order matters: request context first, error handler last |
-| Routes | `src/routes/index.ts:24-28`, `frac.routes.ts:13-22`, `review.routes.ts:14-19` | Wiring and body validation only |
+| Routes | `src/routes/index.ts:26-37`, `frac.routes.ts:13-33`, `review.routes.ts:14-19` | Wiring and body validation only |
 | Controllers | `src/controllers/` | Read params, call one service method, send the response |
 | Services | `src/services/frac.service.ts`, `review.service.ts` | Business rules; long work becomes a job |
 | Repositories | `src/repositories/` | All SQL; one file per table, each with a memory twin for tests |
@@ -89,7 +89,7 @@ sequenceDiagram
   participant J as JobRunner
   participant S as runLadders
   participant M as askModel
-  participant P as Provider (Claude / Gemini / mock)
+  participant P as Provider (Claude / mock)
   UI->>C: POST /v1/fracs/:id/steps/ladders
   C->>F: startStep(owner, id, "ladders", body)
   F->>F: STEPS["ladders"].notReady? → 409 STEP_NOT_READY
@@ -110,19 +110,30 @@ sequenceDiagram
 
 | Hop | Where |
 | --- | --- |
-| Route and controller | `src/routes/frac.routes.ts:19` → `src/controllers/frac.controller.ts:45` |
-| Step registry and readiness check | `src/services/frac.service.ts:123` (`STEPS`), `:159` (`startStep`) |
-| Job created, 202 returned | `src/services/frac.service.ts:165` → `src/services/queue/job-runner.ts:69` |
-| Background run, heartbeat, job context | `src/services/queue/job-runner.ts:98`, `:147` |
-| The step logic | `src/services/ai/research.step.ts:48`, `roles.step.ts:39`, `competencies.step.ts:43`, `ladders.step.ts:29` |
+| Route and controller | `src/routes/frac.routes.ts:25` → `src/controllers/frac.controller.ts:54` |
+| Step registry and readiness check | `src/services/frac.service.ts:170` (`STEPS`), `:207` (`startStep`) |
+| Job created, 202 returned (409 `JOB_RUNNING` if one is live) | `src/services/frac.service.ts:213` → `src/services/queue/job-runner.ts:114` (`startExclusive`) → `:85` (`start`) |
+| Background run, heartbeat, job context | `src/services/queue/job-runner.ts:136`, `:194` |
+| The step logic | `src/services/ai/research.step.ts:96`, `roles.step.ts:82` (`fillGaps` `:61` for given roles), `competencies.step.ts:59` (`mapToSheet` `:44` for a Competencies sheet), `ladders.step.ts:29` |
 | Prompts (personas, METHOD, the Reviewer's scope rules) | `src/services/ai/prompts.ts` (`reviewGuard`, `laddersPrompt`, …) |
-| One model call: time it, validate, retry once, record | `src/services/ai/step-context.ts:34` → `src/services/ai/ask-model.ts:37` |
-| The provider | `src/providers/text/claude.ts:65` (or `gemini.ts`, `src/mocks/`) |
-| Spend per call and per job | `src/services/queue/job-runner.ts:140` (`ai_calls`), `jobs.usage` |
-| Saving with team edits kept, snapshot | `src/services/frac.service.ts:167-180` |
+| One model call: time it, validate, retry once, record | `src/services/ai/step-context.ts:37` → `src/services/ai/ask-model.ts:41` |
+| The provider | `src/providers/text/claude.ts:86` (or `src/mocks/`); research's web-search pages come back as `citations` (`searchCitations`) |
+| Spend per call and per job | `src/services/queue/job-runner.ts:181` (`ai_calls`), `jobs.usage`; the `JOB_MAX_COST_USD` limit in the same `recordUsage` |
+| Saving with team edits kept, snapshot | `src/services/frac.service.ts:215-229` (research also loads the FRAC's documents here) |
 
 Which persona each step uses: research, roles, activities and competencies are Kaushal; ladders are Kaushal
 and Vidya in the same call (see the "agents" table in [FRAC_STUDIO_GUIDE.md](FRAC_STUDIO_GUIDE.md)).
+
+### Documents, templates and position matching (Nov 2026)
+
+| Flow | Where |
+| --- | --- |
+| Position match on the brief | `GET /v1/fracs/match`: `frac.routes.ts:20` → `frac.controller.ts:33` → `frac.service.ts:254` (`match`) → `FracRepository.findByCadre` |
+| Create from a match (`seed`) | `frac.service.ts:237` (`create`) → `seedContent`, `positionRoles` |
+| Attach a document or import a sheet | `frac.routes.ts:31` → `document.controller.ts` → `document.service.ts:109` (`upload`): `extractDocumentText`, or `import*Sheet` then `apply*Import`, version first |
+| Remove a document | `frac.routes.ts:32` → `document.service.ts:158` |
+| Template download | `routes/index.ts:30` → `DocumentService.template` (`document.service.ts:172`) → `buildTemplateWorkbook` |
+| How steps use them | research reads `ctx.documents` (`research.step.ts:96`); roles `fillGaps`; competencies `mapToSheet`; ladders skip competencies whose ladder came in the sheet |
 
 ## 5. Flow B: the expert check, and Flow C: a Reviewer upload
 
@@ -147,8 +158,8 @@ flowchart TD
 | --- | --- |
 | Upload route, file limits | `src/routes/review.routes.ts:14` → `src/controllers/review.controller.ts:14` |
 | Read and parse the workbook | `src/services/review.service.ts:123-132` → `src/services/excel/workbook-reader.ts`, `src/services/review-engine/parse-workbook.ts` |
-| Same file, same review (fingerprint) | `src/services/review.service.ts:135` → `src/services/review-engine/fingerprint.ts` |
-| Expert check entry | `src/routes/frac.routes.ts:18` → `src/services/frac.service.ts:213` |
+| Same file, same review (fingerprint) | `src/services/review.service.ts:134` → `src/services/review-engine/fingerprint.ts` |
+| Expert check entry | `src/routes/frac.routes.ts:24` → `src/services/frac.service.ts:298` (clears `reviewStale`) |
 | The review itself | `src/services/review.service.ts:75` (`review`) |
 | Rule-based checks | `src/services/review-engine/checks.ts` (`computeChecks`), tables in `config/review-rules.json`, `config/outdated.json` |
 | Vidya's checklist, answer reuse | `src/services/ai-review.service.ts:112`, `:131` (stored answers), `:155` (store new ones) |
@@ -158,7 +169,7 @@ flowchart TD
 
 ## 6. Flow D: the Excel download
 
-`GET /v1/fracs/:id/export.xlsx` → `src/services/frac.service.ts:249` → `buildFracWorkbook`
+`GET /v1/fracs/:id/export.xlsx` → `src/services/frac.service.ts:335` → `buildFracWorkbook`
 (`src/services/excel/workbook-writer.ts:113`) with the method paragraph from `config/method.txt`. A review's
 download uses `buildReviewWorkbook` (`:212`). No AI call.
 
@@ -168,8 +179,10 @@ download uses `buildReviewWorkbook` (`:212`). No AI call.
 | --- | --- | --- |
 | Heartbeat | `src/services/queue/job-runner.ts` (`setInterval`) | A long model call keeps its job fresh |
 | Watchdog | `src/services/job-watchdog.service.ts:19` | A job left running by a crash is failed as `JOB_INTERRUPTED` |
-| Concurrency cap | `src/providers/text/limit.ts` | A profile's `maxConcurrent` (1 on the Gemini free tier) |
-| Retries | the SDKs (408/429/5xx); `askModel` retries a wrong-shape answer once | Transient errors and malformed answers |
+| One live job per target | `src/services/queue/job-runner.ts:114`, `migrations/009_one_active_job.sql` | A reload, second tab or double click cannot start a second paid job |
+| Spending limit | `src/services/queue/job-runner.ts` (`recordUsage`), `JOB_MAX_COST_USD` | A runaway job stops at $3 of billed spend |
+| Concurrency cap | `src/providers/text/limit.ts` | A profile's optional `maxConcurrent` (none of the current profiles set one) |
+| Retries | the SDK (408/429/5xx); `askModel` retries a wrong-shape answer once | Transient errors and malformed answers |
 
 ## 8. The tools: reports and checks (not the running service)
 

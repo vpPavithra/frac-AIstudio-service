@@ -133,7 +133,7 @@ describe("buildFracWorkbook", () => {
     ]);
     expect(sheets[0].rows[1]).toEqual(["R1", "Conduct VHSND sessions", "", "", "ANM1, ANM2", "IPHS 2022", ""]);
     expect(sheets[2].rows).toContainEqual(["Method", "Approved method paragraph."]);
-    expect(sheets[2].rows).toContainEqual(["Title", "Issuer", "Year", "Use", "Tier"]);
+    expect(sheets[2].rows).toContainEqual(["Title", "Issuer", "Year", "Use", "Tier", "URL"]);
     expect(sheets[3].rows[5]).toEqual(["Severity", "Check", "Finding", "Detail", "Refs", "Suggested fix", "Found by"]);
 
     const { model } = parseWorkbook(sheets, "ANM competencies - Bihar.xlsx");
@@ -164,6 +164,14 @@ describe("buildFracWorkbook", () => {
   it("omits the expert-check sheet when the FRAC has no review", async () => {
     const sheets = await readWorkbook(await buildFracWorkbook(frac(), "Method."));
     expect(sheets.map((sheet) => sheet.name)).toEqual(["FRAC", "Competencies", "Method & Sources"]);
+    expect(sheets[2].rows.find((r) => r[0] === "Built")?.[1]).toContain("not yet expert-checked");
+  });
+
+  it("leaves an out-of-date check out of a draft download, and marks a checked one", async () => {
+    const draft = await readWorkbook(await buildFracWorkbook({ ...frac(), review: review(), reviewStale: true }, "Method."));
+    expect(draft.map((sheet) => sheet.name)).toEqual(["FRAC", "Competencies", "Method & Sources"]);
+    const checked = await readWorkbook(await buildFracWorkbook({ ...frac(), review: review() }, "Method."));
+    expect(checked[2].rows.find((r) => r[0] === "Built")?.[1]).toContain("— expert-checked;");
   });
 });
 

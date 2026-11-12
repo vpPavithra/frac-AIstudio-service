@@ -9,6 +9,7 @@ import { loadReviewRules } from "../config/review-rules.ts";
 import { createMockProvider, seedMockData } from "./index.ts";
 import { memoryRepositories } from "../repositories/index.ts";
 import { ChecklistReviewer } from "../services/ai-review.service.ts";
+import { DocumentService } from "../services/document.service.ts";
 import { FracService } from "../services/frac.service.ts";
 import { JobRunner } from "../services/queue/job-runner.ts";
 import { ReviewService } from "../services/review.service.ts";
@@ -21,7 +22,7 @@ function setup() {
   const provider = createMockProvider();
   const reviews = new ReviewService(repos, runner, new ChecklistReviewer(provider), () => loadReviewRules());
   const fracs = new FracService(repos, runner, reviews, () => "Method text", provider);
-  return { app: createApp({ fracs, reviews, jobs: repos.jobs, provider }), runner, fracs, reviews };
+  return { app: createApp({ fracs, documents: new DocumentService(repos, fracs), reviews, jobs: repos.jobs, provider }), runner, fracs, reviews };
 }
 
 type App = ReturnType<typeof setup>["app"];
@@ -53,8 +54,9 @@ describe("full flow on the mock AI provider", () => {
     expect(frac.postings.map((p: { key: string }) => p.key)).toEqual(["P1", "P2"]);
     expect(frac.research.assumptions).toMatch(/^VERIFY: /m);
     expect(frac.research.authorised.split("\n").length).toBeGreaterThan(1);
-    // The brief is now locked
-    await request(app).patch(`/v1/fracs/${id}`).set(OWNER).send({ cadre: "GNM" }).expect(409);
+    // The brief stays editable after research (the change is stamped); put it back for the rest of the flow
+    await request(app).patch(`/v1/fracs/${id}`).set(OWNER).send({ cadre: "GNM" }).expect(200);
+    await request(app).patch(`/v1/fracs/${id}`).set(OWNER).send({ cadre: "ANM" }).expect(200);
 
     // Step 3: roles then activities in batches of 4 (spec 5.3)
     const roles = await step(app, runner, id, "roles");

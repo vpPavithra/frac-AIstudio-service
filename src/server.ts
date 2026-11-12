@@ -16,6 +16,7 @@ import { JobRunner } from "./services/queue/job-runner.ts";
 import { startJobWatchdog } from "./services/job-watchdog.service.ts";
 import { createAi } from "./providers/registry.ts";
 import { memoryRepositories, pgRepositories } from "./repositories/index.ts";
+import { DocumentService } from "./services/document.service.ts";
 import { FracService } from "./services/frac.service.ts";
 import { ReviewService } from "./services/review.service.ts";
 import { describeError, logger } from "./utils/logger.ts";
@@ -35,6 +36,7 @@ async function start(): Promise<void> {
   const reviews = new ReviewService(repos, runner, new ChecklistReviewer(provider, repos.reviewAnswers), () => loadReviewRules());
   // The method paragraph (config/method.txt) is also re-read per export, for the same reason
   const fracs = new FracService(repos, runner, reviews, () => loadMethodParagraph(), provider);
+  const documents = new DocumentService(repos, fracs);
   // Refuse to start when Postgres is unreachable, rather than failing every request later
   if (pool) await checkDatabase(pool, poolTarget());
   if (pool && SERVER.migrateOnStart) {
@@ -51,7 +53,7 @@ async function start(): Promise<void> {
       logger.warn("Server run not recorded", { error: describeError(err) });
       return null;
     });
-  const server = createApp({ fracs, reviews, jobs: repos.jobs, provider }).listen(SERVER.port, () => {
+  const server = createApp({ fracs, documents, reviews, jobs: repos.jobs, provider }).listen(SERVER.port, () => {
     logger.info("frac-studio-service listening", { port: SERVER.port, store: inMemory ? "memory" : "postgres", ai: provider.name, run: runId });
   });
   // MOCK_SEED: fill the memory store with sample FRACs/reviews for local UI work (mock provider only)

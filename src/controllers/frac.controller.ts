@@ -6,6 +6,7 @@ import { ownerOf } from "../middleware/auth.ts";
 import type { FracService, GenerationStep } from "../services/frac.service.ts";
 import { notFound } from "../utils/response.ts";
 import {
+  matchQuerySchema,
   versionIdSchema,
   type CreateFracInput,
   type PatchFracInput,
@@ -26,6 +27,11 @@ export function fracController(fracs: FracService) {
 
     async list(_req: Request, res: Response) {
       res.json({ fracs: await fracs.list(ownerOf(res)) });
+    },
+
+    /** Position matching: ?cadre=&state=; `match` is null when the owner has no FRAC for that position. */
+    async match(req: Request, res: Response) {
+      res.json({ match: await fracs.match(ownerOf(res), parseInput(matchQuerySchema, req.query)) });
     },
 
     /** `activeJobId`: the step or check still running on it, so a reloaded page can show its progress. */

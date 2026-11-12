@@ -9,7 +9,7 @@
 import type { ZodType } from "zod/v4";
 import { LLM } from "../../config/constants.ts";
 import { jsonProblem } from "../../providers/text/json.ts";
-import type { AiTask, CompletionResult, ModelTier, TextProvider } from "../../providers/text/types.ts";
+import type { AiTask, Citation, CompletionResult, ModelTier, TextProvider } from "../../providers/text/types.ts";
 import { currentJob } from "../../utils/context.ts";
 import { logger } from "../../utils/logger.ts";
 import { ApiError } from "../../utils/response.ts";
@@ -22,6 +22,10 @@ export interface AskRequest {
   tier: ModelTier;
   prompt: string;
   input: unknown;
+  /** Research only: most web searches for this call (0 = none); see CompletionRequest.searchMaxUses. */
+  searchMaxUses?: number;
+  /** Receives the pages the accepted answer's web search retrieved (research), so sources can link to them. */
+  onCitations?: (citations: Citation[]) => void;
 }
 
 /** Why an answer was rejected, for the log: unreadable JSON, or the first schema issue. */
@@ -43,7 +47,7 @@ export async function askModel<T>(req: AskRequest, schema: ZodType<T>, recordUsa
     logger.info("AI call started", { ...tags, attempt: attempt + 1 });
     let result: CompletionResult;
     try {
-      result = await req.provider.complete({ task: req.task, tier: req.tier, prompt: req.prompt, input: req.input, schema });
+      result = await req.provider.complete({ task: req.task, tier: req.tier, prompt: req.prompt, input: req.input, schema, searchMaxUses: req.searchMaxUses });
     } catch (err) {
       const outcome = err instanceof ApiError ? err.code : "ERROR";
       const latencyMs = Date.now() - started;
@@ -87,7 +91,10 @@ export async function askModel<T>(req: AskRequest, schema: ZodType<T>, recordUsa
         startedAt: new Date(started + queuedMs).toISOString(),
       },
     });
-    if (parsed.success) return parsed.data;
+    if (parsed.success) {
+      req.onCitations?.(result.citations ?? []);
+      return parsed.data;
+    }
 
     const first = parsed.error.issues[0];
     const retry = attempt < LLM.invalidRetries;

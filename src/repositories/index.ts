@@ -1,6 +1,7 @@
 // Builds the repositories for one store. server.ts picks pgRepositories when Postgres is in use
 // and memoryRepositories for FRAC_STUDIO_STORE=memory; tests use the memory set.
 import type { Pool } from "pg";
+import { MemoryDocumentRepository, PgDocumentRepository, type DocumentRepository } from "./document.repository.ts";
 import { MemoryAiCallRepository, PgAiCallRepository, type AiCallRepository } from "./ai-call.repository.ts";
 import { MemoryFracRepository, PgFracRepository, type FracRepository } from "./frac.repository.ts";
 import { MemoryJobRepository, PgJobRepository, type JobRepository } from "./job.repository.ts";
@@ -19,6 +20,8 @@ export interface Repositories {
   serverRuns: ServerRunRepository;
   /** Stored AI checklist answers, so a repeat check skips unchanged competencies. */
   reviewAnswers: ReviewAnswerCacheRepository;
+  /** Documents attached to a FRAC: brief text for research, and standard sheet imports. */
+  documents: DocumentRepository;
 }
 
 export function pgRepositories(pool: Pool): Repositories {
@@ -29,6 +32,7 @@ export function pgRepositories(pool: Pool): Repositories {
     aiCalls: new PgAiCallRepository(pool),
     serverRuns: new PgServerRunRepository(pool),
     reviewAnswers: new PgReviewAnswerCacheRepository(pool),
+    documents: new PgDocumentRepository(pool),
   };
 }
 
@@ -40,5 +44,6 @@ export function memoryRepositories(): Repositories {
     aiCalls: new MemoryAiCallRepository(),
     serverRuns: new MemoryServerRunRepository(),
     reviewAnswers: new MemoryReviewAnswerCacheRepository(),
+    documents: new MemoryDocumentRepository(),
   };
 }

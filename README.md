@@ -3,8 +3,8 @@
 Backend for FRAC Studio (FRAC Creator, FRAC Reviewer, My FRACs). The UI lives in `sunbird-cb-orgportal`
 at `app/frac-studio`, and calls this service through `sunbird-cb-uiproxy` at `/apis/protected/v8/fracStudio/*`.
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the design and [docs/CODEBASE_GUIDE.md](docs/CODEBASE_GUIDE.md) for what every folder and file does.
-[docs/FRAC_STUDIO_GUIDE.md](docs/FRAC_STUDIO_GUIDE.md) explains each Creator step and the Reviewer, how to run mock, Gemini or
-Claude, the pricing and the configuration.
+[docs/FRAC_STUDIO_GUIDE.md](docs/FRAC_STUDIO_GUIDE.md) explains each Creator step and the Reviewer, how to run mock or Claude,
+the pricing and the configuration.
 
 ## Repository layout
 
@@ -44,14 +44,13 @@ batching, progress, checks, report and export.
 | `AI_PROVIDER` | Answers from | Key (environment only) |
 |---|---|---|
 | `mock` | `src/mocks/` sample data, no cost, no network | none |
-| `gemini-free` (the default in `config/service.json`) | Gemini API free tier, `gemini-3.6-flash` on both tiers (switch to `gemini-3.8-flash` once Google's overload clears), no web search | `GEMINI_API_KEY` |
-| `gemini-paid` | Gemini API paid tier, `gemini-4-argon` (complex) + `gemini-3.8-flash`, Google Search for research | `GEMINI_API_KEY` |
-| `claude` | Claude Sonnet 5.5 on both tiers (high / medium thinking), web search for research | `ANTHROPIC_API_KEY` |
+| `claude` (the default in `config/service.json`) | Claude Sonnet 5.5 on both tiers (high / medium thinking), web search for research | `ANTHROPIC_API_KEY` |
 | `claude-mixed` | Sonnet 5.5 for research, roles, competencies and the review; Haiku 5.5 ($0.10 / $0.50) for activities and ladders: about half the cost. Compare quality before choosing it | `ANTHROPIC_API_KEY` |
 | `claude-fast` | The same model with less thinking (medium / low): faster and cheaper, for the effort comparison | `ANTHROPIC_API_KEY` |
 
 The profiles live in [`config/ai-providers.json`](config/ai-providers.json): model and thinking level per
-tier, list prices, which variable holds the key, web search, free tier and a cap on calls in flight.
+tier, list prices, which variable holds the key and web search. Every profile is Claude, so the only key a
+real run needs is `ANTHROPIC_API_KEY`.
 Switching provider means changing `AI_PROVIDER` and setting that profile's key. Changing a model or a
 price means editing the profile. Neither needs a code change.
 
@@ -72,23 +71,19 @@ price means editing the profile. Neither needs a code change.
 **Make sure a run uses the AI, not the mock:**
 
 1. Start it with `npm run dev:ai` (or `start:ai`). These set `AI_REQUIRE_REAL=true`, so the service refuses to start on the mock and says why. `npm run dev` does not: it follows whatever `AI_PROVIDER` says.
-2. The startup log names the provider: `"ai":"gemini-free"` (or `claude`), never `"ai":"mock"`.
-3. `curl -H 'x-aastrika-creator: me' localhost:3010/v1/info` returns `{"aiProvider":"gemini-free"}`.
-4. After a step, `npm run ai:report -- --days 1` lists the calls under `gemini-free · gemini-3.6-flash`; mock calls show as `mock · mock`.
+2. The startup log names the provider: `"ai":"claude"` (or the profile in use), never `"ai":"mock"`.
+3. `curl -H 'x-aastrika-creator: me' localhost:3010/v1/info` returns `{"aiProvider":"claude"}`.
+4. After a step, `npm run ai:report -- --days 1` lists the calls under `claude · claude-sonnet-5-5`; mock calls show as `mock · mock`.
 
-The cost in the portal reads "est." on both the mock and the Gemini free tier (no bill either way), so it does not tell them apart; the checks above do.
+The cost in the portal reads "est." on the mock (no bill), so check one of the above to be sure.
 
-- **Where the key goes:** the service's `.env` locally (`GEMINI_API_KEY=…`); the deployment's secret store
+- **Where the key goes:** the service's `.env` locally (`ANTHROPIC_API_KEY=…`); the deployment's secret store
   on a server. Never a file in `config/` (committed; startup refuses any `*_API_KEY` there).
-- To try another provider for one run: `AI_PROVIDER=claude npm run dev:ai`.
-- Startup logs `"ai":"gemini-free"` (or the name in use); `GET /v1/info` returns the same.
-- **Free tier:** calls are not billed, so the cost on each job is what the same tokens would cost at the
-  paid list price, marked `est.` in the portal. The profile runs one call at a time (`maxConcurrent: 1`)
-  and the SDK waits and retries on a 429, so a full FRAC is slower than on a paid key. When the daily
-  quota runs out, jobs fail with `AI_BUSY` until it resets (midnight Pacific).
+- To try another profile for one run: `AI_PROVIDER=claude-mixed npm run dev:ai`.
+- Startup logs `"ai":"claude"` (or the name in use); `GET /v1/info` returns the same.
 - **Adding another provider** (e.g. OpenAI): write `src/providers/text/<kind>.ts` implementing
   `TextProvider`, add it to `FACTORIES` in `src/providers/registry.ts` and to `PROVIDER_KINDS` in
-  `src/config/ai-providers.ts`, then add a profile. See `gemini.ts` for a complete example.
+  `src/config/ai-providers.ts`, then add a profile. See `claude.ts` for a complete example.
 
 What switching affects, how to edit the sample data, and how to delete the mocks: [src/mocks/README.md](src/mocks/README.md).
 
@@ -157,12 +152,14 @@ the service after a change.
 
 | What | Keys | Default |
 |---|---|---|
-| Provider | `AI_PROVIDER`, `MOCK_PRICED_AS` (whose prices the mock's estimate uses) | `gemini-free`, `gemini-free` |
+| Provider | `AI_PROVIDER`, `MOCK_PRICED_AS` (whose prices the mock's estimate uses) | `claude`, `claude` |
 | Call limits (every provider) | `LLM_TIMEOUT_MS`, `LLM_RETRIES`, `LLM_MAX_TOKENS`, `LLM_MAX_RESUMES`, `LLM_MAX_RETRY_DELAY_MS`, `LLM_INVALID_RETRIES` | 10 min, 3, 64,000, 3, 60 s, 1 |
 | Creator batching | `AI_BATCH_SIZE`, `AI_BATCH_PARALLEL` (activities and ladders) | 4 per call, 6 at once |
 | Review checklist | `REVIEW_BATCH_SIZE`, `REVIEW_BATCH_PARALLEL`, `REVIEW_MAX_STATE_ITEMS`, `REVIEW_MIN_QUOTE_WORDS`, `REVIEW_REUSE_ANSWERS` | 6, 6, 6, 4, on (a repeat expert check asks the AI only about changed competencies; "Run a fresh review" asks everything) |
-| Research web search | `RESEARCH_WEB_SEARCH`, `RESEARCH_SEARCH_DOMAINS`, `RESEARCH_SEARCH_MAX_USES` | on, 4 government domains, 3 |
-| Jobs | `JOB_STALE_AFTER_MS`, `JOB_SWEEP_EVERY_MS`, `JOB_HEARTBEAT_MS` | 15 min, 1 min, 1 min |
+| Research web search | `RESEARCH_WEB_SEARCH`, `RESEARCH_SEARCH_DOMAINS`, `RESEARCH_SEARCH_MAX_USES`, `RESEARCH_SEARCH_MAX_USES_WITH_DOCS` | on, 4 government domains, 3, 1 (when a brief document is attached). Claude's web search only |
+| Source links (View Source) | `SOURCE_LINK_DOMAINS`, `SOURCE_LINK_CHECK_TIMEOUT_MS`, `SOURCE_LINK_MAX_CHECKS` | 5 guideline sites not searched (`nhsrcindia.org`, `main.mohfw.gov.in`, `who.int`, `nhp.gov.in`, `nhsrc.gov.in`), 3 s, 10 checks per research run |
+| Documents | `DOC_MAX_CHARS`, `DOC_MAX_BRIEF_FILES` | 30,000 characters, 3 per FRAC |
+| Jobs | `JOB_STALE_AFTER_MS`, `JOB_SWEEP_EVERY_MS`, `JOB_HEARTBEAT_MS`, `JOB_MAX_COST_USD` | 15 min, 1 min, 1 min, $3 (billed spend at which one job stops; 0 = no limit) |
 | Postgres pool | `POSTGRES_POOL_MAX`, `POSTGRES_CONNECT_TIMEOUT_MS`, `POSTGRES_IDLE_TIMEOUT_MS` | 10, 10 s, 30 s |
 | Request limits | `MAX_UPLOAD_MB`, `MAX_JSON_MB`, `MAX_TEXT_CHARS`, `MAX_ROLES`, `MAX_ACTIVITIES_PER_ROLE`, `MAX_COMPETENCIES` | 15, 5, 20,000, 200, 200, 500 |
 

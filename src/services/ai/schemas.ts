@@ -17,13 +17,34 @@ export const researchOutput = z.object({
   codePrefix: s(),
   summary: s(),
   postings: z.array(z.object({ key: s(), label: s() })).default([]),
-  sources: z.array(z.object({ title: s(), issuer: s(), year: s(), use: s(), tier: s() })).default([]),
+  sources: z.array(z.object({ title: s(), issuer: s(), year: s(), use: s(), tier: s(), url: s() })).default([]),
   authorised: lines(),
   notAuthorised: lines(),
   stateContext: lines(),
   sourceNotes: s(),
   assumptions: lines(),
   verify: lines(),
+  /** Only asked when the agent chooses the size (sizeBy "agent"): compact, standard or full, and why. */
+  size: s(),
+  sizeReason: s(),
+});
+
+/** How much of a research field the team's documents cover. */
+const coverage = () => z.enum(["found", "partial", "missing"]).default("missing");
+
+/**
+ * Step 2, first part when the team attached documents: what the documents say, field by field, and how much of
+ * each they cover. No sources: the documents themselves are the sources (research.step.ts documentSources).
+ */
+export const documentReadOutput = researchOutput.omit({ sources: true }).extend({
+  coverage: z.object({
+    cadreFull: coverage(),
+    summary: coverage(),
+    postings: coverage(),
+    authorised: coverage(),
+    notAuthorised: coverage(),
+    stateContext: coverage(),
+  }).default({ cadreFull: "missing", summary: "missing", postings: "missing", authorised: "missing", notAuthorised: "missing", stateContext: "missing" }),
 });
 
 /** Step 3a: at least one role, each with a title. Codes are assigned in code, not by the model. */
@@ -46,6 +67,11 @@ export const competenciesOutput = z.object({
   competencies: z
     .array(z.object({ code: z.string().min(1), label: z.string().min(1), description: s(), type: s(), area: s(), kcm: s() }))
     .min(1),
+  mapping: z.array(z.object({ a: z.string(), c: z.string(), l: z.coerce.number().int().min(1).max(5) })),
+});
+
+/** Step 4 with a team's Competencies sheet: only the activity -> competency@level mapping, to the given codes. */
+export const mappingOutput = z.object({
   mapping: z.array(z.object({ a: z.string(), c: z.string(), l: z.coerce.number().int().min(1).max(5) })),
 });
 

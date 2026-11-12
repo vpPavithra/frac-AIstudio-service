@@ -7,8 +7,8 @@ import { buildAiReport } from "./ai-report.ts";
 const call = (over: Partial<AiCall>): AiCall => ({
   jobId: "j1",
   jobKind: "roles",
-  provider: "gemini-free",
-  model: "gemini-3.8-flash",
+  provider: "claude-mixed",
+  model: "claude-haiku-5-5",
   task: "roles",
   tier: "complex",
   outcome: "ok",
@@ -74,11 +74,11 @@ describe("AI response report", () => {
       reviews: [review],
     });
     expect(md).toContain("# AI response report, 2026-11-01 to 2026-11-06");
-    expect(md).toContain("4 AI calls through gemini-free: 50% answered in the expected shape");
+    expect(md).toContain("4 AI calls through claude-mixed: 50% answered in the expected shape");
     expect(md).toContain("2 jobs ran; 1 failed.");
     expect(md).toContain("Costs marked est. are estimates");
-    expect(md).toMatch(/\| gemini-free · gemini-3\.8-flash \| 3 \| 67% \| 1 \| 0 \|/);
-    expect(md).toMatch(/\| gemini-free · \(no answer\) \| 1 \| 0% \| 0 \| 1 \|/);
+    expect(md).toMatch(/\| claude-mixed · claude-haiku-5-5 \| 3 \| 67% \| 1 \| 0 \|/);
+    expect(md).toMatch(/\| claude-mixed · \(no answer\) \| 1 \| 0% \| 0 \| 1 \|/);
     expect(md).toMatch(/\| `AI_BUSY` \| 1 \| roles \| Rate limit or quota used up \|/);
     expect(md).toMatch(/\| roles \| 2 \| 1 \| 1 \(AI_BUSY ×1\) \| 30\.0 s \|/);
     expect(md).toContain("| Kept after the quote check | 5 (50%) |");
@@ -109,14 +109,14 @@ describe("AI response report", () => {
     });
     expect(md).toContain("# Daily AI report, 2026-11-06");
     expect(md).toContain("Times are IST.");
-    expect(md).toMatch(/\| 3 Roles and activities \| gemini-free \| 1 \| 2 \| 2,000 \| 800 \| 2,000 \| 800 \| est\. \$0\.0300 \| est\. \$0\.0300 \| 12\.0 s \| 30\.0 s \| 75% \| 0 \|/);
-    expect(md).toMatch(/\| 5 Level ladders \| gemini-free \| 1 \| 1 \|/);
+    expect(md).toMatch(/\| 3 Roles and activities \| claude-mixed \| 1 \| 2 \| 2,000 \| 800 \| 2,000 \| 800 \| est\. \$0\.0300 \| est\. \$0\.0300 \| 12\.0 s \| 30\.0 s \| 75% \| 0 \|/);
+    expect(md).toMatch(/\| 5 Level ladders \| claude-mixed \| 1 \| 1 \|/);
     expect(md).toMatch(/\| FRAC ANM · Bihar · standard \| Roles and activities, Level ladders \| 3 \| 3,000 \| 1,200 \| est\. \$0\.0700 \| 1 \|/);
     expect(md).toMatch(/## Slowest 10 calls[\s\S]*\| 20\.0 s \| 11-06 15:35:00 \| ladders \|/);
     expect(md).toMatch(/\| 2026-11-06 \| 3 \| 67% \| 1 \|/);
     // Every call, in start order, times on the IST clock (UTC 09:59:58 → 15:29:58)
     expect(md).toMatch(/## Every call[\s\S]*\| 1 \| 15:29:58 \| 15:30:00 \| roles \| `j1` \| roles \|/);
-    expect(md).toMatch(/\| 3 \| 15:35:00 \| 15:30:00 \| ladders \| `j2` \| ladders \| gemini-free · gemini-3\.8-flash \| \*\*invalid\*\* \|/);
+    expect(md).toMatch(/\| 3 \| 15:35:00 \| 15:30:00 \| ladders \| `j2` \| ladders \| claude-mixed · claude-haiku-5-5 \| \*\*invalid\*\* \|/);
   });
 
   it("shows cost per user, what revisions added, and warns when a day's billed spend passes the budget", () => {

@@ -63,6 +63,9 @@ function byScope<T>(items: T[], scope: string, textOf: (item: T) => string, coun
   return items.filter((_, i) => keep.has(i));
 }
 
+/** Spec 3.7: usually L3; L4 for supervising/reviewing work; L5 only for audit or mentoring. */
+const levelFor = (text: string) => (/audit|mentor/i.test(text) ? 5 : /supervise|review|verify|investigate|manage/i.test(text) ? 4 : 3);
+
 /** Pauses so the progress bar visibly moves. 0 in tests. */
 const pause = () => new Promise((resolve) => setTimeout(resolve, MOCK.delayMs));
 
@@ -103,12 +106,16 @@ export class MockTextProvider implements TextProvider {
     switch (task) {
       case "research":
         return this.research(input);
+      case "research-documents":
+        return this.documentRead(input);
       case "roles":
         return this.roles(input);
       case "activities":
         return this.activities(input);
       case "competencies":
         return this.competencies(input);
+      case "mapping":
+        return this.mapping(input);
       case "ladders":
         return this.ladders(input);
       case "review-competencies":
@@ -157,6 +164,28 @@ export class MockTextProvider implements TextProvider {
       sourceNotes: p.sourceNotes + feedback,
       assumptions: [...(scope ? [`Scope taken from the brief: ${scope}`] : []), ...p.assumptions.map((s) => fill(s, vars))],
       verify: p.verify.map((s) => fill(s, vars)),
+      // When the brief left the size to the agent: a short scope reads as a narrow job
+      ...(input.decideSize
+        ? scope.length > 80
+          ? { size: "standard", sizeReason: "The brief covers several programmes and settings." }
+          : { size: "compact", sizeReason: "The brief describes a focused job in one main setting." }
+        : {}),
+    };
+  }
+
+  /**
+   * Step 2, document read: the profile's research as if a job description covered part of it. The position,
+   * summary and authorised work are found, postings and work to refer only partly, and state context not at all,
+   * so the gap research always has something to do.
+   */
+  private documentRead(input: Record<string, unknown>) {
+    // Its sources are dropped by documentReadOutput, which has none
+    const research = this.research(input);
+    return {
+      ...research,
+      notAuthorised: research.notAuthorised.slice(0, 1),
+      stateContext: [],
+      coverage: { cadreFull: "found", summary: "found", postings: "partial", authorised: "found", notAuthorised: "partial", stateContext: "missing" },
     };
   }
 
@@ -227,11 +256,29 @@ export class MockTextProvider implements TextProvider {
       const donor = assigned.findIndex((c) => assigned.filter((x) => x === c).length > 1);
       if (donor >= 0) assigned[donor] = k;
     }
-    // Spec 3.7: usually L3; L4 for supervising/reviewing work; L5 only for audit or mentoring
-    const levelFor = (text: string) => (/audit|mentor/i.test(text) ? 5 : /supervise|review|verify|investigate|manage/i.test(text) ? 4 : 3);
     return {
       competencies: comps,
       mapping: activities.map((a, i) => ({ a: a.code, c: comps[assigned[i]].code, l: levelFor(a.text) })),
+    };
+  }
+
+  /** Mapping to a team's competencies: each activity to the one sharing the most words with it (first on a tie). */
+  private mapping(input: Record<string, unknown>) {
+    const activities = (input.activities as { code: string; text: string }[] | undefined) ?? [];
+    const comps = (input.competencies as { code: string; label: string; description: string }[] | undefined) ?? [];
+    if (!comps.length) return { mapping: [] };
+    const compWords = comps.map((c) => words(`${c.label} ${c.description}`));
+    return {
+      mapping: activities.map((a, i) => {
+        const aw = words(a.text);
+        let best = i % comps.length;
+        let bestScore = 0;
+        compWords.forEach((cw, k) => {
+          const score = [...aw].filter((w) => cw.has(w)).length;
+          if (score > bestScore) [best, bestScore] = [k, score];
+        });
+        return { a: a.code, c: comps[best].code, l: levelFor(a.text) };
+      }),
     };
   }
 

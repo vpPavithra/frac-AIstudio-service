@@ -18,7 +18,7 @@ app/frac-studio                  /protected/v8/fracStudio/*        /v1/...
 |---|---|---|
 | UI | `sunbird-cb-orgportal`, `project/ws/app/src/lib/routes/frac-studio/` | NgModule, `*ngIf`, constructor DI, `_ws-design-system-v2` mixins, native `<select>`. Route `app/frac-studio` gated by a lowercase role. |
 | Proxy | `sunbird-cb-uiproxy`, `src/protectedApi_v8/fracStudio/fracStudio.ts` | `protectedApiV8.use('/fracStudio', …)` → `CONSTANTS.FRAC_STUDIO_API_BASE` (default `${KONG_API_BASE}/frac-studio`) + `/v1`. Built on the AI Studio helpers (`forwardAny`): owner as `x-aastrika-creator` from the session, multipart rebuilt, downloads streamed, upstream errors relayed. |
-| Service | this repo | Holds the AI provider key (Gemini or Claude), runs the long jobs, owns the Postgres tables. |
+| Service | this repo | Holds the AI provider key (Claude), runs the long jobs, owns the Postgres tables. |
 
 ## Service layout
 
@@ -33,7 +33,8 @@ config/outdated.json   OUTDATED list, read per review (OUTDATED_CONFIG_PATH over
 config/review-rules.json  r3 rule tables: scope per cadre, ladder rules, job areas (REVIEW_RULES_CONFIG_PATH) ← done
 docs/spec/             the spec, the r3 review rules, and R3_GAP_ANALYSIS.md (what is built against them)
 migrations/            numbered SQL: 001 schema, 002 jobs.error_code, 003 reviews.fingerprint,      ← done
-                       004 ai_calls (per-call AI log)
+                       004 ai_calls, 005–006 call start time and thinking tokens, 007 server_runs,
+                       008 review_answer_cache, 009 one active job per FRAC or review, 010 frac_documents
 src/config/            settings.ts (service.json → env, refuses secrets), constants.ts, db.ts,       ← done
                        ai-providers.ts, frac-sizes.ts
 src/routes/            URL → middleware → controller wiring, under /v1                              ← done
@@ -50,7 +51,7 @@ src/services/queue/    job runner, spec 8 job messages                          
 src/repositories/      frac / review / job .repository.ts: Postgres + in-memory per entity           ← done
 src/utils/             response (ApiError, one error shape), logger, context (request id)            ← done
 src/services/ai/       prompt builders, step logic, output schemas, batching                         ← done
-src/providers/         TextProvider seam: AI_PROVIDER picks a profile (gemini.ts, claude.ts) or mock ← done
+src/providers/         TextProvider seam: AI_PROVIDER picks a Claude profile (claude.ts) or mock    ← done
 src/mocks/             sample-data provider for `npm run dev:mock`; deletable                      ← done
 tools/                 not the running service: reports/ (ai:report, review:report), ops/ (config:check, ai:check), fixtures/ ← done
 ```
@@ -66,8 +67,8 @@ three fixed-title findings. Verdict, triage, summary and strengths are computed 
 
 Same file, same review: an upload's fingerprint (engine version + rule tables + parsed model + context)
 is stored with the review; the same upload returns the stored review (`fromCache`, HTTP 200, no job)
-until `POST /v1/frac-reviews/:id/rerun` or an upload with `fresh=true` asks again. Neither Claude
-Sonnet 5.5 nor the profiles' Gemini models are given a temperature, so the stored review is what makes
+until `POST /v1/frac-reviews/:id/rerun` or an upload with `fresh=true` asks again. Claude models are
+not given a temperature, so the stored review is what makes
 results repeatable (the spec's temperature 0 is moot).
 
 ## API (spec 8, mounted under /v1, reached from the portal as /apis/protected/v8/fracStudio/...)
@@ -80,7 +81,14 @@ POST   /v1/frac-reviews (multipart)       GET /v1/frac-reviews    GET /v1/frac-r
 GET    /v1/frac-reviews/:id/export.xlsx   POST /v1/frac-reviews/:id/open-in-creator
 POST   /v1/frac-reviews/:id/rerun         (r3 "Run a fresh review")
 GET    /v1/jobs/:id
+GET    /v1/fracs/match?cadre=&state=      (position matching; POST /v1/fracs takes a `seed`)
+GET|POST /v1/fracs/:id/documents (multipart)   DELETE /v1/fracs/:id/documents/:documentId
+GET    /v1/templates/{brief|roles|competencies|sources}
 ```
+
+A start while a job is live on the same FRAC or review answers 409 `JOB_RUNNING` with that job's id, and
+`GET /v1/fracs/:id` returns `activeJobId`, so a reloaded page follows the running job. Every endpoint, payload
+and AI call is listed in [API_REFERENCE.md](API_REFERENCE.md).
 
 Owner comes from the proxy-forwarded user id header, never from a query param (`?owner=me` in the spec).
 The service trusts `x-aastrika-creator`, so it must be reachable only through the proxy. The proxy
@@ -109,7 +117,7 @@ header and would let a browser act as another user.
 - `frac-studio.html` for the verbatim METHOD / SOURCE_LIBRARY / method-paragraph text.
 - Mount the workbook writer from the export API routes once route/repository wiring is implemented.
 - Product questions in spec 11 (assessment type per level, authorisation source, Hindi sheet, multi-reviewer).
-- Web search domains for the research step need confirming before production. Gemini cannot enforce them (asked for in the instructions); the Gemini free tier has no search.
-- First real runs (Gemini free tier, then Claude): cost per FRAC, repeatability, answer quality per provider.
+- Web search domains for the research step (`RESEARCH_SEARCH_DOMAINS`, enforced by Claude's web search tool) and the extra link domains (`SOURCE_LINK_DOMAINS`) need confirming before production.
+- Quality comparison of `claude-mixed` and `claude-fast` against `claude` on the same FRAC before choosing one for go-live (first real runs on `claude` are done: three FRACs, $0.84–$0.96 each).
 
 Running, providers, pricing and configuration: [FRAC_STUDIO_GUIDE.md](FRAC_STUDIO_GUIDE.md).
