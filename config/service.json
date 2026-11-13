@@ -37,10 +37,11 @@
   "DOC_MAX_BRIEF_FILES": 3,
   "RESEARCH_SEARCH_MAX_USES_WITH_DOCS": 1,
 
-  "// source links": "The View button on each research source opens its page. A page the web search returned is kept; an address the model gave must be on RESEARCH_SEARCH_DOMAINS or SOURCE_LINK_DOMAINS (sites that host the guidelines but are not searched, such as nhsrcindia.org for IPHS and who.int) and answer a quick request (SOURCE_LINK_CHECK_TIMEOUT_MS, redirects included) or it is dropped. SOURCE_LINK_MAX_CHECKS caps the requests per research run; 0 keeps only searched pages.",
+  "// source links": "The View button on each research source opens its page. A page the web search returned is kept only when its title matches the source title by more than SOURCE_LINK_MIN_MATCH (0.6 = 60%), else it is ignored; an address the model gave must be on RESEARCH_SEARCH_DOMAINS or SOURCE_LINK_DOMAINS (sites that host the guidelines but are not searched, such as nhsrcindia.org for IPHS and who.int) and answer a quick request (SOURCE_LINK_CHECK_TIMEOUT_MS, redirects included) or it is dropped. SOURCE_LINK_MAX_CHECKS caps the requests per research run; 0 keeps only searched pages.",
   "SOURCE_LINK_CHECK_TIMEOUT_MS": 3000,
   "SOURCE_LINK_MAX_CHECKS": 10,
   "SOURCE_LINK_DOMAINS": "nhsrcindia.org,main.mohfw.gov.in,who.int,nhp.gov.in,nhsrc.gov.in",
+  "SOURCE_LINK_MIN_MATCH": 0.6,
 
   "MAX_UPLOAD_MB": 15,
   "MAX_JSON_MB": 5,
@@ -48,6 +49,7 @@
   "MAX_ROLES": 200,
   "MAX_ACTIVITIES_PER_ROLE": 200,
   "MAX_COMPETENCIES": 500,
+  "MAX_POSTINGS": 20,
 
   "JOB_STALE_AFTER_MS": 900000,
   "JOB_SWEEP_EVERY_MS": 60000,

@@ -2,7 +2,7 @@
 // and the Reviewer's checklist (ai-review.service.ts, also run by the expert check). Pure string builders;
 // the step files call them and pass the text to the TextProvider. Brief size wording comes from
 // config/frac-sizes.json (via sizes.ts). Never edit the text inside the templates without the spec owner.
-import type { Frac, FracSource, ResearchField } from "../../models/frac.model.ts";
+import type { Frac, FracActivity, FracSource, ResearchField } from "../../models/frac.model.ts";
 import { DOCUMENTS } from "../../config/constants.ts";
 import { loadReviewRules } from "../../config/review-rules.ts";
 import { cadreFamily } from "../review-engine/rules.ts";
@@ -61,9 +61,9 @@ const postings = (f: Frac) => f.postings.map((p) => `${p.key} ${p.label}`).join(
 
 /**
  * Postings come from the team (review, Nov 2026): only the places of work the brief or the team documents name, as
- * many as they name up to 3, and none when they name none. The team adds or edits them on the Research tab.
+ * many as they name (one, several or none). The team adds or edits them on the Research tab.
  */
-const POSTINGS_RULE = `Postings: list only the places of work the brief or the team documents name (up to 3, in their order; e.g. "ANM at Sub-Centre (outreach)"). They become the FRAC's Yes/No columns. Do not add postings they do not name, and return an empty list when they name none: the team adds postings themselves.`;
+const POSTINGS_RULE = `Postings: list every place of work the brief or the team documents name, and only those (as many as they name, in their order; e.g. "ANM at Sub-Centre (outreach)"). They become the FRAC's Yes/No columns. Do not add postings they do not name, and return an empty list when they name none: the team adds postings themselves.`;
 
 /**
  * The Reviewer's own rule tables (config/review-rules.json scope, config/outdated.json), so the Creator writes
@@ -233,6 +233,28 @@ export const mappingPrompt = (f: Frac, feedback?: string) =>
     revise(feedback),
     `Map every activity to exactly one of these competencies at the level the job demands (l = 1–5, usually 3 or 4; 5 only for audit or mentoring). Use as many of the competencies as fit the activities.`,
     `${JSON_ONLY}\n{"mapping":[{"a":"A1","c":"${f.competencies[0]?.code ?? "C1"}","l":3}]}`].filter(Boolean).join("\n\n");
+
+/**
+ * "Check roles against the job description" on the Roles tab (Nov 2026): checks roles and activities, usually from a team's Roles sheet,
+ * against the job description and the research. Reports problems only; nothing on the FRAC changes.
+ */
+export const rolesVerifyPrompt = (f: Frac, documents: { name: string; text: string }[]) => {
+  const keys = f.postings.map((p) => p.key);
+  const row = (a: FracActivity) => `${a.code} ${a.text}${keys.length ? ` [${keys.map((k) => `${k}:${a.postings[k] || "-"}`).join(" ")}]` : ""}`;
+  return [PERSONAS, brief(f),
+    f.research ? `RESEARCH\nSummary: ${f.research.summary}\n${scope(f)}\nSTATE CONTEXT:\n${f.research.stateContext}` : "",
+    teamDocuments(documents, "JOB DESCRIPTION AND ORDERS FROM THE TEAM (authoritative)"),
+    `POSTINGS: ${postings(f)}`,
+    `ROLES AND ACTIVITIES (with each posting's Yes/No):\n${f.roles.map((r) => `${r.code} ${r.title}\n${r.activities.map(row).join("\n") || "(no activities)"}`).join("\n\n")}`,
+    `Check the roles and activities against the job description and the research. Report problems only:
+- missing: a duty the job description or the authorised list names that no activity covers (role "" when no role fits);
+- outside-scope: an activity the position may not do (NOT AUTHORISED, or beyond the job description);
+- posting: a Yes/No that does not fit where that posting works;
+- duplicate: two activities that say the same thing;
+- unclear: an activity too vague to train or assess.
+Quote the activity code. Give a one-line suggestion. Return an empty list when nothing is wrong; do not invent problems.`,
+    `${JSON_ONLY}\n{"summary":"one or two sentences","findings":[{"kind":"missing | outside-scope | posting | duplicate | unclear","role":"R1","activity":"A3","note":"","suggestion":""}]}`].filter(Boolean).join("\n\n");
+};
 
 /**
  * Step 5 (spec 5.5) for one batch of competency codes: each competency with the activities that use it

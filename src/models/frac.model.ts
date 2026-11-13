@@ -1,7 +1,7 @@
 // FRAC shapes from the FRAC Studio spec, section 4.1. A FRAC is the Creator's working document: the
 // brief, research, roles with activities, and laddered competencies. Stored whole as JSONB (fracs.doc),
 // returned as-is by /v1/fracs, and written to Excel by services/excel. Types only, no logic.
-import type { Report } from "./report.model.ts";
+import type { Finding, Report } from "./report.model.ts";
 
 /** How strong the evidence behind an activity is; "Inferred – verify" asks the team to check it. */
 export type SourceTier = "JD" | "Programme guideline" | "Facility standard" | "Inferred – verify";
@@ -119,6 +119,8 @@ export interface Frac {
   rolesDirty: boolean;
   review: Report | null;
   reviewStale?: boolean;
+  /** The agent's last "Check roles against the job description" on the Roles tab; out of date when changedAt.roles is later than its `at`. */
+  rolesCheck?: FracRolesCheck;
   /**
    * When each step's content last changed (an edit, an AI run, a sheet upload) or the team marked it checked.
    * A step with output is out of date when an earlier step changed after it. Missing on older FRACs.
@@ -126,6 +128,30 @@ export interface Frac {
   changedAt?: Partial<Record<FracStep, string>>;
   log: FracLogEntry[];
 }
+
+/** One problem the agent found in the roles and activities (services/ai/roles-verify.ts). */
+export interface FracRoleFinding {
+  kind: "missing" | "outside-scope" | "posting" | "duplicate" | "unclear";
+  /** Role code, e.g. "R3"; "" for a duty that belongs to no role yet. */
+  role: string;
+  /** Activity code, e.g. "A12", or "". */
+  activity: string;
+  note: string;
+  suggestion: string;
+}
+
+/** The agent's last check of the roles against the documents and research. Changes nothing on the FRAC. */
+export interface FracRolesCheck {
+  at: string;
+  summary: string;
+  findings: FracRoleFinding[];
+}
+
+/** The Creator tab a quick check belongs on. */
+export type QuickCheckTab = "roles" | "competencies" | "ladders";
+
+/** A rule-based finding shown on a Creator tab while the FRAC is built (GET /v1/fracs/:id/rule-checks). No AI. */
+export type QuickCheck = Pick<Finding, "check" | "sev" | "title" | "detail" | "fix" | "refs"> & { tab: QuickCheckTab };
 
 /** Standard sheets a team can upload in place of an AI step (see services/documents). */
 export type SheetKind = "roles" | "competencies" | "sources";

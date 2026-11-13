@@ -9,7 +9,7 @@ import type { ZodType } from "zod/v4";
  * "research-documents" reads the team's job descriptions before research, without web search, and says what they cover.
  * "mapping" maps activities to a team's uploaded competencies (no new competencies are written).
  */
-export type AiTask = "research" | "research-documents" | "roles" | "activities" | "competencies" | "mapping" | "ladders" | "review-competencies" | "review-state";
+export type AiTask = "research" | "research-documents" | "roles" | "activities" | "competencies" | "mapping" | "ladders" | "review-competencies" | "review-state" | "verify-roles";
 
 /**
  * Spec 9: complex tier for research, roles, competencies and review; default for activities and ladders.

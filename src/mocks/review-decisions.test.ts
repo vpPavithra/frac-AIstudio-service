@@ -297,4 +297,154 @@ describe("review decisions on the mock provider", () => {
     expect(cleared.body.frac.seededFrom.withRoles).toBe(false);
     expect(cleared.body.frac.postings.length).toBeGreaterThan(0);
   });
+  it("re-applies a roles sheet over edits, and refuses a document that kept no rows", async () => {
+    const ctx = setup();
+    const id = await create(ctx, { cadre: "ANM", state: "Bihar", size: "compact" });
+    const uploaded = await upload(ctx, id, "roles", await xlsx("FRAC", ROLES_SHEET), "roles.xlsx").expect(201);
+    const docId = uploaded.body.document.id as string;
+    expect(uploaded.body.document.parsed.roles).toHaveLength(2);
+
+    const frac = await getFrac(ctx, id);
+    const edited = structuredClone(frac.roles);
+    edited[0].activities[0].text = "Edited by the team";
+    await request(ctx.app).patch(`/v1/fracs/${id}`).set(OWNER).send({ roles: edited }).expect(200);
+
+    const applied = await request(ctx.app).post(`/v1/fracs/${id}/documents/${docId}/apply`).set(OWNER).expect(200);
+    expect(applied.body.frac.roles[0].activities[0].text).toBe(ROLES_SHEET[2][1]);
+    const versions = await request(ctx.app).get(`/v1/fracs/${id}/versions`).set(OWNER).expect(200);
+    expect(versions.body.versions[0].reason).toBe("Before re-applying the Roles sheet");
+
+    await request(ctx.app).post(`/v1/fracs/${id}/documents/${docId}/apply`).set(OTHER).expect(404);
+    await request(ctx.app).post(`/v1/fracs/${id}/documents/nope/apply`).set(OWNER).expect(404);
+    await ctx.repos.documents.insert({ ...uploaded.body.document, id: "old-sheet", ownerId: "mock-user", text: "", parsed: { counts: {}, warnings: [] } });
+    const old = await request(ctx.app).post(`/v1/fracs/${id}/documents/old-sheet/apply`).set(OWNER).expect(409);
+    expect(old.body.error.code).toBe("SHEET_NOT_STORED");
+  });
+
+  it("verifies roles with the agent against the job description without changing them", async () => {
+    const ctx = setup();
+    const id = await create(ctx, { cadre: "ANM", state: "Bihar", size: "compact" });
+    const notReady = await request(ctx.app).post(`/v1/fracs/${id}/roles/verify`).set(OWNER).expect(409);
+    expect(notReady.body.error.code).toBe("STEP_NOT_READY");
+
+    await upload(ctx, id, "roles", await xlsx("FRAC", ROLES_SHEET), "roles.xlsx").expect(201);
+    // Activities but neither research nor a job description to check them against
+    await request(ctx.app).post(`/v1/fracs/${id}/roles/verify`).set(OWNER).expect(409);
+    await upload(ctx, id, "brief", Buffer.from("Position: ANM, Bihar\nDuties:\n- Immunise children"), "JD.txt").expect(201);
+    const before = await getFrac(ctx, id);
+
+    const from = ctx.calls.length;
+    const started = await request(ctx.app).post(`/v1/fracs/${id}/roles/verify`).set(OWNER).expect(202);
+    await ctx.runner.idle();
+    const job = await request(ctx.app).get(`/v1/jobs/${started.body.jobId}`).set(OWNER).expect(200);
+    expect(job.body).toMatchObject({ status: "done", error: null });
+    expect(tasksSince(ctx, from)).toEqual(["verify-roles"]);
+    expect(ctx.calls[from]).toMatchObject({ tier: "complex" });
+    expect(ctx.calls[from].prompt).toContain("Immunise children");
+    expect(ctx.calls[from].prompt).toContain("A1 Conduct immunisation sessions as per the UIP schedule [P1:Yes P2:Yes]");
+
+    const after = await getFrac(ctx, id);
+    expect(after.rolesCheck.findings).toHaveLength(2);
+    expect(after.rolesCheck.findings[0]).toMatchObject({ kind: "unclear", role: "R1", activity: "A1" });
+    expect(after.roles).toEqual(before.roles);
+    expect(after.changedAt).toEqual(before.changedAt);
+    await request(ctx.app).post(`/v1/fracs/${id}/roles/verify`).set(OTHER).expect(404);
+  });
+  it("runs the expert check's rule-based checks on an uploaded sheet and lists what points at it", async () => {
+    const ctx = setup();
+    const id = await create(ctx, { cadre: "ANM", state: "Bihar", size: "compact" });
+    const roles = await upload(ctx, id, "roles", await xlsx("FRAC", [
+      ["Role", "Activity"], ["R1", "Mobilise mothers"], ["A1", "Mobilise mothers and children for the VHND"],
+    ]), "roles.xlsx").expect(201);
+    const roleChecks = roles.body.document.parsed.checks as { check: string; title: string }[];
+    expect(roleChecks).toEqual(expect.arrayContaining([expect.objectContaining({ check: "context", refs: expect.arrayContaining(["A1"]) })]));
+    expect(roleChecks.some((c) => c.check === "coverage")).toBe(false);
+
+    const ladder = (verb: string) => [1, 2, 3, 4, 5].flatMap((n) => [`${n === 1 ? verb : "Performs"} step ${n}`, `Does step ${n}`]);
+    const header = ["Competency Code", "Competency Label", "Competency Description", "Competency Type", "Competency Area",
+      ...[1, 2, 3, 4, 5].flatMap((n) => [`Competency Level ${n} Label`, `Competency Level ${n} Description`])];
+    const comps = await upload(ctx, id, "competencies", await xlsx("Competencies", [header,
+      ["ANM1", "Immunisation", "Conducts immunisation sessions", "Domain", "PH", ...ladder("Understands")],
+      ["ANM2", "Antenatal care", "Gives antenatal care", "Domain", "PH", ...ladder("Knows")],
+    ]), "competencies.xlsx").expect(201);
+    const checks = comps.body.document.parsed.checks as { check: string; sev: string; refs: string[] }[];
+    expect(checks.find((c) => c.check === "bloom")?.refs).toEqual(expect.arrayContaining(["ANM1", "ANM2"]));
+    expect(checks.every((c, i) => i === 0 || "BMm".indexOf(checks[i - 1].sev) <= "BMm".indexOf(c.sev))).toBe(true);
+    // Mapping comes after the upload, so "never used" is not a sheet problem
+    expect(checks.some((c) => c.title === "Competencies never used")).toBe(false);
+    // The outdated name in activity A1 belongs to the roles sheet, not this one
+    expect(checks.some((c) => c.check === "context" && c.refs.includes("A1"))).toBe(false);
+  });
+  it("runs the Bloom's verbs and FRAC structure quick checks on the FRAC as built, each on its tab", async () => {
+    const ctx = setup();
+    const id = await create(ctx, { cadre: "ANM", state: "Bihar", size: "compact" });
+    const quick = async () => (await request(ctx.app).get(`/v1/fracs/${id}/rule-checks`).set(OWNER).expect(200)).body.checks as
+      { check: string; tab: string; title: string; refs: string[] }[];
+    expect(await quick()).toEqual([]);
+
+    await upload(ctx, id, "roles", await xlsx("FRAC", [["Role", "Activity"], ["R1", "Mobilise mothers"], ["A1", "Mobilise mothers for the VHND"]]), "roles.xlsx")
+      .expect(201);
+    // Roles exist, competencies do not: only roles findings, and nothing about missing competencies
+    let checks = await quick();
+    expect(checks).toEqual([expect.objectContaining({ check: "structure", tab: "roles", title: "Roles with fewer than 2 activities", refs: ["R1"] })]);
+
+    const ladder = (verb: string) => [1, 2, 3, 4, 5].flatMap((n) => [`${n === 1 ? verb : "Performs"} step ${n}`, `Does step ${n}`]);
+    const header = ["Competency Code", "Competency Label", "Competency Description", "Competency Type", "Competency Area",
+      ...[1, 2, 3, 4, 5].flatMap((n) => [`Competency Level ${n} Label`, `Competency Level ${n} Description`])];
+    await upload(ctx, id, "competencies", await xlsx("Competencies", [header,
+      ["ANM1", "Immunisation", "Conducts immunisation sessions", "Domain", "PH", ...ladder("Understands")],
+      ["ANM2", "Antenatal care", "Gives antenatal care", "", "PH", ...ladder("Knows")],
+    ]), "competencies.xlsx").expect(201);
+    checks = await quick();
+    expect(checks.map((c) => c.check).every((k) => k === "bloom" || k === "structure")).toBe(true);
+    expect(checks.find((c) => c.check === "bloom")).toMatchObject({ tab: "ladders" });
+    expect(checks.some((c) => c.tab === "competencies")).toBe(true);
+    expect(ctx.calls).toHaveLength(0);
+    await request(ctx.app).get(`/v1/fracs/${id}/rule-checks`).set(OTHER).expect(404);
+  });
+  it("maps activities to a competency sheet uploaded before roles, at the end of the roles job", async () => {
+    const ctx = setup();
+    const id = await create(ctx, { cadre: "ANM", state: "Bihar", size: "compact" });
+    await step(ctx, id, "research");
+    await upload(ctx, id, "competencies", await download(ctx, "/v1/templates/competencies"), "competencies.xlsx").expect(201);
+
+    const before = ctx.calls.length;
+    await step(ctx, id, "roles");
+    const tasks = tasksSince(ctx, before);
+    expect(tasks[0]).toBe("roles");
+    expect(tasks.at(-1)).toBe("mapping");
+    const frac = await getFrac(ctx, id);
+    expect(frac.rolesDirty).toBe(false);
+    expect(frac.roles.flatMap((r: { activities: { comp: string }[] }) => r.activities).every((a: { comp: string }) => /^ANM[12]@L[1-5]$/.test(a.comp))).toBe(true);
+    // Mapped in a write of its own, so Competencies is not left older than Roles, and the sheet's ladders stay current
+    expect(frac.changedAt.competencies >= frac.changedAt.roles).toBe(true);
+    expect(frac.changedAt.ladders >= frac.changedAt.competencies).toBe(true);
+    expect(frac.competencies[0].levels).toHaveLength(5);
+
+    // Without a sheet the roles job makes no mapping call
+    const plain = await create(ctx, { cadre: "ANM", state: "Assam", size: "compact" });
+    await step(ctx, plain, "research");
+    const from = ctx.calls.length;
+    await step(ctx, plain, "roles");
+    expect(tasksSince(ctx, from)).not.toContain("mapping");
+  });
+  it("replaces an outdated name across the FRAC without AI, and refuses a finding that needs content", async () => {
+    const ctx = setup();
+    const id = await create(ctx, { cadre: "ANM", state: "Bihar", size: "compact" });
+    await upload(ctx, id, "roles", await xlsx("FRAC", [["Role", "Activity"], ["R1", "Outreach"], ["A1", "Mobilise mothers for the VHND"]]), "roles.xlsx")
+      .expect(201);
+    const before = ctx.calls.length;
+    const res = await request(ctx.app).post(`/v1/fracs/${id}/fixes/outdated`).set(OWNER)
+      .send({ title: "Outdated reference: VHND / Village Health and Nutrition Day" }).expect(200);
+    expect(res.body.replaced).toBe(1);
+    expect(res.body.frac.roles[0].activities[0].text).toBe("Mobilise mothers for the VHSND");
+    expect(ctx.calls.length).toBe(before);
+    const versions = await request(ctx.app).get(`/v1/fracs/${id}/versions`).set(OWNER).expect(200);
+    expect(versions.body.versions[0].reason).toBe("Before replacing VHND / Village Health and Nutrition Day");
+
+    await request(ctx.app).post(`/v1/fracs/${id}/fixes/outdated`).set(OWNER).send({ title: "Outdated reference: nothing" }).expect(404);
+    await request(ctx.app).post(`/v1/fracs/${id}/fixes/outdated`).set(OWNER).send({}).expect(400);
+    await request(ctx.app).post(`/v1/fracs/${id}/fixes/outdated`).set(OTHER)
+      .send({ title: "Outdated reference: VHND / Village Health and Nutrition Day" }).expect(404);
+  });
 });

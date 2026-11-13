@@ -22,16 +22,20 @@ function laddersWritten(prev: Frac, next: Frac): boolean {
 /**
  * `next` with `changedAt` set to `at` for every step whose content differs from `prev`. Mappings belong to the
  * competencies step, but not when the roles changed in the same write: a roles rebuild drops mappings of new
- * activities, and that must leave competencies out of date, not mark them current.
+ * activities, and that must leave competencies out of date, not mark them current. A mappings-only change (the
+ * roles job mapping to a Competencies sheet, or a hand edit of competency@level) leaves the ladders current too:
+ * a ladder describes its competency, not which activities map to it.
  */
 export function stampChanges(prev: Frac, next: Frac, at: string): Frac {
   const rolesChanged = roles(prev) !== roles(next);
+  const contentChanged = competencies(prev) !== competencies(next);
+  const mappingsOnly = !rolesChanged && !contentChanged && mappings(prev) !== mappings(next);
   const changes: Record<FracStep, boolean> = {
     brief: brief(prev) !== brief(next),
     research: research(prev) !== research(next),
     roles: rolesChanged,
-    competencies: competencies(prev) !== competencies(next) || (!rolesChanged && mappings(prev) !== mappings(next)),
-    ladders: laddersWritten(prev, next),
+    competencies: contentChanged || mappingsOnly,
+    ladders: laddersWritten(prev, next) || (mappingsOnly && next.competencies.some((c) => c.levels !== null)),
   };
   const changed = FRAC_STEPS.filter((step) => changes[step]);
   if (!changed.length) return next;

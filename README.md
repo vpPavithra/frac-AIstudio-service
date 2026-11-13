@@ -171,5 +171,5 @@ Brief sizes (roles, activities per role and competencies for compact, standard a
 `config/frac-sizes.json` (override with `FRAC_SIZES_CONFIG_PATH`). Startup stops if a size is missing or a
 count is not a positive whole number.
 
-What stays in code on purpose: rules the spec fixes, such as at most 3 postings, 5 levels per ladder, the
+What stays in code on purpose: rules the spec fixes, such as 5 levels per ladder, the
 fixed finding titles and the triage thresholds. Changing those changes the product, so they go through review.

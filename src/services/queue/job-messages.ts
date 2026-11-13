@@ -13,6 +13,7 @@ export const JOB_MESSAGES = {
   competencies: "The agent is deriving competencies from the activities…",
   mapping: "The agent is mapping activities to your competencies…",
   ladders: (n: number) => `The agent is writing level ladders for ${n} competencies…`,
+  verifyRoles: "The agent is checking the roles and activities against your documents and the research…",
   check: "Running the expert check (rule-based checks, then the agent's checklist)…",
   review: "Reviewing — rule-based checks, then the agent's checklist…",
 } as const;

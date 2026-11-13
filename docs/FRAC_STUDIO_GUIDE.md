@@ -64,10 +64,10 @@ Kaushal researches the job in one AI call, or the team fills in the Research tab
 **What the service does with the answer:**
 
 - Code prefix: upper-case letters only, at most 4 (e.g. `ANM`); falls back to `C`.
-- Postings: at most 3, renamed P1, P2, P3. If the AI gives none, one posting named after the cadre.
+- Postings: every place of work the brief and documents name, renamed P1, P2, P3…: one, several or none. With none, the Research tab stays empty for the team to add them; the team's own postings are kept on a re-run (review, 12–13 Nov 2026).
 - Lists (authorised, not authorised, state context) are saved as one item per line.
 - Every "verify" item is added to the assumptions with the prefix `VERIFY:` so the team sees what needs checking.
-- **Source links (View Source):** the prompt tells the agent to open the JD and the main guidelines with Claude's web search before listing them, and to give each source the address of the page it opened. A link is kept only when it is real: a page the search returned, or an address on the research domains or on `SOURCE_LINK_DOMAINS` (sites that host guidelines such as IPHS, Dakshata or the WHO Labour Care Guide but are not searched) that answers a quick check. Anything else is dropped. In the Research tab the View icon on each source row opens the page or document; a source with no real link shows the icon greyed out (re-run research, or upload a Sources sheet with its URL column filled). The Excel has a URL column.
+- **Source links (View Source):** the prompt tells the agent to open the JD and the main guidelines with Claude's web search before listing them, and to give each source the address of the page it opened. A link is kept only when it is real: a page the search returned whose title matches the source title by more than 60% (`SOURCE_LINK_MIN_MATCH`; a weaker match is ignored, so the row shows no link), or an address on the research domains or on `SOURCE_LINK_DOMAINS` (sites that host guidelines such as IPHS, Dakshata or the WHO Labour Care Guide but are not searched) that answers a quick check. Anything else is dropped. In the Research tab the View icon on each source row opens the page or document; a source with no link shows the icon greyed out, and hovering, tapping or tabbing to it says why: a source without a link is drawn from several documents, so there is no single link to view; your uploaded job description is a file, not a web page. The Excel has a URL column.
 - **Size:** when the agent chooses, a valid `size` in the answer is saved with its reason; anything else keeps "standard".
 
 **Behaviour:** research can run with no earlier step. It locks the brief (Step 1). Running it again with feedback revises it, keeps the team's later edits, and saves a new version.
@@ -78,8 +78,20 @@ Kaushal drafts the roles, then writes the activities for each role. It needs res
 
 **Roles from a standard sheet or a matched position (Nov 2026):** the roles are kept as they are. Only roles with no activities get them written (the activity calls alone, no roles call). With every role filled, the step makes no AI call. The main button reads "Write missing activities". "Revise with feedback" still rebuilds the roles with the AI.
 
+**Roles tab (13 Nov 2026):** roles and activities are built by the agent. The tab has no upload box, re-apply or roles check; a Roles sheet uploaded earlier still works on that FRAC. The quick checks at the top show its Bloom's verbs and FRAC structure findings. (`POST /v1/fracs/:id/roles/verify` stays in the service but the portal no longer offers it.)
+
+**Fixing expert-check findings (13 Nov 2026):** "Fix these competencies" and "Fix all findings" rewrite level ladders, so they show only for findings about ladder text (Bloom's verbs, the ladder shape, scope quoted from a level). An outdated name gets **Replace with … (no AI)**, which swaps it everywhere the check reads it (names, descriptions, ladders, activities). Missing competencies, types and state fit are fixed by hand on their tab. After an upload or edit leaves a step out of date, the footer follows the tab you are updating, as the first build did: on Research, Competencies, Roles & activities or Level ladders it offers **Re-run …** for that tab's own step, with its rough cost; on Expert check or History it offers **Open … to re-run it** for the earliest out-of-date step (no AI call until you are there).
+
+**Quick checks (13 Nov 2026):** the Roles, Competencies and Level ladders tabs show the expert check's Bloom's verbs and FRAC structure findings for that tab at the top, re-run after every upload, step and save (rules only, no AI, no cost). Each roles and competency sheet also lists the rule findings about its rows under the sheet at upload. When quick-check issues are still open, a line next to "Run expert check" says so. The expert check still runs every rule and the AI checklist.
+
+**Flow changes (13 Nov 2026, after testing):**
+- **Competency sheet first:** it uploads on the Research tab, under the Sources sheet. The tabs and the progress tracker run Research, Competencies, Roles & activities, Level ladders, Expert check: the sheet's competencies show right after research, and a step counts as done only once it is reached. The roles job then maps each new activity to them (one mapping call at the end), so there is no separate mapping click. Without a sheet, competencies are derived after Roles & activities, as before.
+- **Roles are built by the agent:** the Roles tab has no upload box and no roles check. A Roles sheet uploaded earlier still works on that FRAC.
+- **Fix all on the expert check:** one button rewrites the ladders of every competency the open findings name, in one run (about $0.011 per competency), then the check shows out of date. Findings that name only activities, roles or missing areas are listed under it for a hand fix.
+- **Create FRAC form:** the job description box has no "Download template" link; the Research tab keeps it.
+
 1. **Roles:** one high-effort call returns the target number of roles for the size, each with a title and source.
-2. **Activities:** medium-effort calls, 4 roles per call, 3 calls at once. Each activity carries its text, the postings it applies to (P1–P3), a source and a source tier (JD, programme guideline, facility standard, or "Inferred – verify"). Progress shows "x of y roles".
+2. **Activities:** medium-effort calls, 4 roles per call, 3 calls at once. Each activity carries its text, the postings it applies to (P1, P2…), a source and a source tier (JD, programme guideline, facility standard, or "Inferred – verify"). Progress shows "x of y roles".
 3. **Codes:** roles are renumbered R1…Rn and activities A1…An, numbered across all roles, not per role.
 
 **Behaviour on a revise:**
@@ -263,7 +275,7 @@ The service's automated suite passes: 168 tests passed and 3 skipped (the 3 need
 
 | Area | What is checked | Result |
 | --- | --- | --- |
-| Whole Creator flow (mock) | Brief → research → roles → competencies → ladders → expert check → Excel → re-import; at most 3 postings, global A-codes, every activity mapped, every competency used, 5 levels each, spend recorded | Pass |
+| Whole Creator flow (mock) | Brief → research → roles → competencies → ladders → expert check → Excel → re-import; postings only as named, global A-codes, every activity mapped, every competency used, 5 levels each, spend recorded | Pass |
 | Step rules | Brief locks after research; steps refused until the previous one exists; edits kept during a step; roles revise keeps competencies and flags them; one running job per FRAC; a fix or edit marks the expert check out of date; the spending limit stops a job | Pass |
 | Review rules r3 | Rule and check tests: parser layouts, KCM sheets, scope sentence by sentence (sentences that rule an act out are not flagged), outdated terms, "family / birth planning" not a KCM name, ladder shifts, coverage areas | Pass |
 | AI checklist | Quotes under 4 words or not in the text are dropped; flags already covered by a rule are dropped; at most 3 fixed-title findings | Pass |
@@ -403,13 +415,14 @@ The settings people change most:
 | `RESEARCH_WEB_SEARCH` / `RESEARCH_SEARCH_DOMAINS` | on / 4 government sites | Off switch and site list for research search (Claude's web search) |
 | `SOURCE_LINK_DOMAINS` | `nhsrcindia.org`, `main.mohfw.gov.in`, `who.int`, `nhp.gov.in`, `nhsrc.gov.in` | Guideline sites that are not searched but whose addresses a source may keep, if they answer the check |
 | `SOURCE_LINK_CHECK_TIMEOUT_MS` / `SOURCE_LINK_MAX_CHECKS` | 3,000 / 10 | How long one link check waits; link checks per research run (0 keeps only searched pages) |
+| `SOURCE_LINK_MIN_MATCH` | 0.6 | How closely a searched page's title must match a source's title (shared words, 0 to 1) to become its link; at or below it the page is ignored |
 | `MOCK_DELAY_MS` / `MOCK_PRICED_AS` | 1,500 / `claude` | Mock pause per call; whose prices the mock estimate uses |
 | `JOB_STALE_AFTER_MS` / `JOB_HEARTBEAT_MS` | 15 min / 1 min | When a silent job counts as interrupted; how often a running job reports in |
 | `JOB_MAX_COST_USD` | 3 | Billed spend at which one job stops with `AI_BUDGET_EXCEEDED` (0 = no limit) |
 | `DOC_MAX_CHARS` / `DOC_MAX_BRIEF_FILES` | 30,000 / 3 | Characters kept from one attached document (and sent to research from all of them); documents per FRAC |
 | `RESEARCH_SEARCH_MAX_USES_WITH_DOCS` | 1 | Web searches research runs when a document is attached (a Sources sheet turns search off) |
 
-What stays in code on purpose: rules the spec fixes, such as at most 3 postings, 5 levels per ladder, the finding titles and the triage thresholds.
+What stays in code on purpose: rules the spec fixes, such as 5 levels per ladder, the finding titles and the triage thresholds.
 
 ## Where the code is
 

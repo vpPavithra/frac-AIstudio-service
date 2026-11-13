@@ -45,6 +45,8 @@ export const TITLES = Object.freeze({
   syllabus: "Activities read as syllabus outcomes",
   untyped: "Competency type is missing",
   incomplete: "Incomplete level ladders",
+  unmapped: "Activities not mapped to a competency",
+  unused: "Competencies never used",
 });
 
 /** One sentence that a scope rule caught. level 0 = the definition (label + description). */
@@ -589,7 +591,7 @@ function coverageChecks(model: ReviewModel, family: CadreFamily | null, areas: A
         finding(
           "coverage",
           unmapped.length >= 0.05 * acts.length ? "M" : "m",
-          "Activities not mapped to a competency",
+          TITLES.unmapped,
           `${unmapped.length} of ${acts.length} activities have no competency mapping, e.g. ${quoted}.`,
           unmapped.map((a) => a.code),
           "Map each activity to exactly one competency at the level the job demands (usually L3 or L4).",
@@ -606,7 +608,7 @@ function coverageChecks(model: ReviewModel, family: CadreFamily | null, areas: A
         finding(
           "coverage",
           "m",
-          "Competencies never used",
+          TITLES.unused,
           `${unused.length} competencies are not mapped from any activity: ${list(unused.map((c) => c.code))}.`,
           unused.map((c) => c.code),
           "Map each to an activity that needs it, or remove it.",

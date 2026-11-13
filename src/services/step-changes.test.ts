@@ -33,9 +33,12 @@ describe("stampChanges", () => {
     const text = structuredClone(f);
     text.roles[0].activities[0].text = "Weighs newborns";
     expect(stamped(f, text)).toEqual(["roles"]);
+    // A mapping change keeps existing ladders current: a ladder describes its competency, not the mappings
     const mapped = structuredClone(f);
     mapped.roles[0].activities[0].comp = "C1@L3";
-    expect(stamped(f, mapped)).toEqual(["competencies"]);
+    expect(stamped(f, mapped)).toEqual(["competencies", "ladders"]);
+    const noLadders = { ...f, competencies: [comp("C1")] };
+    expect(stamped(noLadders, { ...structuredClone(mapped), competencies: [comp("C1")] })).toEqual(["competencies"]);
     expect(stamped(f, { ...f, competencies: [{ ...comp("C1", [level]), label: "Newborn care" }] })).toEqual(["competencies"]);
     expect(stamped(f, { ...f, competencies: [comp("C1", [{ label: "L1", desc: "Does it well" }])] })).toEqual(["ladders"]);
   });

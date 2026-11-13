@@ -5,7 +5,9 @@
 // saved FRAC, logs it and snapshots a version. Called by controllers/frac.controller.ts; wired in server.ts.
 import { randomUUID } from "node:crypto";
 import { fracToModel } from "./review-engine/convert.ts";
-import type { Frac, FracRole, FracSeed, FracVersion } from "../models/frac.model.ts";
+import type { Frac, FracRole, FracSeed, FracVersion, QuickCheck, QuickCheckTab } from "../models/frac.model.ts";
+import type { CheckKey, Finding } from "../models/report.model.ts";
+import { normalizeCode } from "./review-engine/refs.ts";
 import { buildFracWorkbook, fracWorkbookFilename } from "./excel/workbook-writer.ts";
 import type { JobRunner } from "./queue/job-runner.ts";
 import { EXPERT_CHECK_NOTES, JOB_MESSAGES } from "./queue/job-messages.ts";
@@ -18,6 +20,8 @@ import { runCompetencies } from "./ai/competencies.step.ts";
 import { runLadders } from "./ai/ladders.step.ts";
 import { runResearch } from "./ai/research.step.ts";
 import { renumberRoles, runRoles } from "./ai/roles.step.ts";
+import { rolesVerifyNotReady, verifyRoles } from "./ai/roles-verify.ts";
+import { outdatedTitle, replaceable, replaceOutdated } from "./outdated-fix.ts";
 import type { StepContext } from "./ai/step-context.ts";
 import { type ReviewService, worstSeverity } from "./review.service.ts";
 import { markChecked, stampChanges } from "./step-changes.ts";
@@ -193,6 +197,38 @@ const STEPS: Record<GenerationStep, StepSpec> = {
   },
 };
 
+/** Rule groups the quick checks run while a FRAC is built. Add a CheckKey (ladder, context, coverage) to run more. */
+const QUICK_CHECKS: readonly CheckKey[] = ["bloom", "structure"];
+const SEVERITY_ORDER = { B: 0, M: 1, m: 2 } as const;
+
+/**
+ * The quick checks for a FRAC from the expert check's rule-based findings: only QUICK_CHECKS, each on the tab its
+ * codes point at (Bloom's verbs on Level ladders), and only for parts that exist yet, so a FRAC still at roles
+ * is not told its competencies are missing. Worst first.
+ */
+export function quickChecks(frac: Frac, findings: Finding[]): QuickCheck[] {
+  const codes = (list: string[]) => new Set(list.map(normalizeCode));
+  const roleCodes = codes(frac.roles.flatMap((r) => [r.code, ...r.activities.map((a) => a.code)]));
+  const compCodes = codes(frac.competencies.map((c) => c.code));
+  const names = (set: Set<string>, f: Finding) => f.refs.some((ref) => set.has(normalizeCode(ref.split("@")[0])));
+  const tabOf = (f: Finding): QuickCheckTab => {
+    if (f.check === "bloom") return "ladders";
+    if (names(roleCodes, f)) return "roles";
+    if (names(compCodes, f)) return "competencies";
+    return /\brole/i.test(f.title) ? "roles" : "competencies";
+  };
+  const built: Record<QuickCheckTab, boolean> = {
+    roles: frac.roles.some((r) => r.activities.length),
+    competencies: frac.competencies.length > 0,
+    ladders: frac.competencies.some((c) => c.levels?.length),
+  };
+  return findings
+    .filter((f) => QUICK_CHECKS.includes(f.check))
+    .map((f) => ({ check: f.check, sev: f.sev, title: f.title, detail: f.detail, fix: f.fix, refs: f.refs, tab: tabOf(f) }))
+    .filter((c) => built[c.tab])
+    .sort((a, b) => SEVERITY_ORDER[a.sev] - SEVERITY_ORDER[b.sev]);
+}
+
 /**
  * Creator tab (spec 5) and My FRACs. Every read goes through `get`, which scopes to the owner and answers
  * 404 for someone else's FRAC, so no other method checks ownership itself.
@@ -288,6 +324,12 @@ export class FracService {
     return frac;
   }
 
+  /** Quick checks (Bloom's verbs, FRAC structure) on the FRAC as saved now: rule-based, no AI, nothing stored. */
+  async ruleChecks(ownerId: string, id: string): Promise<QuickCheck[]> {
+    const frac = await this.get(ownerId, id);
+    return quickChecks(frac, this.reviews.ruleFindings(fracToModel(frac), frac.cadre));
+  }
+
   /** The id of the step or check running on this FRAC, if any, so a reloaded page can follow it. */
   async activeJobId(ownerId: string, id: string): Promise<string | null> {
     await this.get(ownerId, id);
@@ -303,6 +345,27 @@ export class FracService {
     const next = applyEdits(await this.get(ownerId, id), edits);
     await this.repos.fracs.update(next);
     return next;
+  }
+
+  /**
+   * "Check roles against the job description" on the Roles tab: the agent checks the roles and activities against the job description
+   * and the research (ai/roles-verify.ts). Saves frac.rolesCheck and a snapshot; roles and changedAt are left alone.
+   * Throws 409 STEP_NOT_READY before any job starts when there are no activities, or neither research nor a JD.
+   */
+  async startRolesVerify(ownerId: string, id: string) {
+    const frac = await this.get(ownerId, id);
+    const documents = await this.repos.documents.listForFrac(id);
+    const reason = rolesVerifyNotReady(frac, documents);
+    if (reason) throw conflict("STEP_NOT_READY", reason);
+
+    return this.runner.startExclusive({ ownerId, kind: "verify-roles", targetId: id, msg: JOB_MESSAGES.verifyRoles }, async (_progress, recordUsage) => {
+      const rolesCheck = await verifyRoles(frac, documents, this.provider, recordUsage);
+      // Re-read so edits saved while the check ran are kept
+      const latest = await this.get(ownerId, id);
+      const checked: Frac = { ...latest, rolesCheck, updatedAt: new Date().toISOString() };
+      await this.repos.fracs.update(checked);
+      await this.repos.fracs.snapshot(checked, "Roles verified");
+    });
   }
 
   /**
@@ -333,6 +396,26 @@ export class FracService {
   async versions(ownerId: string, id: string): Promise<FracVersion[]> {
     await this.get(ownerId, id);
     return this.repos.fracs.versions(id);
+  }
+
+  /**
+   * "Replace with …" on an expert-check finding "Outdated reference: X": swaps the outdated name for the current one
+   * in activities and competency names, descriptions and ladders (outdated-fix.ts), after snapshotting, and marks the
+   * check out of date. No AI. 404 when no pattern has that title; 400 NOT_REPLACEABLE when the finding needs content
+   * added (e.g. the Labour Care Guide alongside the partograph). Returns the FRAC and how many places changed.
+   */
+  async replaceOutdated(ownerId: string, id: string, title: string): Promise<{ frac: Frac; replaced: number }> {
+    const frac = await this.get(ownerId, id);
+    const pattern = this.reviews.outdatedPatterns().find((p) => outdatedTitle(p) === title);
+    if (!pattern) throw notFound("Outdated reference");
+    if (!replaceable(pattern)) throw badRequest("NOT_REPLACEABLE", "This finding needs content added, not a name replaced. Fix it by hand.");
+    const { frac: replacedFrac, replaced } = replaceOutdated(frac, pattern);
+    if (!replaced) return { frac, replaced };
+    await this.repos.fracs.snapshot(frac, `Before replacing ${pattern.found}`);
+    const at = new Date().toISOString();
+    const next = stampChanges(frac, { ...replacedFrac, reviewStale: frac.review ? true : frac.reviewStale, updatedAt: at }, at);
+    await this.repos.fracs.update(next);
+    return { frac: next, replaced };
   }
 
   /** Rolls back to a snapshot, after snapshotting the current state so the restore is undoable. */

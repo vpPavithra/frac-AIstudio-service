@@ -33,10 +33,11 @@ export interface AiReportInput {
 }
 
 /** Order the steps appear in the "By step" table: the Creator flow, then the Reviewer. */
-const STEP_ORDER = ["research", "roles", "competencies", "ladders", "check", "review"];
+const STEP_ORDER = ["research", "roles", "verify-roles", "competencies", "ladders", "check", "review"];
 const STEP_NAME: Record<string, string> = {
   research: "2 Research",
   roles: "3 Roles and activities",
+  "verify-roles": "3 Roles: verify with the agent",
   competencies: "4 Competencies",
   ladders: "5 Level ladders",
   check: "6 Expert check",

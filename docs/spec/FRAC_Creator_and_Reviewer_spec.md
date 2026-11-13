@@ -118,7 +118,7 @@ FRAC {
   cadre, cadreFull, state, size: "compact"|"standard"|"full", prompt,
   imported?: "source filename",          // set when created from a review
   codePrefix: "ANM",                      // A–Z only, ≤4 chars, fallback "C"
-  postings: [{ key: "P1", label: "ANM at Sub-Centre (outreach)" }],   // 1–3
+  postings: [{ key: "P1", label: "ANM at Sub-Centre (outreach)" }],   // as many as the brief names, or none (review 13 Nov 2026; was 1–3)
   research: {
     summary, sourceNotes,
     sources: [{ title, issuer, year, use, tier }],   // tier: JD | Programme guideline | Facility standard | Curriculum (scope only)
@@ -226,7 +226,7 @@ The brief locks once research exists.
 
 **The prompt asks for:**
 - The applicable JD documents.
-- 1–3 postings. These become the FRAC columns, e.g. "ANM at Sub-Centre (outreach)" and "ANM at delivery-point PHC".
+- Postings as the brief and documents name them: one, several or none (review 13 Nov 2026; was 1–3). These become the FRAC columns, e.g. "ANM at Sub-Centre (outreach)" and "ANM at delivery-point PHC".
 - What the cadre is and is not authorised to do.
 - What changes for this state: programmes, cadre names, endemic diseases, languages, portals.
 - For the national baseline: what each state must customise.
@@ -241,7 +241,7 @@ The brief locks once research exists.
 
 **Post-processing in code:**
 - Sanitise `codePrefix`.
-- Keep at most 3 postings, re-keyed P1..P3. If none come back, fall back to `[{P1: cadre}]`.
+- Keep every posting returned, re-keyed P1, P2…. If none come back, keep none: the team adds them (review 12–13 Nov 2026: no cap of 3, no fallback posting).
 - Join the arrays into newline-separated text.
 - Prefix each `verify` item with "VERIFY: " and append it to the assumptions.
 

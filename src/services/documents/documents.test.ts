@@ -28,15 +28,15 @@ describe("brief documents", () => {
 describe("standard sheet importers", () => {
   const sheet = (rows: string[][]) => [{ name: "Sheet1", rows }];
 
-  it("keeps at most 3 postings and warns about untitled roles", () => {
+  it("keeps every posting column (more than 3 too) and warns about untitled roles", () => {
     const { roles, postings, warnings } = importRolesSheet(sheet([
       ["Role", "Activity", "P1: A", "P2: B", "P3: C", "P4: D"],
       ["R1", "", "", "", "", ""],
       ["A1", "Screen women", "Yes", "No", "y", "n"],
     ]));
-    expect(postings.map((p) => p.label)).toEqual(["A", "B", "C"]);
-    expect(roles[0].activities[0].postings).toEqual({ P1: "Yes", P2: "No", P3: "Yes" });
-    expect(warnings).toEqual(["Only the first 3 posting columns were kept.", "1 role row(s) have no title; add one in Roles & activities."]);
+    expect(postings.map((p) => p.label)).toEqual(["A", "B", "C", "D"]);
+    expect(roles[0].activities[0].postings).toEqual({ P1: "Yes", P2: "No", P3: "Yes", P4: "No" });
+    expect(warnings).toEqual(["1 role row(s) have no title; add one in Roles & activities."]);
   });
 
   it("keeps a ladder only when all five levels are filled, and the first of a repeated code", () => {
@@ -61,10 +61,11 @@ describe("linkFor", () => {
     { url: "https://mohfw.gov.in/anm", title: "Job responsibilities of the ANM" },
   ];
 
-  it("matches by title, containment or most words, and never guesses", () => {
+  it("takes the page whose title matches by more than 60%, and never guesses", () => {
     expect(linkFor("Job responsibilities of the ANM", pages)).toBe("https://mohfw.gov.in/anm");
     expect(linkFor("Indian Public Health Standards 2022", pages)).toBe("https://nhm.gov.in/iphs-2022.pdf");
     expect(linkFor("Public Health Standards 2022 Sub-Centre (IPHS)", pages)).toBe("https://nhm.gov.in/iphs-2022.pdf");
+    expect(linkFor("ANM", pages)).toBe(""); // contained in a title, but matches it by 50%
     expect(linkFor("NTEP training modules", pages)).toBe("");
     expect(linkFor("", pages)).toBe("");
   });

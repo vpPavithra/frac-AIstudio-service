@@ -49,6 +49,7 @@ tokens per search.
 | 6a | Standard Sources sheet | Same | Web search off: 3 searches and about 21,000 input tokens saved; the answer leaves `sources` empty, about 1,000 output tokens fewer | **≈ −$0.08** |
 | 6b | Standard Roles sheet with activities | Roles step: 4 → **0** | − about 28,000 | **−$0.137** |
 | 6b′ | Roles sheet, some roles without activities | Roles call skipped; activity batches only for the empty roles | Pro rata | About −$0.03, plus about −$0.03 per 4 roles that already have activities |
+| 6b″ | "Check roles against the job description" on the Roles tab (optional, 13 Nov) | **+1** complex call, only when the team clicks it | About 8,000–10,000 in, 1,500–3,000 out (thinking included) | **≈ +$0.03 to +$0.06** per check. "Re-apply sheet" makes no AI call; "Write activities for N empty roles" costs as 6b′ |
 | 6c | Standard Competencies sheet, no ladders | Competencies call (complex) → one **mapping** call (default tier) | Output about 9,800 → about 1,000–2,000 | **≈ −$0.08 to −$0.09** (on `claude-mixed` the mapping runs on Haiku: ≈ −$0.11) |
 | 6d | Competencies sheet with all five levels filled | Ladders: 8 calls → **0** | − about 78,000 | **−$0.361** more (pro rata when only some competencies have ladders: about $0.011 each) |
 | 7 | Remove Standard / Full: the agent chooses the size | Same | Research output + about 30 | Depends on the job: compact **≈ $0.63**, standard ≈ $0.96, full **≈ $1.38** |

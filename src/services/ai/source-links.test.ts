@@ -2,7 +2,7 @@
 // and answering), and a check never reaches an internal address.
 // Uses the domains in config/service.json (RESEARCH_SEARCH_DOMAINS, SOURCE_LINK_DOMAINS).
 import { jest } from "@jest/globals";
-import { linkSources, onDomains, probeLink, webLink } from "./source-links.ts";
+import { linkSources, onDomains, probeLink, titleMatch, webLink } from "./source-links.ts";
 
 const source = (title: string, url = "") => ({ title, issuer: "MoHFW", year: "2022", use: "JD", tier: "JD", url });
 
@@ -23,13 +23,32 @@ describe("webLink", () => {
   });
 });
 
+describe("titleMatch", () => {
+  it("scores the shared words, ignoring case, punctuation and filler words", () => {
+    expect(titleMatch("Indian Public Health Standards 2022", "indian public health standards (2022)")).toBe(1);
+    expect(titleMatch("Indian Public Health Standards 2022", "Indian Public Health Standards : National Health Mission")).toBeGreaterThan(0.6);
+    expect(titleMatch("Guidelines for ASHA", "ASHA Guidelines")).toBe(1);
+    expect(titleMatch("IPHS", "Indian Public Health Standards 2022")).toBe(0);
+    expect(titleMatch("", "IPHS")).toBe(0);
+  });
+});
+
 describe("linkSources", () => {
   const pages = [{ url: "https://nhm.gov.in/iphs-2022.pdf", title: "Indian Public Health Standards 2022" }];
 
   it("keeps a searched page without a request, and falls back to the page whose title matches", async () => {
     const probe = jest.fn(async (url: string) => url);
-    const out = await linkSources([source("IPHS", "https://nhm.gov.in/iphs-2022.pdf"), source("Indian Public Health Standards 2022")], pages, probe);
+    const out = await linkSources([source("IPHS 2022: Indian Public Health Standards", "https://nhm.gov.in/iphs-2022.pdf"),
+      source("Indian Public Health Standards 2022")], pages, probe);
     expect(out.map((s) => s.url)).toEqual(["https://nhm.gov.in/iphs-2022.pdf", "https://nhm.gov.in/iphs-2022.pdf"]);
+    expect(probe).not.toHaveBeenCalled();
+  });
+
+  it("ignores a searched page whose title matches the source by 60% or less, even when the model gave it", async () => {
+    const probe = jest.fn(async (url: string) => url);
+    const out = await linkSources([source("IPHS", "https://nhm.gov.in/iphs-2022.pdf"), source("Public Health Standards for Sub-Centres 2012")],
+      pages, probe);
+    expect(out.every((s) => !("url" in s))).toBe(true);
     expect(probe).not.toHaveBeenCalled();
   });
 

@@ -61,6 +61,8 @@ export const LIMITS = Object.freeze({
   maxRoles: num("MAX_ROLES", 200),
   maxActivitiesPerRole: num("MAX_ACTIVITIES_PER_ROLE", 200),
   maxCompetencies: num("MAX_COMPETENCIES", 500),
+  /** Most postings (Yes/No columns) on a FRAC: a safety limit, not a rule; research keeps as many as the brief names. */
+  maxPostings: num("MAX_POSTINGS", 20),
 });
 
 /**
@@ -84,6 +86,8 @@ export const SOURCE_LINKS = Object.freeze({
   maxChecks: int("SOURCE_LINK_MAX_CHECKS", 10, 0),
   /** Sites a link may point to besides AI.researchSearchDomains: they host guidelines but are not searched. */
   domains: list("SOURCE_LINK_DOMAINS"),
+  /** A searched page is a source's link only when their titles match by more than this (0 to 1); else it is ignored. */
+  minTitleMatch: num("SOURCE_LINK_MIN_MATCH", 0.6),
 });
 
 /** Stuck-job watchdog (services/job-watchdog.service.ts), started by server.ts. */
@@ -197,9 +201,9 @@ export const MOCK = Object.freeze({
 export const KNOWN_SETTINGS = [
   "PORT", "FRAC_STUDIO_STORE", "MIGRATE_ON_START",
   "LLM_TIMEOUT_MS", "LLM_RETRIES", "LLM_MAX_TOKENS", "LLM_MAX_RESUMES", "LLM_MAX_RETRY_DELAY_MS", "LLM_INVALID_RETRIES",
-  "MAX_UPLOAD_MB", "MAX_JSON_MB", "MAX_TEXT_CHARS", "MAX_ROLES", "MAX_ACTIVITIES_PER_ROLE", "MAX_COMPETENCIES",
+  "MAX_UPLOAD_MB", "MAX_JSON_MB", "MAX_TEXT_CHARS", "MAX_ROLES", "MAX_ACTIVITIES_PER_ROLE", "MAX_COMPETENCIES", "MAX_POSTINGS",
   "DOC_MAX_CHARS", "DOC_MAX_BRIEF_FILES", "RESEARCH_SEARCH_MAX_USES_WITH_DOCS",
-  "SOURCE_LINK_CHECK_TIMEOUT_MS", "SOURCE_LINK_MAX_CHECKS", "SOURCE_LINK_DOMAINS",
+  "SOURCE_LINK_CHECK_TIMEOUT_MS", "SOURCE_LINK_MAX_CHECKS", "SOURCE_LINK_DOMAINS", "SOURCE_LINK_MIN_MATCH",
   "JOB_STALE_AFTER_MS", "JOB_SWEEP_EVERY_MS", "JOB_HEARTBEAT_MS", "JOB_MAX_COST_USD",
   "POSTGRES_POOL_MAX", "POSTGRES_CONNECT_TIMEOUT_MS", "POSTGRES_IDLE_TIMEOUT_MS", "CORS_ORIGINS", "LOG_FORMAT", "LOG_LEVEL",
   "OUTDATED_CONFIG_PATH", "REVIEW_RULES_CONFIG_PATH", "FRAC_SIZES_CONFIG_PATH", "AI_PROVIDERS_CONFIG_PATH", "METHOD_PARAGRAPH_PATH",

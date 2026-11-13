@@ -5,9 +5,9 @@ import { modelToFrac } from "./review-engine/convert.ts";
 import { ENGINE_VERSION, reviewFingerprint } from "./review-engine/fingerprint.ts";
 import { parseWorkbook } from "./review-engine/parse-workbook.ts";
 import { buildReport } from "./review-engine/report.ts";
-import type { ReviewRules } from "./review-engine/rules.ts";
+import type { OutdatedPattern, ReviewRules } from "./review-engine/rules.ts";
 import type { Frac } from "../models/frac.model.ts";
-import type { AiChecklistStats, Report } from "../models/report.model.ts";
+import type { AiChecklistStats, Finding, Report } from "../models/report.model.ts";
 import type { ReviewContext, ReviewKind, ReviewModel, ReviewRecord } from "../models/review.model.ts";
 import { readWorkbook } from "./excel/workbook-reader.ts";
 import { buildReviewWorkbook, reviewWorkbookFilename } from "./excel/workbook-writer.ts";
@@ -69,6 +69,16 @@ export class ReviewService {
     /** Re-read per review so clinical reviewers' edits to the rule tables apply without a restart. */
     private readonly rules: () => ReviewRules,
   ) {}
+
+  /** The OUTDATED name list the check uses (config/outdated.json), for "Replace with …" in the Creator. */
+  outdatedPatterns(): OutdatedPattern[] {
+    return this.rules().outdated;
+  }
+
+  /** The rule-based findings alone (no AI, nothing stored), for the Creator's quick checks while a FRAC is built. */
+  ruleFindings(model: ReviewModel, cadre: string): Finding[] {
+    return computeChecks(model, this.rules(), { cadre }).findings;
+  }
 
   /** Rule-based checks, then the AI checklist, merged into one computed report (rules r3 §4–7). */
   /** `fresh`: ask the model about every competency ("Run a fresh review"), not reusing stored answers. */

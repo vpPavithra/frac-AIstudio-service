@@ -61,8 +61,12 @@ Portal client: `project/ws/app/src/lib/routes/frac-studio/services/frac-studio-a
 | 24 | `POST /v1/fracs/:id/documents` | `uploadDocument` | 201 | none |
 | 25 | `DELETE /v1/fracs/:id/documents/:documentId` | `removeDocument` | 200 | none |
 | 26 | `GET /v1/templates/:kind` | `downloadTemplate` | 200 file | none |
+| 27 | `POST /v1/fracs/:id/documents/:documentId/apply` | `reapplyDocument` | 200 | none |
+| 28 | `POST /v1/fracs/:id/roles/verify` | `verifyRoles` | 202 job | 1 |
+| 29 | `GET /v1/fracs/:id/rule-checks` | `ruleChecks` | 200 | none |
+| 30 | `POST /v1/fracs/:id/fixes/outdated` | `replaceOutdated` | 200 | none |
 
-Rows 22–26 and the `seed` on #3 were added for the Nov 2026 review decisions
+Rows 22–26 and the `seed` on #3 were added for the Nov 2026 review decisions, rows 27–30 on 13 Nov 2026
 (`docs/releases/REVIEW_DECISIONS_2026-11.md`). With documents or a seed, steps 7–10 make fewer AI calls; see
 "Fewer calls with documents or a match" in section 5.
 
@@ -129,7 +133,7 @@ Rows 22–26 and the `seed` on #3 were added for the Nov 2026 review decisions
 | --- | --- |
 | `cadre`, `state`, `size`, `prompt` | The brief. Refused with `409 BRIEF_LOCKED` once research exists |
 | `cadreFull`, `codePrefix` (≤20) | From research; editable |
-| `postings` | At most 3: `[{ "key": "P1", "label": "Sub-centre" }]` |
+| `postings` | As many as the brief and documents name, or none (safety limit `MAX_POSTINGS`, 20): `[{ "key": "P1", "label": "Sub-centre" }]` |
 | `research` | `{ summary, sourceNotes, sources[], authorised, notAuthorised, stateContext, assumptions }`, or `null` |
 | `roles` | `[{ code, title, source, activities: [{ code, text, postings, source, tier, comp }] }]`, ≤200 roles, ≤200 activities each |
 | `competencies` | `[{ code (required), label, description, type, area, kcm, levels: [{label, desc}] ×≤5 \| null }]`, ≤500 |
@@ -174,7 +178,7 @@ Rows 22–26 and the `seed` on #3 were added for the Nov 2026 review decisions
 
 | Step | What changes in the FRAC |
 | --- | --- |
-| research | `cadreFull`, `codePrefix` (≤4 capital letters, fallback `C`), `postings` (≤3, renamed P1–P3), `research` (lists one item per line; "verify" items added to assumptions as `VERIFY: …`) |
+| research | `cadreFull`, `codePrefix` (≤4 capital letters, fallback `C`), `postings` (every posting the brief and documents name, renamed P1, P2…; none is fine), `research` (lists one item per line; "verify" items added to assumptions as `VERIFY: …`) |
 | roles | `roles` renumbered R1…Rn, activities A1…An across all roles. Team-added activities kept. Every mapping cleared, the expert check result cleared. Competencies kept, and `rolesDirty` set |
 | competencies | `competencies`, and each activity's `comp` set to `CODE@Ln`. A competency keeps its ladder only if its code and label are unchanged. On a revise, new codes start after the highest existing one |
 | ladders | `levels` for the competencies asked for (without `codes`: only those with no ladder). Saved after every batch. Marks an earlier expert check out of date (`reviewStale`) |
@@ -285,6 +289,46 @@ Rows 22–26 and the `seed` on #3 were added for the Nov 2026 review decisions
   - A sheet replaces that part of the FRAC, saves a version first, and sets `uploads[kind]`.
   - **Errors:** `FILE_REQUIRED`, `FILE_TYPE_NOT_ALLOWED`, `FILE_UNREADABLE`, `SHEET_NOT_RECOGNISED`, `TOO_MANY_DOCUMENTS`, `BRIEF_LOCKED`, `JOB_RUNNING`.
 - **`DELETE /v1/fracs/:id/documents/:documentId`:** `{ frac }`. For a sheet, the content stays and `uploads[kind]` is cleared, so the step uses the AI again.
+- **`POST /v1/fracs/:id/documents/:documentId/apply` (27):** puts a sheet's rows back on the FRAC over edits made
+  since the upload (the "Re-apply sheet" control). A version "Before re-applying the … sheet" is saved first.
+  - **Answer `200`:** `{ frac }`.
+  - Sheets keep their rows in `parsed` (`roles` and `postings`, `competencies`, or `sources`) from 13 Nov 2026.
+  - **Errors:** `NOT_FOUND`, `SHEET_NOT_STORED` (a brief document, or a sheet uploaded before rows were kept), `JOB_RUNNING`.
+
+### 28. `POST /v1/fracs/:id/roles/verify` — verify the roles with the agent
+
+- **When:** "Check roles against the job description" on the Roles tab, once a Roles sheet is in.
+- **What it does:** one complex-tier AI call (task `verify-roles`, no web search) checks the roles and activities
+  against the brief documents and the research, and lists problems: duties no activity covers, activities outside
+  what the position may do, posting Yes/No that look wrong, duplicates and unclear activities. Nothing on the FRAC
+  changes except `rolesCheck`.
+- **Answer `202`:** `{ jobId }`. When the job is done, the FRAC has
+  `rolesCheck: { at, summary, findings: [{ kind, role, activity, note, suggestion }] }`. It is out of date when
+  `changedAt.roles` is later than `rolesCheck.at`.
+- **Errors:** `STEP_NOT_READY` (no activities, or neither research nor a job description), `JOB_RUNNING`.
+- **Cost:** about $0.03–0.06 per check on `claude`.
+
+### 29. `GET /v1/fracs/:id/rule-checks` — quick checks while the FRAC is built
+
+- **When:** the portal calls it after the FRAC loads, after each upload, re-apply, step and autosave, and shows the
+  results at the top of the Roles, Competencies and Level ladders tabs.
+- **Answer `200`:** `{ "checks": [{ check, sev, title, detail, fix, refs, tab }] }`, worst first. `tab` is `roles`,
+  `competencies` or `ladders`.
+- **What it runs:** the expert check's rule-based Bloom's verbs and FRAC structure checks (`computeChecks`), on the
+  FRAC as saved. No AI, nothing stored. A tab's findings appear only once that part exists (activities, competencies,
+  a ladder). `QUICK_CHECKS` in `frac.service.ts` lists the rule groups; add `ladder`, `context` or `coverage` to run more.
+- **Uploads:** each roles and competencies sheet also gets these rule findings at upload, in `parsed.checks`
+  (findings naming the sheet's codes; coverage on the competency sheet).
+
+### 30. `POST /v1/fracs/:id/fixes/outdated` — replace an outdated name
+
+- **When:** "Replace with VHSND (no AI)" on an expert-check finding "Outdated reference: …".
+- **Body:** `{ "title": "Outdated reference: VHND / Village Health and Nutrition Day" }`, the finding's title.
+- **What it does:** swaps the outdated name for the current one (from `config/outdated.json`, a trailing year note
+  dropped) in activities and in competency names, descriptions and ladders, the same texts the check reads. Saves a
+  version "Before replacing …" first and marks the expert check out of date. No AI.
+- **Answer `200`:** `{ frac, replaced }`, how many places changed (0 leaves the FRAC as it was).
+- **Errors:** `NOT_FOUND` (no outdated pattern with that title, or not your FRAC), `NOT_REPLACEABLE`, `VALIDATION_FAILED`.
 
 ### 26. `GET /v1/templates/:kind` — upload templates
 
@@ -367,7 +411,7 @@ All of them go through one function, `askModel` (`src/services/ai/ask-model.ts`)
 
 Research also returns `citations` from Claude's web search: the pages it opened. The prompt tells the agent to open
 the JD and main guidelines with the search and to give each source the address it opened. `source-links.ts` keeps a
-source's `url` only when it is a searched page, or an address on `RESEARCH_SEARCH_DOMAINS` or `SOURCE_LINK_DOMAINS`
+source's `url` only when it is a searched page whose title matches the source by more than 60% (`SOURCE_LINK_MIN_MATCH`), or an address on `RESEARCH_SEARCH_DOMAINS` or `SOURCE_LINK_DOMAINS`
 that answers a quick check (`SOURCE_LINK_CHECK_TIMEOUT_MS`, at most `SOURCE_LINK_MAX_CHECKS` per run); a source with
 no link is matched to a searched page by title. Cost effect of all of this: `docs/COST_IMPACT_REVIEW_DECISIONS.md`.
 
@@ -422,6 +466,8 @@ cut the ladders step to well under a cent in a test (4 ladders for $0.004). Repo
 | `FILE_UNREADABLE` | 400 | The file could not be read, or a PDF has no text layer |
 | `SHEET_NOT_RECOGNISED` | 400 | A standard sheet without the expected header row; download the template |
 | `TOO_MANY_DOCUMENTS` | 400 | Already 3 brief documents on this FRAC |
+| `NOT_REPLACEABLE` | 400 | "Replace with …" on an outdated-name finding that needs content added (e.g. the Labour Care Guide); fix it by hand |
+| `SHEET_NOT_STORED` | 409 | Re-apply on a brief document, or a sheet uploaded before its rows were kept; upload the sheet again |
 | `PAYLOAD_TOO_LARGE` | 413 | File over 15 MB or body over 5 MB |
 | `AI_OUTPUT_INVALID` | job | The answer had the wrong shape twice; nothing from that call is saved. Run again |
 | `AI_OUTPUT_TRUNCATED` | job | The answer was cut off; use a smaller size or fewer competencies |

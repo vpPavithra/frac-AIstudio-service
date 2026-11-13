@@ -4,11 +4,11 @@
 // instead of the AI (see the step files). Also serves the templates users fill in before uploading.
 // Called by controllers/document.controller.ts; wired in server.ts. The uploaded file itself is never stored.
 import { randomUUID } from "node:crypto";
-import type { DocumentKind, DocumentSummary, FracDocument } from "../models/document.model.ts";
+import type { DocumentKind, DocumentSummary, FracDocument, SheetCheck } from "../models/document.model.ts";
 import type { Frac, FracCompetency, SheetKind } from "../models/frac.model.ts";
 import type { Repositories } from "../repositories/index.ts";
 import { DOCUMENTS } from "../config/constants.ts";
-import { badRequest, notFound } from "../utils/response.ts";
+import { badRequest, conflict, notFound } from "../utils/response.ts";
 import { buildTemplateWorkbook } from "./excel/workbook-writer.ts";
 import { readCsv } from "./excel/csv-reader.ts";
 import { readWorkbook } from "./excel/workbook-reader.ts";
@@ -19,6 +19,11 @@ import type { SheetData } from "./review-engine/parse-workbook.ts";
 import { jobRunning } from "./queue/job-runner.ts";
 import type { FracService } from "./frac.service.ts";
 import { markChecked, stampChanges } from "./step-changes.ts";
+import { loadReviewRules } from "../config/review-rules.ts";
+import { computeChecks, TITLES } from "./review-engine/checks.ts";
+import { fracToModel } from "./review-engine/convert.ts";
+import { normalizeCode } from "./review-engine/refs.ts";
+import type { ReviewRules } from "./review-engine/rules.ts";
 
 /** What the portal lists for a document: everything except the extracted text. */
 export type DocumentInfo = Omit<FracDocument, "text" | "ownerId"> & { chars: number };
@@ -89,10 +94,43 @@ export function applySourcesImport(frac: Frac, sources: NonNullable<DocumentSumm
   };
 }
 
+const SEVERITY_ORDER = { B: 0, M: 1, m: 2 } as const;
+
+/**
+ * The expert check's rule-based findings (computeChecks, no AI) that point at a just-imported sheet: for a Roles sheet
+ * the ones naming its roles or activities, for a Competencies sheet the ones naming its competencies plus the
+ * coverage gaps. Worst first. Lets the team fix the sheet before steps build on it. Coverage is about the competencies,
+ * so it never shows on a Roles sheet. Mapping findings (activities not mapped, competencies never used) are left out:
+ * a sheet replaces the mappings, and the roles or Competencies step maps the activities afterwards.
+ */
+export function sheetChecks(frac: Frac, kind: SheetKind, rules: ReviewRules): SheetCheck[] {
+  if (kind === "sources") return [];
+  const codes = new Set(kind === "roles"
+    ? frac.roles.flatMap((r) => [r.code, ...r.activities.map((a) => a.code)]).map(normalizeCode)
+    : frac.competencies.map((c) => normalizeCode(c.code)));
+  if (!codes.size) return [];
+  const named = (ref: string) => codes.has(normalizeCode(ref.split("@")[0]));
+  return computeChecks(fracToModel(frac), rules, { cadre: frac.cadre }).findings
+    .filter((f) => f.title !== TITLES.unmapped && f.title !== TITLES.unused)
+    .filter((f) => (kind === "roles" ? f.check !== "coverage" && f.refs.some(named) : f.check === "coverage" || f.refs.some(named)))
+    .sort((a, b) => SEVERITY_ORDER[a.sev] - SEVERITY_ORDER[b.sev])
+    .map(({ check, sev, title, detail, fix, refs }) => ({ check, sev, title, detail, fix, refs }));
+}
+
+/** The FRAC with a stored sheet's rows applied again, or null when the document kept no rows (a brief, or an older upload). */
+function storedImport(frac: Frac, doc: FracDocument): Frac | null {
+  const p = doc.parsed;
+  if (doc.kind === "roles" && p?.roles) return applyRolesImport(frac, { roles: p.roles, postings: p.postings ?? [], warnings: [] }, doc.filename);
+  if (doc.kind === "competencies" && p?.competencies) return applyCompetenciesImport(frac, p.competencies, doc.filename);
+  if (doc.kind === "sources" && p?.sources) return applySourcesImport(frac, p.sources, doc.filename);
+  return null;
+}
+
 export class DocumentService {
   constructor(
     private readonly repos: Repositories,
     private readonly fracs: FracService,
+    private readonly rules: () => ReviewRules = loadReviewRules,
   ) {}
 
   /** The FRAC's documents (owner-checked), oldest first, without their text. */
@@ -131,17 +169,24 @@ export class DocumentService {
     if (kind === "roles") {
       const imported = importRolesSheet(sheets);
       next = applyRolesImport(frac, imported, file.name);
-      parsed = { counts: { roles: imported.roles.length, activities: imported.roles.reduce((n, r) => n + r.activities.length, 0), postings: imported.postings.length }, warnings: imported.warnings };
+      parsed = {
+        counts: { roles: imported.roles.length, activities: imported.roles.reduce((n, r) => n + r.activities.length, 0), postings: imported.postings.length },
+        warnings: imported.warnings, roles: imported.roles, postings: imported.postings,
+      };
     } else if (kind === "competencies") {
       const imported = importCompetenciesSheet(sheets);
       next = applyCompetenciesImport(frac, imported.competencies, file.name);
-      parsed = { counts: { competencies: imported.competencies.length, ladders: imported.competencies.filter((c) => c.levels).length }, warnings: imported.warnings };
+      parsed = {
+        counts: { competencies: imported.competencies.length, ladders: imported.competencies.filter((c) => c.levels).length },
+        warnings: imported.warnings, competencies: imported.competencies,
+      };
     } else {
       const imported = importSourcesSheet(sheets);
       next = applySourcesImport(frac, imported.sources, file.name);
       parsed = { counts: { sources: imported.sources.length }, warnings: imported.warnings, sources: imported.sources };
     }
 
+    if (kind !== "sources") parsed.checks = sheetChecks(next, kind, this.rules());
     await this.repos.fracs.snapshot(frac, `Before ${SHEET_LABELS[kind]} sheet upload`);
     const at = new Date().toISOString();
     next = stampChanges(frac, { ...next, updatedAt: at }, at);
@@ -150,6 +195,28 @@ export class DocumentService {
     const doc: FracDocument = { ...base, text: "", parsed };
     await this.repos.documents.insert(doc);
     return { document: info(doc), frac: next };
+  }
+
+  /**
+   * Puts an uploaded sheet's rows back on the FRAC (the Re-apply button), replacing edits made since the upload.
+   * Snapshotted first, so it can be undone from History. 404 when the document is not this FRAC's, 409
+   * SHEET_NOT_STORED for a brief document or a sheet uploaded before the rows were kept, 409 JOB_RUNNING while a
+   * step runs.
+   */
+  async reapply(ownerId: string, fracId: string, documentId: string): Promise<Frac> {
+    const frac = await this.fracs.get(ownerId, fracId);
+    const active = await this.repos.jobs.activeFor(fracId);
+    if (active) throw jobRunning(active);
+    const doc = (await this.repos.documents.listForFrac(fracId)).find((d) => d.id === documentId);
+    if (!doc) throw notFound("Document");
+    const stored = storedImport(frac, doc);
+    if (!stored || doc.kind === "brief") throw conflict("SHEET_NOT_STORED", "This sheet was uploaded before re-apply was possible. Upload it again to re-apply it.");
+
+    await this.repos.fracs.snapshot(frac, `Before re-applying the ${SHEET_LABELS[doc.kind]} sheet`);
+    const at = new Date().toISOString();
+    const next = stampChanges(frac, { ...stored, updatedAt: at }, at);
+    await this.repos.fracs.update(next);
+    return next;
   }
 
   /**

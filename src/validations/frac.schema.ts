@@ -114,7 +114,7 @@ export const patchFracSchema = z.object({
   prompt: z.string().max(LIMITS.maxTextChars).optional(),
   cadreFull: shortText().optional(),
   codePrefix: shortText(20).optional(),
-  postings: z.array(postingSchema).max(3).optional(),
+  postings: z.array(postingSchema).max(LIMITS.maxPostings).optional(),
   research: researchSchema.nullable().optional(),
   roles: z.array(roleSchema).max(LIMITS.maxRoles).optional(),
   competencies: z.array(competencySchema).max(LIMITS.maxCompetencies).optional(),
@@ -135,6 +135,10 @@ export const stepSchema = z.object({
   codes: z.array(shortText(20, "Competency code is required")).max(LIMITS.maxCompetencies).optional(),
 });
 export type StepInput = z.infer<typeof stepSchema>;
+
+/** POST /fracs/:id/fixes/outdated: the finding title, "Outdated reference: …". */
+export const outdatedFixSchema = z.object({ title: shortText(300, "Finding title is required") });
+export type OutdatedFixInput = z.infer<typeof outdatedFixSchema>;
 
 /** GET /fracs/match: the position typed on the brief, and its state to rank same-state FRACs first. */
 export const matchQuerySchema = z.object({

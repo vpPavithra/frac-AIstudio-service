@@ -39,9 +39,9 @@ export function competenciesPatch(frac: Frac, out: z.infer<typeof competenciesOu
 /**
  * Step 4 with a team's Competencies sheet (review decisions, Nov 2026): the competencies are kept as uploaded
  * and one default-tier call only maps the activities to them. competenciesPatch keeps every uploaded ladder,
- * because codes and labels are unchanged.
+ * because codes and labels are unchanged. Also the last part of the roles job when the sheet came first (roles.step.ts).
  */
-async function mapToSheet(ctx: StepContext): Promise<Partial<Frac>> {
+export async function mapToSheet(ctx: StepContext): Promise<Partial<Frac>> {
   const { frac, feedback } = ctx;
   await ctx.progress(JOB_MESSAGES.mapping);
   const activities = frac.roles.flatMap((r) => r.activities.map((a) => ({ code: a.code, text: a.text })));

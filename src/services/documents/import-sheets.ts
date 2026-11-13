@@ -2,6 +2,7 @@
 // activities, Competencies with optional ladders, and Sources. Input is SheetData from the workbook or CSV
 // reader; sheets are found by their header row (sheet-formats.ts gives the layouts), reusing the Reviewer's
 // header helpers and competency reader. Pure: DocumentService applies the result to the FRAC.
+import { LIMITS } from "../../config/constants.ts";
 import type { FracCompetency, FracRole, FracSource, Posting } from "../../models/frac.model.ts";
 import {
   ACTIVITY,
@@ -21,8 +22,8 @@ import { badRequest } from "../../utils/response.ts";
 import { renumberRoles } from "../ai/roles.step.ts";
 import { SOURCE_TIERS } from "./sheet-formats.ts";
 
-/** Spec 5.2: a FRAC has at most 3 postings (its Yes/No columns). */
-const MAX_POSTINGS = 3;
+/** A safety limit on posting columns (LIMITS.maxPostings); a sheet normally has far fewer. */
+const MAX_POSTINGS = LIMITS.maxPostings;
 const TEMPLATE_HINT = "Download the template to see the expected columns.";
 
 export interface RolesImport {

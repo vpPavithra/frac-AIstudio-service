@@ -7,7 +7,7 @@
 // skipped when nothing is left. research.origin records which parts came from the documents and which from the agent.
 // Flow: brief -> research -> roles & activities -> competencies -> ladders -> expert check.
 import type { z } from "zod/v4";
-import { DOCUMENTS } from "../../config/constants.ts";
+import { DOCUMENTS, LIMITS } from "../../config/constants.ts";
 import type { Frac, FracResearch, FracSize, FracSource, ResearchField } from "../../models/frac.model.ts";
 import type { Citation } from "../../providers/text/types.ts";
 import { sanitizeCodePrefix } from "../../utils/codes.ts";
@@ -17,8 +17,6 @@ import { documentReadOutput, researchOutput } from "./schemas.ts";
 import { linkSources } from "./source-links.ts";
 import { callModel, type StepContext } from "./step-context.ts";
 
-/** Spec 5.2: at most 3 postings (the FRAC's columns). A spec rule, so it stays in code. */
-const MAX_POSTINGS = 3;
 const SIZES: readonly FracSize[] = ["compact", "standard", "full"];
 
 /** What the team fixed before research: a standard source list, and postings from a Roles sheet or a matched position. */
@@ -109,8 +107,8 @@ export function mergeResearch(read: DocumentRead, gap: ResearchOut | null, split
 }
 
 /**
- * Spec 5.2 post-processing: sanitise codePrefix; keep at most 3 postings re-keyed P1..P3 (none when the brief
- * and documents name none); join the lists into newline text; prefix each `verify` item
+ * Spec 5.2 post-processing: sanitise codePrefix; keep every posting the brief and documents name, re-keyed P1, P2…
+ * (none when they name none; LIMITS.maxPostings is only a safety limit, review 13 Nov 2026); join the lists into newline text; prefix each `verify` item
  * with "VERIFY: " and append it to the assumptions. Review decisions (Nov 2026): postings fixed by the team
  * are kept, a standard source list replaces the model's, a source keeps its link only when it has one (runResearch
  * checks them first with linkSources), and an agent-chosen size is applied when the answer names a valid one.
@@ -119,7 +117,7 @@ export function mergeResearch(read: DocumentRead, gap: ResearchOut | null, split
  * reach the model only through the PREVIOUS RESEARCH block in the prompt.
  */
 export function researchPatch(frac: Frac, out: z.infer<typeof researchOutput>, fixed: ResearchFixed = {}): Partial<Frac> {
-  const labels = out.postings.map((p) => p.label.trim()).filter(Boolean).slice(0, MAX_POSTINGS);
+  const labels = out.postings.map((p) => p.label.trim()).filter(Boolean).slice(0, LIMITS.maxPostings);
   // Kept: postings fixed by a sheet or match, and the team's own when the brief and documents name none
   const keepPostings = frac.postings.length > 0 && (fixed.fixedPostings || !labels.length);
   // Only the postings the brief or documents name; none is fine, the team adds them (review, Nov 2026)

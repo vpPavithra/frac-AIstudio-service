@@ -71,6 +71,19 @@ export const competenciesOutput = z.object({
 });
 
 /** Step 4 with a team's Competencies sheet: only the activity -> competency@level mapping, to the given codes. */
+/** The agent's check of the roles and activities against the documents and research (roles-verify.ts). */
+export const ROLE_FINDING_KINDS = ["missing", "outside-scope", "posting", "duplicate", "unclear"] as const;
+export const rolesVerifyOutput = z.object({
+  summary: s(),
+  findings: z.array(z.object({
+    kind: z.enum(ROLE_FINDING_KINDS),
+    role: s(),
+    activity: s(),
+    note: z.string().min(1),
+    suggestion: s(),
+  })).default([]),
+});
+
 export const mappingOutput = z.object({
   mapping: z.array(z.object({ a: z.string(), c: z.string(), l: z.coerce.number().int().min(1).max(5) })),
 });

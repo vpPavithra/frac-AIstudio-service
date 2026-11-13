@@ -122,6 +122,8 @@ export class MockTextProvider implements TextProvider {
         return this.reviewCompetencies(input);
       case "review-state":
         return this.reviewState(input);
+      case "verify-roles":
+        return this.verifyRoles(input);
     }
   }
 
@@ -186,6 +188,24 @@ export class MockTextProvider implements TextProvider {
       notAuthorised: research.notAuthorised.slice(0, 1),
       stateContext: [],
       coverage: { cadreFull: "found", summary: "found", postings: "partial", authorised: "found", notAuthorised: "partial", stateContext: "missing" },
+    };
+  }
+
+  /**
+   * "Check roles against the job description" answer: two sample findings on the first role (an unclear activity, a posting to
+   * look at) so the panel has something to show; none when the FRAC has no activities.
+   */
+  private verifyRoles(input: Record<string, unknown>) {
+    const roles = (input.roles ?? []) as { code: string; activities: { code: string }[] }[];
+    const first = roles.find((r) => r.activities.length);
+    if (!first) return { summary: "No activities to check.", findings: [] };
+    const [a, b] = [first.activities[0], first.activities[1] ?? first.activities[0]];
+    return {
+      summary: `The roles match the job description. Two activities in ${first.code} need a look.`,
+      findings: [
+        { kind: "unclear", role: first.code, activity: a.code, note: "Too broad to train or assess as written.", suggestion: "Name the task and the setting." },
+        { kind: "posting", role: first.code, activity: b.code, note: "Marked Yes for a posting where this work is not done.", suggestion: "Check the posting Yes/No." },
+      ],
     };
   }
 

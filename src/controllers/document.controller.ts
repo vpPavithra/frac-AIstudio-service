@@ -23,6 +23,11 @@ export function documentController(documents: DocumentService) {
       res.status(201).json(result);
     },
 
+    /** Re-applies an uploaded sheet's rows over edits made since; answers with the FRAC. */
+    async reapply(req: Request, res: Response) {
+      res.json({ frac: await documents.reapply(ownerOf(res), param(req.params.id), param(req.params.documentId)) });
+    },
+
     async remove(req: Request, res: Response) {
       res.json({ frac: await documents.remove(ownerOf(res), param(req.params.id), param(req.params.documentId)) });
     },

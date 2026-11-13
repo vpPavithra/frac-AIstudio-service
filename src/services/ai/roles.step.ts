@@ -10,6 +10,7 @@ import { activitiesPrompt, rolesPrompt } from "./prompts.ts";
 import { activitiesOutput, rolesOutput } from "./schemas.ts";
 import { BATCH, SIZE_TARGETS } from "./sizes.ts";
 import { callModel, type StepContext } from "./step-context.ts";
+import { mapToSheet } from "./competencies.step.ts";
 
 /** Source label for activities the team typed in; kept across a revise (spec 5.3 "keep what the team edited"). */
 export const ADDED_BY_TEAM = "Added by team";
@@ -65,6 +66,18 @@ export function keepGivenRoles(frac: Frac, briefDocuments: number): boolean {
 }
 
 /**
+ * With a team's Competencies sheet (uploaded on the Research tab, review 13 Nov 2026) the competencies exist before
+ * the roles, so the roles job ends by mapping the new activities to them (mapToSheet, one default-tier call). The
+ * roles are saved first: a write that changes roles and mappings together leaves Competencies out of date
+ * (step-changes.ts), while a mappings-only write stamps it. Without a sheet the patch is returned as it is.
+ */
+async function withSheetMapping(ctx: StepContext, patch: Partial<Frac>): Promise<Partial<Frac>> {
+  if (!ctx.frac.uploads?.competencies || !ctx.frac.competencies.length) return patch;
+  const saved = await ctx.save(() => patch);
+  return mapToSheet({ ...ctx, frac: saved, feedback: undefined });
+}
+
+/**
  * Roles from a team's Roles sheet or a matched position (review decisions, Nov 2026): kept as they are, and
  * only the roles with no activities get them written (3b alone, no roles call). No AI call when every role has
  * activities. Competency mappings stay; new activities have none, so rolesDirty is set when competencies exist.
@@ -75,7 +88,7 @@ async function fillGaps(ctx: StepContext): Promise<Partial<Frac>> {
   if (!empty.length) return { roles: renumberRoles(frac.roles) };
   const written = await writeActivities(ctx, empty.map((r) => ({ code: r.code, title: r.title })), SIZE_TARGETS[frac.size]);
   const roles = frac.roles.map((r) => (r.activities.length ? r : { ...r, activities: written.get(r.code) ?? [] }));
-  return { roles: renumberRoles(roles), rolesDirty: frac.competencies.length > 0, review: null, reviewStale: false };
+  return withSheetMapping(ctx, { roles: renumberRoles(roles), rolesDirty: frac.competencies.length > 0, review: null, reviewStale: false });
 }
 
 /**
@@ -112,5 +125,5 @@ export async function runRoles(ctx: StepContext): Promise<Partial<Frac>> {
 
   // Copied roles, if any, are replaced now
   const seededFrom = frac.seededFrom ? { seededFrom: { ...frac.seededFrom, withRoles: false } } : {};
-  return { roles: renumberRoles(built), ...seededFrom, rolesDirty: frac.competencies.length > 0, review: null, reviewStale: false };
+  return withSheetMapping(ctx, { roles: renumberRoles(built), ...seededFrom, rolesDirty: frac.competencies.length > 0, review: null, reviewStale: false });
 }

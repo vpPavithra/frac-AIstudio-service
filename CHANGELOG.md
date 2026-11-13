@@ -5,6 +5,29 @@ full pre-deploy test checklist passes.
 
 ## Unreleased: FRAC Studio review decisions (11 Nov 2026)
 
+Added 13 Nov 2026, actions on the Roles tab after a sheet upload:
+- **Re-apply a sheet.** `POST /v1/fracs/:id/documents/:documentId/apply` puts an uploaded sheet's rows back over
+  later edits, after saving a version. Sheets now keep their imported rows in `frac_documents.parsed`; older
+  uploads answer `SHEET_NOT_STORED`.
+- **Verify the roles with the agent.** `POST /v1/fracs/:id/roles/verify` runs a `verify-roles` job: one
+  complex-tier call that lists problems in the roles and activities against the JD and the research, saved as
+  `frac.rolesCheck`. Nothing else changes. About $0.03–0.06 a check.
+- **Replace outdated names without AI.** `POST /v1/fracs/:id/fixes/outdated` swaps a name from `config/outdated.json`
+  (VHND → VHSND) everywhere the check reads it. The portal shows "Fix these competencies" only for findings about ladder
+  text, a free "Replace with …" for outdated names, and a footer "Re-run …" for the earliest out-of-date step.
+- **No cap of 3 postings.** Research keeps every posting the brief and documents name (one, several or none), the
+  prompt no longer says "up to 3", and saves and Roles sheets accept more columns. `MAX_POSTINGS` (20) is a safety
+  limit only.
+- **Competency sheet before roles.** With a Competencies sheet on the FRAC, the roles job saves the roles and then
+  maps the new activities to the sheet (`mapToSheet`, one `mapping` call) in a second write, so Competencies is not
+  left out of date. The portal uploads the sheet on the Research tab and shows Competencies before Roles; it no longer
+  offers a Roles sheet (the API still accepts one).
+- **Quick checks while building.** `GET /v1/fracs/:id/rule-checks` runs the expert check's Bloom's verbs and FRAC
+  structure rules on the FRAC as saved (no AI), each finding tagged with its Creator tab. Each roles and competency
+  sheet also gets the rule findings that name its codes at upload, in `parsed.checks`.
+- **Source links match by more than 60%.** A searched page becomes a source's link only when the titles share more
+  than `SOURCE_LINK_MIN_MATCH` (0.6) of their words; the "contains" and 70% rules are gone.
+
 The eight decisions from the FRAC Studio review. What changed where: `docs/releases/REVIEW_DECISIONS_2026-11.md`;
 the cost effect: `docs/COST_IMPACT_REVIEW_DECISIONS.md`.
 

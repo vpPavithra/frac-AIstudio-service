@@ -9,6 +9,7 @@ import {
   matchQuerySchema,
   versionIdSchema,
   type CreateFracInput,
+  type OutdatedFixInput,
   type PatchFracInput,
   type StepInput,
 } from "../validations/frac.schema.ts";
@@ -45,8 +46,25 @@ export function fracController(fracs: FracService) {
       res.json({ frac: await fracs.patch(ownerOf(res), param(req.params.id), req.body as PatchFracInput) });
     },
 
+    /** Quick checks while the FRAC is built: Bloom's verbs and FRAC structure, rule-based, each tagged with its tab. */
+    async ruleChecks(req: Request, res: Response) {
+      res.json({ checks: await fracs.ruleChecks(ownerOf(res), param(req.params.id)) });
+    },
+
+    /** "Replace with …" on an outdated-name finding; body { title }. Answers { frac, replaced }. */
+    async replaceOutdated(req: Request, res: Response) {
+      const { title } = req.body as OutdatedFixInput;
+      res.json(await fracs.replaceOutdated(ownerOf(res), param(req.params.id), title));
+    },
+
     async startCheck(req: Request, res: Response) {
       const job = await fracs.startCheck(ownerOf(res), param(req.params.id));
+      res.status(202).json({ jobId: job.id });
+    },
+
+    /** The agent checks the roles and activities against the documents and the research; nothing is changed. */
+    async startRolesVerify(req: Request, res: Response) {
+      const job = await fracs.startRolesVerify(ownerOf(res), param(req.params.id));
       res.status(202).json({ jobId: job.id });
     },
 

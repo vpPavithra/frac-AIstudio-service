@@ -84,6 +84,9 @@ describe("postings", () => {
     expect(researchPatch({ ...f, postings: own }, out).postings).toEqual(own);
     expect(researchPatch({ ...f, postings: own }, researchOutput.parse({ postings: [{ key: "P1", label: "Labour room" }] })).postings)
       .toEqual([{ key: "P1", label: "Labour room" }]);
+    // As many as the brief names, not capped at 3
+    const five = ["Sub-Centre", "PHC", "CHC", "VHSND site", "School"].map((label, i) => ({ key: `X${i}`, label }));
+    expect(researchPatch(f, researchOutput.parse({ postings: five })).postings.map((p) => p.key)).toEqual(["P1", "P2", "P3", "P4", "P5"]);
   });
 });
 
