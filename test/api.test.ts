@@ -15,8 +15,8 @@ import { stubProvider } from "./support/stub-provider.ts";
 import { gnmSample } from "./support/sample-workbooks.ts";
 import { goodLevels } from "./support/test-data.ts";
 
-const OWNER = { "x-aastrika-creator": "user-1" };
-const OTHER = { "x-aastrika-creator": "user-2" };
+const OWNER = { "x-user-id": "user-1" };
+const OTHER = { "x-user-id": "user-2" };
 
 function setup() {
   const repos = memoryRepositories();

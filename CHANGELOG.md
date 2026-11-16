@@ -12,6 +12,10 @@ Added 13 Nov 2026, actions on the Roles tab after a sheet upload:
 - **Verify the roles with the agent.** `POST /v1/fracs/:id/roles/verify` runs a `verify-roles` job: one
   complex-tier call that lists problems in the roles and activities against the JD and the research, saved as
   `frac.rolesCheck`. Nothing else changes. About $0.03–0.06 a check.
+- **Guardrails (16 Nov).** Per-user limits on AI jobs: `JOB_MAX_ACTIVE_PER_USER` (2) running at once and
+  `JOB_DAILY_BUDGET_PER_USER_USD` ($10) of billed spend per 24 hours (429 `TOO_MANY_JOBS` / `DAILY_LIMIT_REACHED`);
+  jobs now record `usage.billedUsd`. Every prompt that reads files or web pages says they are source material, not
+  instructions. The identity header is now `x-user-id` (the uiproxy sends it for FRAC Studio).
 - **Docker images on Node 22 LTS** (Node 20 reached end of life in April 2026). The tests and a compiled-server smoke
   test pass on 22. `reports/` is kept out of the build context.
 - **Replace outdated names without AI.** `POST /v1/fracs/:id/fixes/outdated` swaps a name from `config/outdated.json`
@@ -129,7 +133,7 @@ fit) with quote checks, a computed verdict, and "same file, same review" by fing
 
 **Cost.** Tokens, web searches and USD per call, added up per job and shown in the portal.
 
-## Unreleased: aligned with aastrika-ai-service
+## Unreleased: aligned with the AI Studio service
 
 **Folder layout.** Files moved to the sibling repo's layout with no logic change: `models/` for the domain
 types, one repository file per entity, the review engine, Excel and job runner under `services/`, and the

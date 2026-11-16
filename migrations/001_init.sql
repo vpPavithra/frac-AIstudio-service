@@ -2,7 +2,7 @@
 -- Applied once by `npm run migrate` (or MIGRATE_ON_START=true), inside a transaction.
 -- One JSONB doc per FRAC is enough: FRACs stay under 1 MB.
 
--- One row per FRAC; owner_id comes from the x-aastrika-creator header and scopes every read
+-- One row per FRAC; owner_id comes from the x-user-id header and scopes every read
 CREATE TABLE IF NOT EXISTS fracs (
   id          UUID PRIMARY KEY,
   owner_id    TEXT        NOT NULL,

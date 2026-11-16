@@ -17,12 +17,12 @@ app/frac-studio                  /protected/v8/fracStudio/*        /v1/...
 | Layer | Repo | Notes |
 |---|---|---|
 | UI | `sunbird-cb-orgportal`, `project/ws/app/src/lib/routes/frac-studio/` | NgModule, `*ngIf`, constructor DI, `_ws-design-system-v2` mixins, native `<select>`. Route `app/frac-studio` gated by a lowercase role. |
-| Proxy | `sunbird-cb-uiproxy`, `src/protectedApi_v8/fracStudio/fracStudio.ts` | `protectedApiV8.use('/fracStudio', …)` → `CONSTANTS.FRAC_STUDIO_API_BASE` (default `${KONG_API_BASE}/frac-studio`) + `/v1`. Built on the AI Studio helpers (`forwardAny`): owner as `x-aastrika-creator` from the session, multipart rebuilt, downloads streamed, upstream errors relayed. |
+| Proxy | `sunbird-cb-uiproxy`, `src/protectedApi_v8/fracStudio/fracStudio.ts` | `protectedApiV8.use('/fracStudio', …)` → `CONSTANTS.FRAC_STUDIO_API_BASE` (default `${KONG_API_BASE}/frac-studio`) + `/v1`. Built on the AI Studio helpers (`forwardAny`): owner as `x-user-id` from the session, multipart rebuilt, downloads streamed, upstream errors relayed. |
 | Service | this repo | Holds the AI provider key (Claude), runs the long jobs, owns the Postgres tables. |
 
 ## Service layout
 
-Layered like [aastrika-ai-service](https://github.com/Sphere/aastrika-ai-service): routes wire, controllers
+Layered like the AI Studio service: routes wire, controllers
 handle HTTP, services hold the rules, repositories own the queries, validations own the shapes.
 
 ```
@@ -40,7 +40,7 @@ src/config/            settings.ts (service.json → env, refuses secrets), cons
 src/routes/            URL → middleware → controller wiring, under /v1                              ← done
 src/controllers/       HTTP only: frac, review, job                                                  ← done
 src/validations/       Zod request schemas (frac, review)                                            ← done
-src/middleware/        auth (x-aastrika-creator), validate, errorHandler, requestContext, requestLogger, upload ← done
+src/middleware/        auth (x-user-id), validate, errorHandler, requestContext, requestLogger, upload ← done
 src/models/            frac, review, report, job types (spec 4)                                      ← done
 src/services/          frac.service (Creator, My FRACs), review.service (Reviewer + shared engine),  ← done
                        job-watchdog.service, ai-review.service (r3 checklist: Vidya Q1/Q2/Q3 + quote check)
@@ -91,7 +91,7 @@ A start while a job is live on the same FRAC or review answers 409 `JOB_RUNNING`
 and AI call is listed in [API_REFERENCE.md](API_REFERENCE.md).
 
 Owner comes from the proxy-forwarded user id header, never from a query param (`?owner=me` in the spec).
-The service trusts `x-aastrika-creator`, so it must be reachable only through the proxy. The proxy
+The service trusts `x-user-id`, so it must be reachable only through the proxy. The proxy
 fills it with `resolveCreatorId` (session user id, else the token subject) and overwrites anything the
 browser sent. It deliberately avoids `extractUserIdFromRequest`, which prefers a client-sent `wid`
 header and would let a browser act as another user.

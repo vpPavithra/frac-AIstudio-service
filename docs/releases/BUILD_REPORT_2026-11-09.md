@@ -56,7 +56,7 @@ rules and prompts, the acceptance tests on real workbooks, and a full app walkth
 
 ### uiproxy
 
-- `/apis/protected/v8/fracStudio/*` forwards to the service and sets `x-aastrika-creator` from the session.
+- `/apis/protected/v8/fracStudio/*` forwards to the service and sets `x-user-id` from the session.
 
 ## Changes in this build (9 Nov)
 

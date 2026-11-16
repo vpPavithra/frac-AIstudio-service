@@ -60,4 +60,27 @@ describe("JobRunner", () => {
     await runner.idle();
     expect(await jobs.get(free.id)).toMatchObject({ status: "done", usage: { calls: 5 } });
   });
+  it("refuses a user's job past their running-job limit or their 24-hour billed spend, and never counts estimates", async () => {
+    const jobs = new MemoryJobRepository();
+    const runner = new JobRunner(jobs, undefined, undefined, 0, { maxActive: 1, dailyBudgetUsd: 1 });
+    let release = () => undefined as void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    await runner.start(spec, () => held);
+    await expect(runner.start(spec, async () => undefined)).rejects.toMatchObject({ status: 429, code: "TOO_MANY_JOBS" });
+    // Another user is not affected
+    await runner.start({ ...spec, ownerId: "u2" }, async () => undefined);
+    release();
+    await runner.idle();
+
+    await runner.start(spec, async (_progress, recordUsage) => {
+      await recordUsage({ inputTokens: 1, outputTokens: 1, costUsd: 5, estimated: true });
+    });
+    await runner.idle();
+    await runner.start(spec, async (_progress, recordUsage) => {
+      await recordUsage({ inputTokens: 1, outputTokens: 1, costUsd: 1.2 });
+    });
+    await runner.idle();
+    await expect(runner.start(spec, async () => undefined)).rejects.toMatchObject({ status: 429, code: "DAILY_LIMIT_REACHED" });
+    expect((await jobs.ownerUsage("u1", new Date(0))).billedUsd).toBe(1.2);
+  });
 });

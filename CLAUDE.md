@@ -1,7 +1,7 @@
 # Working in this repo
 
 frac-studio-service is the backend for FRAC Studio (FRAC Creator, Reviewer, My FRACs). It follows the
-conventions of its sibling, [aastrika-ai-service](https://github.com/Sphere/aastrika-ai-service). Where
+conventions of its sibling, the AI Studio service. Where
 this file is silent, do what that repo does.
 
 ## Git
@@ -29,7 +29,7 @@ hold the rules · `repositories/` own the queries (one file per entity) · `vali
 shapes · `models/` hold the domain types. `services/review-engine/` is the deterministic review logic and
 `services/excel/` is Excel, both pure and free of HTTP and SQL.
 
-**Kept different from aastrika-ai-service on purpose:** the service lives at the repo root (no
+**Kept different from the AI Studio service on purpose:** the service lives at the repo root (no
 `backend/`), tests are Jest (`src/**/*.test.ts` next to the code, `test/` for API and data-path tests),
 and the schema is numbered `migrations/` applied by `npm run migrate`.
 
@@ -43,7 +43,7 @@ drops fields the schema does not declare, so declare every field a handler needs
 through `config/constants.ts`. Secrets go in the environment only; startup refuses them in the file.
 Run `npm run config:check` after editing config.
 
-**Identity is authorisation.** The owner comes from `x-aastrika-creator`, set by the uiproxy from the
+**Identity is authorisation.** The owner comes from `x-user-id`, set by the uiproxy from the
 session. It is required (401 without it) and scopes every read. No body fallback, no default user.
 The service must only be reachable through the proxy.
 
@@ -65,6 +65,6 @@ the prototype (`frac-studio.html`). Never invent wording for them.
 8. Every production bug earns a regression test.
 9. Relative imports name the source file: `import { logger } from "../utils/logger.ts"`. The compiler
    rewrites them to `.js` in `dist/` (`rewriteRelativeImportExtensions`), so source says `.ts` and
-   compiled output says `.js`. (aastrika-ai-service writes `.js` in source; this repo chose `.ts`.)
+   compiled output says `.js`. (The AI Studio service writes `.js` in source; this repo chose `.ts`.)
 
 `npm run check` runs typecheck, lint, config check and tests.

@@ -16,8 +16,8 @@ import { JobRunner } from "../services/queue/job-runner.ts";
 import { ReviewService } from "../services/review.service.ts";
 import { readWorkbook } from "../services/excel/workbook-reader.ts";
 
-const OWNER = { "x-aastrika-creator": "mock-user" };
-const OTHER = { "x-aastrika-creator": "someone-else" };
+const OWNER = { "x-user-id": "mock-user" };
+const OTHER = { "x-user-id": "someone-else" };
 
 function setup() {
   const repos = memoryRepositories();

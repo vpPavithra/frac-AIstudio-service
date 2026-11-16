@@ -1,7 +1,7 @@
 # AI Studio: FRAC Creator and FRAC Reviewer (developer spec)
 
 **Version:** v1, 28 Oct 2026
-**Owner:** Sarvesh Deshpande (sarvesh@aastrika.org)
+**Owner:** Sarvesh Deshpande
 **Status:** prototype tested, ready for production build
 **Reference prototype:** `FRAC Studio/frac-studio.html` is a single-file working prototype. It is the behavioural reference for this spec. Line numbers below (e.g. `L362`) point into that file.
 
@@ -13,7 +13,7 @@ AI Studio gets a FRAC module with two tabs, in the same style as the existing Vi
 
 **FRAC Creator**
 - The user gives a cadre, a state (or the India national baseline), a short brief and, optionally, job descriptions or government orders.
-- AI agents build a full FRAC competency dictionary in the Aastrika format: Position → Roles → Activities → Competencies → L1–L5 ladders.
+- AI agents build a full FRAC competency dictionary in the Sphere FRAC format: Position → Roles → Activities → Competencies → L1–L5 ladders.
 - The team edits every step, gives feedback to revise, runs an expert check and downloads Excel.
 
 **FRAC Reviewer**
@@ -42,7 +42,7 @@ The prototype runs entirely in the browser and calls Claude through the artifact
 | Concern | Prototype | Production |
 |---|---|---|
 | LLM | `sample.json(prompt, {modelTier})`, no model pinned | Server-side Anthropic API. `claude-opus-5-5` for the complex tier and `claude-sonnet-5-5` for the default tier (section 9). Use JSON output via tool-use or a strict JSON schema. |
-| Storage | Artifact `db` (head doc plus 10-competency parts) | Postgres, using the shared AI Studio / AskMe Postgres on `aastrika_net`. Use JSONB columns or normalised tables (section 4). |
+| Storage | Artifact `db` (head doc plus 10-competency parts) | Postgres, using the shared AI Studio / AskMe Postgres on the shared Docker network. Use JSONB columns or normalised tables (section 4). |
 | Uploads | Browser text extraction (pdf.js, mammoth) | Server extraction: reuse `server/sources.js` from AI Studio (PDF/DOCX/TXT plus Drive/S3 links). |
 | Excel | `xlsx-js-style` in the browser | Either is fine. Server-side generation (exceljs / openpyxl) is easier to test. |
 | Long steps | Awaited in the browser | Background jobs with progress polling, the same pattern as `/api/jobs/:id` in AI Studio. |
@@ -401,7 +401,7 @@ The real dictionaries are inconsistent, so the parser must be tolerant.
 - `ANM competencies 6aug2026.xlsx` (role-row ranges, "Comptency" typo)
 - `GNM COMPETENCY DICTIONARY 9 June 2025.xlsx` (codes like `ME50L2-L5`, Hindi sheets; openpyxl cannot open its stylesheet, so use a tolerant reader)
 - `Staff Nurse competencies - India v0.1.xlsx`
-- `[Shared with Aastrika] GO-HRM Meghalaya (ANM FRAC).xlsx` (Domain + KCM Functional + KCM Behavioural sheets, single-column Roles/Activities sheet, no mapping)
+- `GO-HRM Meghalaya (ANM FRAC).xlsx` (shared by the state team) (Domain + KCM Functional + KCM Behavioural sheets, single-column Roles/Activities sheet, no mapping)
 - Our own Creator export (round trip)
 
 All four are in `Claude content/FRAC/` or on the T7 drive; ask Sarvesh for copies.

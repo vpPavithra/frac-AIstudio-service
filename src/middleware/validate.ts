@@ -18,7 +18,7 @@ export function parseInput<T>(schema: ZodType<T, ZodTypeDef, unknown>, value: un
 
 /**
  * Replaces req.body with the parsed value. Fields the schema does not declare are dropped,
- * so every field a handler needs must be in the schema (aastrika-ai-service rule).
+ * so every field a handler needs must be in the schema (the AI Studio service rule).
  */
 export function validateBody<T>(schema: ZodType<T, ZodTypeDef, unknown>) {
   return (req: Request, _res: Response, next: NextFunction): void => {

@@ -14,10 +14,10 @@ For the path a request takes through the code, with file and line, see [CODE_FLO
 orgportal (browser)                         sunbird-cb-uiproxy                     frac-studio-service
 FracStudioApiService                        protectedApi_v8/fracStudio             Express, port 3005 (3010 locally)
 /apis/protected/v8/fracStudio/<path>   →    checks the session, sets          →    /v1/<path>
-                                            x-aastrika-creator = user id
+                                            x-user-id = user id
 ```
 
-- **Identity.** Every `/v1` route needs the `x-aastrika-creator` header. The uiproxy sets it from the signed-in
+- **Identity.** Every `/v1` route needs the `x-user-id` header. The uiproxy sets it from the signed-in
   session and overwrites anything the browser sent. Missing header: `401 NOT_SIGNED_IN`. Every record is scoped to
   that user; another user's FRAC, review or job answers `404`, so ids cannot be probed.
 - **Bodies.** JSON, up to `MAX_JSON_MB` (5 MB). Each body is checked with Zod before the controller runs; unknown
@@ -456,11 +456,13 @@ cut the ladders step to well under a cent in a test (4 ladders for $0.004). Repo
 
 | Code | HTTP / where | Meaning and what to do |
 | --- | --- | --- |
-| `NOT_SIGNED_IN` | 401 | No `x-aastrika-creator` header: the call didn't come through the uiproxy |
+| `NOT_SIGNED_IN` | 401 | No `x-user-id` header: the call didn't come through the uiproxy |
 | `NOT_FOUND` | 404 | No such FRAC, review, job or step, or it belongs to another user |
 | `BRIEF_LOCKED` | 409 | The brief can't change once research exists; start a new FRAC |
 | `STEP_NOT_READY` | 409 | An earlier step is missing |
 | `JOB_RUNNING` | 409 | A step, check or review re-run is already running on this target; `details.jobId` names it |
+| `TOO_MANY_JOBS` | 429 | The user already has `JOB_MAX_ACTIVE_PER_USER` (2) steps or checks running; wait for one to finish |
+| `DAILY_LIMIT_REACHED` | 429 | The user's billed AI spend over the last 24 hours reached `JOB_DAILY_BUDGET_PER_USER_USD` ($10); estimates never count |
 | `NO_COMPETENCIES` | 400 | The expert check needs at least one competency |
 | `FILE_REQUIRED`, `FILE_TYPE_NOT_ALLOWED` | 400 | Upload one file as `file`: `.xlsx` for a review; for documents PDF/DOCX/TXT (brief) or .xlsx/.csv (sheets) |
 | `FILE_UNREADABLE` | 400 | The file could not be read, or a PDF has no text layer |
@@ -509,7 +511,7 @@ easier to use.
 | B2 | Switch the default profile to `claude-mixed` after a quality comparison | Activities and ladders on Haiku cost about a twentieth as much. Known risk: the MgSO4 slip persisted on Haiku ladders, so compare on the expert check first | `config/service.json` `AI_PROVIDER` |
 | B3 | Find out why research made 0 web searches in the Claude run | The research step is meant to cite government sources; without search it relies on the model's memory | `claude.ts` web search tool, research prompt |
 | B4 | Effort comparison: run the same FRAC on `claude` and `claude-fast` | Thinking is 51% of competencies output and 75% of the expert check; lower effort may give the same quality faster and cheaper | `npm run ai:report` on both runs |
-| B5 | ✅ Done 9 Nov (per job): a job stops with `AI_BUDGET_EXCEEDED` once its billed spend reaches `JOB_MAX_COST_USD` ($3). A daily limit is still open; the daily report warns at `REPORT_DAILY_BUDGET_USD` | A runaway or a large "full" FRAC cannot run up an unexpected bill | `JobRunner` |
+| B5 | ✅ Done 9 Nov (per job): a job stops with `AI_BUDGET_EXCEEDED` once its billed spend reaches `JOB_MAX_COST_USD` ($3). Per user (16 Nov): at most `JOB_MAX_ACTIVE_PER_USER` (2) jobs at once and `JOB_DAILY_BUDGET_PER_USER_USD` ($10) of billed spend per 24 hours (429 `TOO_MANY_JOBS` / `DAILY_LIMIT_REACHED`); the daily report still warns at `REPORT_DAILY_BUDGET_USD` | A runaway or a large "full" FRAC cannot run up an unexpected bill | `JobRunner` |
 | B6 | Message Batches API for the expert check and "Rewrite all ladders" | 50% cheaper for work the user doesn't watch live; the trade-off is minutes-to-hours latency, so only for background runs | new provider method |
 | B7 | Write ladders only for changed competencies after a competencies revise, and say so in the progress | Already true for unchanged code and label; make the saving visible ("8 of 32 need new ladders") | `ladders.step.ts`, job message |
 | B8 | Build the "already checked in code" sentence of the review prompt from `config/outdated.json` | It lists the outdated names by hand, so a new entry in the file doesn't reach Vidya's prompt | `prompts.ts` `CODE_CHECKS` |

@@ -14,7 +14,7 @@ import { FracService } from "../services/frac.service.ts";
 import { JobRunner } from "../services/queue/job-runner.ts";
 import { ReviewService } from "../services/review.service.ts";
 
-const OWNER = { "x-aastrika-creator": "mock-user" };
+const OWNER = { "x-user-id": "mock-user" };
 
 function setup() {
   const repos = memoryRepositories();

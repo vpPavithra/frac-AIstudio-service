@@ -1,4 +1,4 @@
-// One error shape for the whole API, as in aastrika-ai-service (utils/response.ts).
+// One error shape for the whole API, as in the AI Studio service (utils/response.ts).
 //
 // A client cannot branch on prose, so every failure carries a stable machine-readable code next
 // to the sentence a person reads. 4xx means "the request was wrong, do not retry"; 5xx means

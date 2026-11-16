@@ -22,6 +22,17 @@ export const JOB_RUNNING = "JOB_RUNNING";
 export const AI_BUDGET_EXCEEDED = "AI_BUDGET_EXCEEDED";
 
 /** The 409 for a target that already has a live job. */
+/** 429 codes for the per-user limits (JOBS.maxActivePerUser, JOBS.dailyBudgetPerUserUsd), checked before a job starts. */
+export const TOO_MANY_JOBS = "TOO_MANY_JOBS";
+export const DAILY_LIMIT_REACHED = "DAILY_LIMIT_REACHED";
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** The per-user limits a job start is checked against; 0 turns one off. */
+export interface UserLimits {
+  maxActive: number;
+  dailyBudgetUsd: number;
+}
+
 export const jobRunning = (job: Job) =>
   new ApiError(409, JOB_RUNNING, "A step is already running on this FRAC. Wait for it to finish.", { jobId: job.id, kind: job.kind });
 
@@ -73,16 +84,23 @@ export class JobRunner {
    * `heartbeatMs`: how often a running job touches its row (JOB_HEARTBEAT_MS); tests pass a short one.
    * `aiCalls`: where each model call's record goes (the AI response report); omitted, calls are not logged.
    * `maxCostUsd`: the per-job spending limit (JOB_MAX_COST_USD); tests pass a small one.
+   * `limits`: the per-user limits (JOB_MAX_ACTIVE_PER_USER, JOB_DAILY_BUDGET_PER_USER_USD); tests pass their own.
    */
   constructor(
     private readonly jobs: JobRepository,
     private readonly heartbeatMs = JOBS.heartbeatMs,
     private readonly aiCalls?: AiCallRepository,
     private readonly maxCostUsd = JOBS.maxCostUsd,
+    private readonly limits: UserLimits = { maxActive: JOBS.maxActivePerUser, dailyBudgetUsd: JOBS.dailyBudgetPerUserUsd },
   ) {}
 
-  /** Inserts the job as queued and returns it at once; the task runs in the background (fire and forget). */
+  /**
+   * Inserts the job as queued and returns it at once; the task runs in the background (fire and forget).
+   * Refused first with 429 TOO_MANY_JOBS when the user already has `limits.maxActive` jobs running, or 429
+   * DAILY_LIMIT_REACHED when their billed AI spend over the last 24 hours has reached `limits.dailyBudgetUsd`.
+   */
   async start(spec: StartJob, task: JobTask): Promise<Job> {
+    await this.checkUserLimits(spec.ownerId);
     const now = new Date().toISOString();
     const job: Job = {
       id: randomUUID(),
@@ -128,6 +146,20 @@ export class JobRunner {
     }
   }
 
+  /** The per-user guardrails on AI spend: how many jobs run at once, and how much is billed in a day. */
+  private async checkUserLimits(ownerId: string): Promise<void> {
+    const { maxActive, dailyBudgetUsd } = this.limits;
+    if (!maxActive && !dailyBudgetUsd) return;
+    const { active, billedUsd } = await this.jobs.ownerUsage(ownerId, new Date(Date.now() - DAY_MS));
+    if (maxActive && active >= maxActive) {
+      throw new ApiError(429, TOO_MANY_JOBS, `You already have ${active} steps running. Wait for one to finish, then try again.`);
+    }
+    if (dailyBudgetUsd && billedUsd >= dailyBudgetUsd) {
+      throw new ApiError(429, DAILY_LIMIT_REACHED,
+        `You have used today's AI limit ($${dailyBudgetUsd}) for FRAC Studio. It frees up as runs pass 24 hours; an admin can raise JOB_DAILY_BUDGET_PER_USER_USD.`);
+    }
+  }
+
   /** Resolves once every started job has settled. Used by tests and graceful shutdown. */
   async idle(): Promise<void> {
     while (this.running.size) await Promise.allSettled([...this.running]);
@@ -164,6 +196,8 @@ export class JobRunner {
       usage.outputTokens += delta.outputTokens;
       usage.webSearches += delta.webSearches ?? 0;
       usage.costUsd = Math.round((usage.costUsd + delta.costUsd) * 10_000) / 10_000;
+      // Billed spend kept apart from estimates, for the per-user daily limit (checkUserLimits)
+      usage.billedUsd = Math.round(billedUsd * 10_000) / 10_000;
       if (delta.estimated) usage.estimated = 1;
       // The per-call log is for reporting only: a failed insert is logged, never fails the job
       if (delta.call && this.aiCalls) {

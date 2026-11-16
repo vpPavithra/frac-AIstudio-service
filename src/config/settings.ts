@@ -1,4 +1,4 @@
-// Non-secret settings in a reviewed file, secrets in the environment (aastrika-ai-service pattern).
+// Non-secret settings in a reviewed file, secrets in the environment (the AI Studio service pattern).
 //
 //   config/service.json   every tunable: models, rates, limits, timeouts. Committed and diffable.
 //   .env / secret store   secrets and per-deployment values only (API key, Postgres credentials).

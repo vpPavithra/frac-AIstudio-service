@@ -55,6 +55,8 @@
   "JOB_SWEEP_EVERY_MS": 60000,
   "JOB_HEARTBEAT_MS": 60000,
   "JOB_MAX_COST_USD": 3,
+  "JOB_MAX_ACTIVE_PER_USER": 2,
+  "JOB_DAILY_BUDGET_PER_USER_USD": 10,
 
   "// postgres": "Pool sizing only; the connection (host, user, password) stays in .env or the secret store.",
   "POSTGRES_POOL_MAX": 10,

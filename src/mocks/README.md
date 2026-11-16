@@ -101,7 +101,7 @@ standard 12/6/32, full 17/7/50), capped by what the profile has. Restart the ser
 PORT=3010 npm run dev:mock:seed      # = AI_PROVIDER=mock FRAC_STUDIO_STORE=memory MOCK_SEED=true
 ```
 
-`MOCK_SEED_OWNERS` must match the user id the portal sends (`x-aastrika-creator`): `local-dev-user`
+`MOCK_SEED_OWNERS` must match the user id the portal sends (`x-user-id`): `local-dev-user`
 with orgportal's local proxy rule, or the person's user id behind the uiproxy. A walkthrough:
 
 1. **My FRACs**: the seeded "ANM — Bihar" FRAC (step 6, with its expert check) and a review of its export.

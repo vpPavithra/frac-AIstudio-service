@@ -4,14 +4,14 @@ import type { NextFunction, Request, Response } from "express";
 import { unauthorized } from "../utils/response.ts";
 
 /**
- * Set by sunbird-cb-uiproxy (protectedApi_v8/fracStudio, via the AI Studio helpers) from the
- * signed-in user's session, overwriting any value the browser sent. Same header AI Studio uses.
+ * Set by sunbird-cb-uiproxy (protectedApi_v8/fracStudio) from the signed-in user's session, overwriting any
+ * value the browser sent. FRAC Studio's own header name; the proxy sends nothing else that identifies the user.
  */
-export const USER_ID_HEADER = "x-aastrika-creator";
+export const USER_ID_HEADER = "x-user-id";
 
 /**
  * The owner always comes from the proxy-forwarded header, never from the request body or a
- * query param, and is required: every record is scoped by it. Unlike aastrika-ai-service (where
+ * query param, and is required: every record is scoped by it. Unlike the AI Studio service (where
  * the header is attribution only and defaults to "admin"), here it is authorisation, so there is
  * no fallback. The service must only be reachable through the proxy. Missing header: 401 NOT_SIGNED_IN.
  */

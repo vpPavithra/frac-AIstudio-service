@@ -21,12 +21,12 @@ for Indian frontline health cadres. This service is its backend:
 - **My FRACs**: lists, versions, restore, downloads.
 
 The portal (orgportal) calls `/apis/protected/v8/fracStudio/*`; the uiproxy adds the signed-in user as the
-`x-aastrika-creator` header and forwards to this service's `/v1/*`. The service never trusts an owner id
+`x-user-id` header and forwards to this service's `/v1/*`. The service never trusts an owner id
 from the request body.
 
 ```mermaid
 flowchart LR
-  portal[orgportal] --> proxy[uiproxy<br/>adds x-aastrika-creator]
+  portal[orgportal] --> proxy[uiproxy<br/>adds x-user-id]
   proxy --> app[app.ts<br/>middleware]
   app --> routes[routes/] --> controllers[controllers/]
   controllers --> svc[services/<br/>FracService, ReviewService]
@@ -85,7 +85,7 @@ flowchart LR
 |---|---|
 | `middleware/requestContext.ts` | Request id (reuses a safe incoming `x-request-id`), echoed back and kept in AsyncLocalStorage for the logs. |
 | `middleware/requestLogger.ts` | One access-log line per request with the error code; skips `/health`. |
-| `middleware/auth.ts` | `requireOwner`: the owner comes from `x-aastrika-creator`; missing → 401 `NOT_SIGNED_IN`. `ownerOf(req)` for controllers. |
+| `middleware/auth.ts` | `requireOwner`: the owner comes from `x-user-id`; missing → 401 `NOT_SIGNED_IN`. `ownerOf(req)` for controllers. |
 | `middleware/validate.ts` | Zod parsing; `validateBody` replaces `req.body` and drops undeclared fields; failure → 400 `VALIDATION_FAILED`. |
 | `middleware/upload.ts` | Multer, in memory, one file, capped at `MAX_UPLOAD_MB`. |
 | `middleware/errorHandler.ts` | The single error body `{ error: { code, message, details? } }`. Maps `ApiError`, workbook parse errors, upload and JSON errors; anything else is a logged 500. |

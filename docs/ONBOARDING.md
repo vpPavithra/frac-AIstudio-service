@@ -2,7 +2,7 @@
 
 ## What this is
 
-The backend for **FRAC Studio** in the Aastrika org portal: review an existing FRAC competency dictionary
+The backend for **FRAC Studio** in the Sphere org portal: review an existing FRAC competency dictionary
 (.xlsx) and get a graded report, or build a FRAC step by step (brief → research → roles & activities →
 competencies → level ladders → expert check → Excel). Spec: `FRAC_Creator_and_Reviewer_spec.md` v1.
 
@@ -50,7 +50,7 @@ Which AI answers, how to switch, and what each costs: [FRAC_STUDIO_GUIDE.md](FRA
 To look at the stored data in pgAdmin 4: [DATABASE.md](DATABASE.md).
 Documents, templates and position matching (Nov 2026 review decisions): [releases/REVIEW_DECISIONS_2026-11.md](releases/REVIEW_DECISIONS_2026-11.md); their cost effect: [COST_IMPACT_REVIEW_DECISIONS.md](COST_IMPACT_REVIEW_DECISIONS.md).
 
-Every `/v1` call needs the header `x-aastrika-creator: <user id>` (the uiproxy sets it in real use).
+Every `/v1` call needs the header `x-user-id: <user id>` (the uiproxy sets it in real use).
 
 ## Errors
 
@@ -59,7 +59,7 @@ Every failure is `{ "error": { "code": "...", "message": "..." } }`. Codes the p
 | Code | Status | Meaning |
 |---|---|---|
 | `VALIDATION_FAILED` | 400 | A request field is missing or wrong; `details` lists each problem |
-| `NOT_SIGNED_IN` | 401 | No `x-aastrika-creator` header |
+| `NOT_SIGNED_IN` | 401 | No `x-user-id` header |
 | `NOT_FOUND` | 404 | No such FRAC, review, job, version or step for this owner |
 | `BRIEF_LOCKED` | 409 | The brief (and its documents) cannot change once research exists |
 | `REVIEW_NOT_READY` | 409 | The review job has not finished |

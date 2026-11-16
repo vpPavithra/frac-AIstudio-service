@@ -3,7 +3,7 @@ import { describeError } from "../utils/logger.ts";
 import type { Queryable } from "./migrate.ts";
 
 /**
- * Fails fast when Postgres cannot be reached, so the service refuses to start (as aastrika-ai-service
+ * Fails fast when Postgres cannot be reached, so the service refuses to start (as the AI Studio service
  * does) instead of starting and failing every request one at a time. `where` names the target in
  * the message, e.g. "localhost:5432/frac_studio". Throws a plain Error (startup, not a request).
  */

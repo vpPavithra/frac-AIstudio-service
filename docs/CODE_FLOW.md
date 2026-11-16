@@ -59,11 +59,11 @@ flowchart LR
 ## 3. How a request gets in
 
 The portal never calls the service directly: orgportal → uiproxy (`/apis/protected/v8/fracStudio/*`, sets the
-signed-in user as `x-aastrika-creator`) → this service at `/v1/*`.
+signed-in user as `x-user-id`) → this service at `/v1/*`.
 
 ```mermaid
 flowchart LR
-  P[orgportal] --> X["uiproxy<br/>adds x-aastrika-creator"] --> A["src/app.ts<br/>request id, access log, helmet,<br/>CORS, JSON body limit"]
+  P[orgportal] --> X["uiproxy<br/>adds x-user-id"] --> A["src/app.ts<br/>request id, access log, helmet,<br/>CORS, JSON body limit"]
   A --> O["requireOwner<br/>401 without the header"] --> R["src/routes/<br/>which handler, Zod body check"]
   R --> C["src/controllers/<br/>HTTP only"] --> S["src/services/<br/>the rules"] --> DB["src/repositories/<br/>Postgres or memory"]
   S -. "errors as { error: { code, message } }" .-> E["middleware/errorHandler.ts"]

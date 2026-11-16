@@ -17,7 +17,7 @@ import { stubProvider } from "./support/stub-provider.ts";
 import { gnmSample } from "./support/sample-workbooks.ts";
 import { goodLevels } from "./support/test-data.ts";
 
-const OWNER = { "x-aastrika-creator": "user-1" };
+const OWNER = { "x-user-id": "user-1" };
 
 async function setup() {
   // pg-mem flags a skipped CREATE TABLE IF NOT EXISTS as unsupported; real Postgres just skips it

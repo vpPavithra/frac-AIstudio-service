@@ -1,7 +1,7 @@
 {
   "name": "frac-studio-service",
   "version": "0.1.0",
-  "description": "FRAC Studio: AI-assisted FRAC Creator and Reviewer backend for Aastrika Sphere",
+  "description": "FRAC Studio: AI-assisted FRAC Creator and Reviewer backend for Sphere",
   "type": "module",
   "engines": {
     "node": ">=20"

@@ -354,7 +354,7 @@ All three have fixed titles and `source:"agent"`. Items inside each are sorted b
 ## 10. Acceptance tests
 
 Test fixtures are available from Sarvesh:
-- `[Shared with Aastrika] GO-HRM Meghalaya (ANM FRAC).xlsx`
+- `GO-HRM Meghalaya (ANM FRAC).xlsx` (shared by the state team)
 - `ANM competencies.xlsx` (Bihar)
 - `GNM COMPETENCY DICTIONARY 9 June 2025.xlsx` (openpyxl cannot read its stylesheet; use a tolerant reader)
 

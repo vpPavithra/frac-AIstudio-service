@@ -15,6 +15,8 @@ export interface JobRepository {
   failStale(before: Date, error: string, errorCode: string): Promise<number>;
   /** Every job created at or after `since`, oldest first (the AI response report). */
   listSince(since: Date): Promise<Job[]>;
+  /** A user's queued or running jobs, and their billed AI spend on jobs created since `since` (the per-user limits). */
+  ownerUsage(ownerId: string, since: Date): Promise<{ active: number; billedUsd: number }>;
 }
 
 interface JobRow {
@@ -84,6 +86,14 @@ export class PgJobRepository implements JobRepository {
     return rows.map(toJob);
   }
 
+  async ownerUsage(ownerId: string, since: Date): Promise<{ active: number; billedUsd: number }> {
+    const active = await this.pool.query<{ n: string }>(
+      `SELECT COUNT(*) AS n FROM jobs WHERE owner_id = $1 AND status IN ('queued', 'running')`, [ownerId]);
+    const recent = await this.pool.query<{ usage: Record<string, number> | null }>(
+      `SELECT usage FROM jobs WHERE owner_id = $1 AND created_at >= $2`, [ownerId, since]);
+    return { active: Number(active.rows[0]?.n ?? 0), billedUsd: sumBilled(recent.rows.map((r) => r.usage ?? {})) };
+  }
+
   async activeFor(targetId: string): Promise<Job | null> {
     const { rows } = await this.pool.query<JobRow>(
       `SELECT * FROM jobs WHERE target_id = $1 AND status IN ('queued', 'running') ORDER BY created_at DESC LIMIT 1`,
@@ -92,6 +102,9 @@ export class PgJobRepository implements JobRepository {
     return rows[0] ? toJob(rows[0]) : null;
   }
 }
+
+/** Billed AI spend across jobs' usage records (estimates from the mock are not billed). */
+const sumBilled = (usages: Record<string, number>[]) => usages.reduce((sum, u) => sum + (Number(u.billedUsd) || 0), 0);
 
 /** Postgres row → Job. */
 const toJob = (r: JobRow): Job => ({
@@ -144,6 +157,14 @@ export class MemoryJobRepository implements JobRepository {
       .filter((j) => j.targetId === targetId && (j.status === "queued" || j.status === "running"))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     return active[0] ? clone(active[0]) : null;
+  }
+
+  async ownerUsage(ownerId: string, since: Date): Promise<{ active: number; billedUsd: number }> {
+    const mine = [...this.rows.values()].filter((j) => j.ownerId === ownerId);
+    return {
+      active: mine.filter((j) => j.status === "queued" || j.status === "running").length,
+      billedUsd: sumBilled(mine.filter((j) => new Date(j.createdAt) >= since).map((j) => j.usage)),
+    };
   }
 
   async listSince(since: Date): Promise<Job[]> {

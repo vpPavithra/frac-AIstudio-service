@@ -107,6 +107,10 @@ export const JOBS = Object.freeze({
    * standard FRAC's dearest step is about $0.40, so this only catches a runaway. Estimates are not counted.
    */
   maxCostUsd: num("JOB_MAX_COST_USD", 3),
+  /** Most steps or checks one user may have running at once (0 = no limit); each FRAC runs one at a time anyway. */
+  maxActivePerUser: int("JOB_MAX_ACTIVE_PER_USER", 2, 0),
+  /** Most billed AI spend one user may reach over the last 24 hours before new jobs are refused (0 = no limit). */
+  dailyBudgetPerUserUsd: num("JOB_DAILY_BUDGET_PER_USER_USD", 10),
 });
 
 /** Postgres pool sizing (non-secret; the connection itself comes from POSTGRES_* in the environment, see db.ts). */
@@ -204,7 +208,7 @@ export const KNOWN_SETTINGS = [
   "MAX_UPLOAD_MB", "MAX_JSON_MB", "MAX_TEXT_CHARS", "MAX_ROLES", "MAX_ACTIVITIES_PER_ROLE", "MAX_COMPETENCIES", "MAX_POSTINGS",
   "DOC_MAX_CHARS", "DOC_MAX_BRIEF_FILES", "RESEARCH_SEARCH_MAX_USES_WITH_DOCS",
   "SOURCE_LINK_CHECK_TIMEOUT_MS", "SOURCE_LINK_MAX_CHECKS", "SOURCE_LINK_DOMAINS", "SOURCE_LINK_MIN_MATCH",
-  "JOB_STALE_AFTER_MS", "JOB_SWEEP_EVERY_MS", "JOB_HEARTBEAT_MS", "JOB_MAX_COST_USD",
+  "JOB_STALE_AFTER_MS", "JOB_SWEEP_EVERY_MS", "JOB_HEARTBEAT_MS", "JOB_MAX_COST_USD", "JOB_MAX_ACTIVE_PER_USER", "JOB_DAILY_BUDGET_PER_USER_USD",
   "POSTGRES_POOL_MAX", "POSTGRES_CONNECT_TIMEOUT_MS", "POSTGRES_IDLE_TIMEOUT_MS", "CORS_ORIGINS", "LOG_FORMAT", "LOG_LEVEL",
   "OUTDATED_CONFIG_PATH", "REVIEW_RULES_CONFIG_PATH", "FRAC_SIZES_CONFIG_PATH", "AI_PROVIDERS_CONFIG_PATH", "METHOD_PARAGRAPH_PATH",
   "AI_PROVIDER", "AI_REQUIRE_REAL", "RESEARCH_WEB_SEARCH", "RESEARCH_SEARCH_DOMAINS", "RESEARCH_SEARCH_MAX_USES", "AI_BATCH_SIZE", "AI_BATCH_PARALLEL",

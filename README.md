@@ -72,7 +72,7 @@ price means editing the profile. Neither needs a code change.
 
 1. Start it with `npm run dev:ai` (or `start:ai`). These set `AI_REQUIRE_REAL=true`, so the service refuses to start on the mock and says why. `npm run dev` does not: it follows whatever `AI_PROVIDER` says.
 2. The startup log names the provider: `"ai":"claude"` (or the profile in use), never `"ai":"mock"`.
-3. `curl -H 'x-aastrika-creator: me' localhost:3010/v1/info` returns `{"aiProvider":"claude"}`.
+3. `curl -H 'x-user-id: me' localhost:3010/v1/info` returns `{"aiProvider":"claude"}`.
 4. After a step, `npm run ai:report -- --days 1` lists the calls under `claude · claude-sonnet-5-5`; mock calls show as `mock · mock`.
 
 The cost in the portal reads "est." on the mock (no bill), so check one of the above to be sure.
@@ -103,7 +103,7 @@ Same pipeline as playlist-service (`Jenkinsfile`): `Dockerfile.build` compiles a
 - **Migrations:** run `node migrate.js` in the image once per deploy (a job or init container), or set
   `MIGRATE_ON_START=true`. Each file runs once, in its own transaction, under an advisory lock, so several
   replicas starting together are safe.
-- **Network:** the service trusts the `x-aastrika-creator` header, so expose it only inside the cluster. The
+- **Network:** the service trusts the `x-user-id` header, so expose it only inside the cluster. The
   uiproxy reaches it through `FRAC_STUDIO_API_BASE` (default `${KONG_API_BASE}/frac-studio`, so a Kong route
   `/frac-studio` → this service, or point the variable straight at the service).
 - **Shutdown:** on SIGTERM it stops taking requests and lets running jobs finish before exiting. Give the pod a
