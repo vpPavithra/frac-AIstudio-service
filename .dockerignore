@@ -1,4 +1,6 @@
 node_modules
+# Local AI cost and review reports: not needed to build, and they hold FRAC data
+reports
 coverage
 .scannerwork
 .git

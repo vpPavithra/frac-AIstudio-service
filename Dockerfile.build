@@ -1,7 +1,8 @@
 # Pre-build image for the Jenkins "docker-pre-build" stage: installs all deps, compiles TypeScript and
 # zips dist/, config/, migrations/ and the package files into /usr/src/app/dist.zip.
 # Jenkins copies dist.zip out and unzips it before build.sh builds the runtime Dockerfile.
-FROM node:20
+# Same Node major as the runtime image (22 LTS)
+FROM node:22
 WORKDIR /usr/src/app
 
 COPY . .

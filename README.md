@@ -98,7 +98,7 @@ Reports keep only the providers in `REPORT_PROVIDERS` (`claude` by default; `-- 
 ## Deploy
 
 Same pipeline as playlist-service (`Jenkinsfile`): `Dockerfile.build` compiles and zips `dist/`, `config/` and
-`migrations/`; `build.sh` builds the runtime image from `Dockerfile` (Node 20 alpine, port 3005, runs as `node`).
+`migrations/`; `build.sh` builds the runtime image from `Dockerfile` (Node 22 alpine, port 3005, runs as `node`).
 
 - **Migrations:** run `node migrate.js` in the image once per deploy (a job or init container), or set
   `MIGRATE_ON_START=true`. Each file runs once, in its own transaction, under an advisory lock, so several

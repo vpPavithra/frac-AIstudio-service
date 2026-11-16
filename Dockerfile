@@ -1,7 +1,8 @@
 # Runtime image for frac-studio-service, built by build.sh in the Jenkins "Build" stage.
 # Expects dist/, config/ and migrations/ already in the build context (unzipped from Dockerfile.build's
 # dist.zip). Runs the compiled server on port 3005 as the non-root node user.
-FROM node:20-alpine
+# Node 22 LTS: Node 20 reached end of life in April 2026; the tests and a compiled-server smoke test pass on 22
+FROM node:22-alpine
 WORKDIR /usr/src/app
 
 ENV NODE_ENV=production

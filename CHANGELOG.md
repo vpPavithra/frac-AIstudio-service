@@ -12,6 +12,8 @@ Added 13 Nov 2026, actions on the Roles tab after a sheet upload:
 - **Verify the roles with the agent.** `POST /v1/fracs/:id/roles/verify` runs a `verify-roles` job: one
   complex-tier call that lists problems in the roles and activities against the JD and the research, saved as
   `frac.rolesCheck`. Nothing else changes. About $0.03–0.06 a check.
+- **Docker images on Node 22 LTS** (Node 20 reached end of life in April 2026). The tests and a compiled-server smoke
+  test pass on 22. `reports/` is kept out of the build context.
 - **Replace outdated names without AI.** `POST /v1/fracs/:id/fixes/outdated` swaps a name from `config/outdated.json`
   (VHND → VHSND) everywhere the check reads it. The portal shows "Fix these competencies" only for findings about ladder
   text, a free "Replace with …" for outdated names, and a footer "Re-run …" for the earliest out-of-date step.
