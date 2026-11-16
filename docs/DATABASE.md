@@ -14,6 +14,7 @@ Take the values from your `.env`. A local setup usually looks like this:
 | Maintenance database | `POSTGRES_DATABASE` | `frac_studio` |
 | Username | `POSTGRES_USER` | your Mac user name |
 | Password | `POSTGRES_PASSWORD` | empty for a local Postgres that trusts local logins |
+| SSL (Connection / Parameters) | `POSTGRES_SSL` | off locally; set `true` (and SSL mode `require` in pgAdmin) for any database not on the same host |
 
 Never write a password into this file or any committed file. For a shared or deployed database, ask DevOps for the
 values and keep them in pgAdmin's saved password or your `.env` only.

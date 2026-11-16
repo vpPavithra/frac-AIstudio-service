@@ -6,7 +6,7 @@ import "dotenv/config";
 import { hostname } from "node:os";
 import { ChecklistReviewer } from "./services/ai-review.service.ts";
 import { createApp } from "./app.ts";
-import { JOBS, MOCK, SERVER } from "./config/constants.ts";
+import { AUTH, JOBS, MOCK, SERVER } from "./config/constants.ts";
 import { createPool, poolTarget } from "./config/db.ts";
 import { checkDatabase } from "./db/check.ts";
 import { loadMethodParagraph } from "./config/method.ts";
@@ -30,6 +30,11 @@ const repos = pool ? pgRepositories(pool) : memoryRepositories();
 const runner = new JobRunner(repos.jobs, JOBS.heartbeatMs, repos.aiCalls);
 
 async function start(): Promise<void> {
+  // Without the service key anyone who can reach this port can act as any user: required in production
+  if (!AUTH.serviceKey) {
+    if (process.env.NODE_ENV === "production") throw new Error("SERVICE_KEY is not set. Set it in the secret store (the uiproxy's FRAC_STUDIO_SERVICE_KEY must match).");
+    logger.warn("SERVICE_KEY is not set: requests are not checked for the uiproxy's key. Set it outside local runs.");
+  }
   // AI_PROVIDER: a profile in config/ai-providers.json (needs its key) or mock (`npm run dev:mock`)
   const { provider, mocks } = await createAi();
   // The rule tables are re-read per review so reviewers' edits apply without a restart

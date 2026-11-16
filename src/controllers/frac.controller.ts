@@ -69,6 +69,12 @@ export function fracController(fracs: FracService) {
       res.status(202).json({ jobId: job.id });
     },
 
+    /** Deletes the FRAC (versions and documents with it; reviews stay). 204 on success. */
+    async remove(req: Request, res: Response) {
+      await fracs.remove(ownerOf(res), param(req.params.id));
+      res.status(204).end();
+    },
+
     /** Fixes expert-check findings with the agent: body { titles? } (one finding's button); none means every open finding. */
     async startFixAll(req: Request, res: Response) {
       const job = await fracs.startFixAll(ownerOf(res), param(req.params.id), (req.body as FixAllInput).titles);

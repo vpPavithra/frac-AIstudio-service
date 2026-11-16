@@ -16,6 +16,7 @@ import { JOB_MESSAGES } from "./queue/job-messages.ts";
 import { badRequest, conflict, notFound } from "../utils/response.ts";
 import type { Repositories } from "../repositories/index.ts";
 import { describeError, logger } from "../utils/logger.ts";
+import { assertZipSafe } from "./documents/zip-guard.ts";
 
 // The Reviewer service (spec 6, rules r3). Runs the whole review flow: upload → parse (parse-workbook.ts)
 // → rule-based checks (checks.ts) → Vidya's AI checklist (ai-review.service.ts) → computed report
@@ -132,6 +133,8 @@ export class ReviewService {
    */
   async startUploadReview(ownerId: string, file: UploadedWorkbook, ctx: ReviewContext, fresh = false): Promise<StartedReview> {
     let sheets;
+    // An .xlsx is a zip: refuse one that would unpack too far before exceljs opens it
+    assertZipSafe(file.buffer, file.name);
     try {
       sheets = await readWorkbook(file.buffer);
     } catch (err) {

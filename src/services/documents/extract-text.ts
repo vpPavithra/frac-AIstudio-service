@@ -4,7 +4,8 @@
 import mammoth from "mammoth";
 import { extractText } from "unpdf";
 import { DOCUMENTS } from "../../config/constants.ts";
-import { badRequest } from "../../utils/response.ts";
+import { ApiError, badRequest } from "../../utils/response.ts";
+import { assertZipSafe, withParseTimeout } from "./zip-guard.ts";
 
 /** File types a brief document may have, by extension. */
 export const BRIEF_EXTENSIONS = /\.(pdf|docx|txt|md)$/i;
@@ -27,11 +28,14 @@ export function tidyText(raw: string): string {
 
 /** The raw text of one file; throws 400 FILE_UNREADABLE when the parser fails. */
 async function rawText(filename: string, buffer: Buffer): Promise<string> {
+  // A .docx is a zip: refuse one that would unpack too far before mammoth opens it
+  if (/\.docx$/i.test(filename)) assertZipSafe(buffer, filename);
   try {
-    if (/\.pdf$/i.test(filename)) return (await extractText(new Uint8Array(buffer), { mergePages: true })).text;
-    if (/\.docx$/i.test(filename)) return (await mammoth.extractRawText({ buffer })).value;
+    if (/\.pdf$/i.test(filename)) return (await withParseTimeout(extractText(new Uint8Array(buffer), { mergePages: true }), filename)).text;
+    if (/\.docx$/i.test(filename)) return (await withParseTimeout(mammoth.extractRawText({ buffer }), filename)).value;
     return buffer.toString("utf8");
-  } catch {
+  } catch (err) {
+    if (err instanceof ApiError) throw err;
     throw badRequest("FILE_UNREADABLE", `Could not read ${filename}. Save it again as PDF, .docx or .txt and upload it.`);
   }
 }

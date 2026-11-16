@@ -25,6 +25,15 @@ const list = (key: string) =>
     .map((s) => s.trim())
     .filter(Boolean);
 
+/**
+ * The key the uiproxy sends in x-service-key so the service knows a request came through it (security review,
+ * 16 Nov 2026). A secret: environment or secret store only, never config/service.json (startup refuses it).
+ * Empty = not checked, for local runs; server.ts refuses to start without it when NODE_ENV is production.
+ */
+export const AUTH = Object.freeze({
+  serviceKey: env.SERVICE_KEY ?? "",
+});
+
 /** Process-level settings, used by server.ts. */
 export const SERVER = Object.freeze({
   port: num("PORT", 3005),
@@ -61,6 +70,8 @@ export const LIMITS = Object.freeze({
   maxRoles: num("MAX_ROLES", 200),
   maxActivitiesPerRole: num("MAX_ACTIVITIES_PER_ROLE", 200),
   maxCompetencies: num("MAX_COMPETENCIES", 500),
+  /** Versions kept per FRAC; the oldest are dropped as new ones are saved (security review, 16 Nov 2026). */
+  maxVersionsPerFrac: int("VERSIONS_MAX_PER_FRAC", 50),
   /** Most postings (Yes/No columns) on a FRAC: a safety limit, not a rule; research keeps as many as the brief names. */
   maxPostings: num("MAX_POSTINGS", 20),
 });
@@ -76,9 +87,23 @@ export const DOCUMENTS = Object.freeze({
   maxBriefFiles: int("DOC_MAX_BRIEF_FILES", 3),
   /** Web searches research may run when the team attached a brief document (the document is the main source). 0 = none. */
   searchesWithDocs: int("RESEARCH_SEARCH_MAX_USES_WITH_DOCS", 1, 0),
+  /** Most a .docx or .xlsx upload may unpack to, in MB, checked before parsing (security review, 16 Nov 2026). */
+  maxUnzippedMb: int("DOC_MAX_UNZIPPED_MB", 100),
+  /** Most entries a .docx or .xlsx zip may hold. */
+  maxZipEntries: int("DOC_MAX_ZIP_ENTRIES", 2000),
+  /** Longest one document may take to read (PDF text extraction); longer is refused as too complex. */
+  parseTimeoutMs: int("DOC_PARSE_TIMEOUT_MS", 20_000),
 });
 
 /** Research source links (services/ai/source-links.ts): checks that an address the model gave really answers. */
+/** Per-user request limits (security review, 16 Nov 2026); middleware/rate-limit.ts. 0 turns a limit off. */
+export const RATE = Object.freeze({
+  /** Requests per user per minute, all of /v1 (2-second job polling uses 30). */
+  perMinute: int("RATE_LIMIT_PER_MINUTE", 120, 0),
+  /** Uploads per user per minute: documents and Review FRAC workbooks, which are parsed in memory. */
+  uploadsPerMinute: int("RATE_LIMIT_UPLOADS_PER_MINUTE", 20, 0),
+});
+
 export const FIX_ALL = Object.freeze({
   /** Most competencies one "Fix all findings" may add for coverage findings. */
   maxNewCompetencies: int("FIX_ALL_MAX_NEW_COMPETENCIES", 5, 0),
@@ -210,9 +235,9 @@ export const MOCK = Object.freeze({
 export const KNOWN_SETTINGS = [
   "PORT", "FRAC_STUDIO_STORE", "MIGRATE_ON_START",
   "LLM_TIMEOUT_MS", "LLM_RETRIES", "LLM_MAX_TOKENS", "LLM_MAX_RESUMES", "LLM_MAX_RETRY_DELAY_MS", "LLM_INVALID_RETRIES",
-  "MAX_UPLOAD_MB", "MAX_JSON_MB", "MAX_TEXT_CHARS", "MAX_ROLES", "MAX_ACTIVITIES_PER_ROLE", "MAX_COMPETENCIES", "MAX_POSTINGS",
-  "DOC_MAX_CHARS", "DOC_MAX_BRIEF_FILES", "RESEARCH_SEARCH_MAX_USES_WITH_DOCS",
-  "FIX_ALL_MAX_NEW_COMPETENCIES",
+  "MAX_UPLOAD_MB", "MAX_JSON_MB", "MAX_TEXT_CHARS", "MAX_ROLES", "MAX_ACTIVITIES_PER_ROLE", "MAX_COMPETENCIES", "MAX_POSTINGS", "VERSIONS_MAX_PER_FRAC",
+  "DOC_MAX_CHARS", "DOC_MAX_BRIEF_FILES", "RESEARCH_SEARCH_MAX_USES_WITH_DOCS", "DOC_MAX_UNZIPPED_MB", "DOC_MAX_ZIP_ENTRIES", "DOC_PARSE_TIMEOUT_MS",
+  "FIX_ALL_MAX_NEW_COMPETENCIES", "RATE_LIMIT_PER_MINUTE", "RATE_LIMIT_UPLOADS_PER_MINUTE",
   "SOURCE_LINK_CHECK_TIMEOUT_MS", "SOURCE_LINK_MAX_CHECKS", "SOURCE_LINK_DOMAINS", "SOURCE_LINK_MIN_MATCH",
   "JOB_STALE_AFTER_MS", "JOB_SWEEP_EVERY_MS", "JOB_HEARTBEAT_MS", "JOB_MAX_COST_USD", "JOB_MAX_ACTIVE_PER_USER", "JOB_DAILY_BUDGET_PER_USER_USD",
   "POSTGRES_POOL_MAX", "POSTGRES_CONNECT_TIMEOUT_MS", "POSTGRES_IDLE_TIMEOUT_MS", "CORS_ORIGINS", "LOG_FORMAT", "LOG_LEVEL",

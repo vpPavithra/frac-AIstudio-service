@@ -2,6 +2,7 @@
 // Called by the Reviewer upload (review.service.ts) before parsing. Values only: styles, formulas and
 // hyperlinks are dropped. Pure: no HTTP, no SQL.
 import ExcelJS from "exceljs";
+import JSZip from "jszip";
 import { Readable } from "node:stream";
 import type { SheetData } from "../review-engine/parse-workbook.ts";
 
@@ -33,12 +34,42 @@ export async function readWorkbook(buffer: ArrayBuffer | Buffer): Promise<SheetD
   try {
     return await readWithFullLoader(bytes);
   } catch (strictError) {
+    // A protected sheet name ("History"): rename it in workbook.xml and load again. Deterministic, unlike the
+    // streaming reader, which could drop a sheet under load (the flaky History test, Nov 2026).
+    if (strictError instanceof Error && PROTECTED_NAME.test(strictError.message)) {
+      try {
+        return await readRenamingProtected(bytes);
+      } catch {
+        // fall through to the streaming reader
+      }
+    }
     try {
       return await readWithStreamingReader(bytes);
     } catch {
       throw strictError;
     }
   }
+}
+
+/** exceljs's full loader refuses these sheet names, which Excel reserves only when writing a file. */
+const PROTECTED_NAMES = ["History"];
+const PROTECTED_NAME = /The name ".*" is protected/;
+/** Suffix for a renamed protected sheet while it loads; put back on the result, so callers see the real name. */
+const RENAMED_SUFFIX = "__frac_studio";
+
+/**
+ * Loads a workbook that has a protected sheet name: renames the sheet in xl/workbook.xml, loads it with the full
+ * loader, and gives the sheet its own name back. The upload passed assertZipSafe before it got here.
+ */
+async function readRenamingProtected(bytes: Buffer): Promise<SheetData[]> {
+  const zip = await JSZip.loadAsync(bytes);
+  const entry = zip.file("xl/workbook.xml");
+  if (!entry) throw new Error("No xl/workbook.xml");
+  const names = PROTECTED_NAMES.join("|");
+  const xml = (await entry.async("string")).replace(new RegExp(`(<sheet\\b[^>]*\\bname=")(${names})(")`, "gi"), `$1$2${RENAMED_SUFFIX}$3`);
+  zip.file("xl/workbook.xml", xml);
+  const sheets = await readWithFullLoader(await zip.generateAsync({ type: "nodebuffer" }));
+  return sheets.map((s) => (s.name.endsWith(RENAMED_SUFFIX) ? { ...s, name: s.name.slice(0, -RENAMED_SUFFIX.length) } : s));
 }
 
 /** Loads the whole workbook with exceljs. Strict about styles and sheet names, but accepts any zip entry order. */

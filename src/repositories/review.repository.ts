@@ -14,6 +14,8 @@ export interface ReviewRepository {
   findByFingerprint(ownerId: string, fingerprint: string): Promise<ReviewRecord | null>;
   /** Every review created at or after `since`, oldest first, without the stored workbook model (the AI response report). */
   listSince(since: Date): Promise<ReviewRecord[]>;
+  /** Clears frac_id on the reviews of a deleted FRAC; the reviews themselves stay (Postgres does the same on delete). */
+  detachFrac(fracId: string): Promise<void>;
 }
 
 interface ReviewRow {
@@ -45,6 +47,10 @@ const toReview = (r: ReviewRow): ReviewRecord => ({
 
 export class PgReviewRepository implements ReviewRepository {
   constructor(private readonly pool: Pool) {}
+
+  async detachFrac(fracId: string): Promise<void> {
+    await this.pool.query(`UPDATE reviews SET frac_id = NULL WHERE frac_id = $1`, [fracId]);
+  }
 
   async insert(r: ReviewRecord): Promise<void> {
     await this.pool.query(
@@ -96,6 +102,10 @@ export class PgReviewRepository implements ReviewRepository {
 
 export class MemoryReviewRepository implements ReviewRepository {
   private readonly rows = new Map<string, ReviewRecord>();
+
+  async detachFrac(fracId: string): Promise<void> {
+    for (const r of this.rows.values()) if (r.fracId === fracId) r.fracId = null;
+  }
 
   async insert(review: ReviewRecord): Promise<void> {
     this.rows.set(review.id, clone(review));

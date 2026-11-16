@@ -1,5 +1,5 @@
 // Postgres connection for the service and the migrate command. Reads POSTGRES_HOST, POSTGRES_PORT,
-// POSTGRES_DATABASE, POSTGRES_USER and POSTGRES_PASSWORD straight from the environment (per-deployment
+// POSTGRES_DATABASE, POSTGRES_USER, POSTGRES_PASSWORD and POSTGRES_SSL(_REJECT_UNAUTHORIZED) straight from the environment (per-deployment
 // values and a secret, so not in config/service.json). Pool sizing comes from DB in constants.ts
 // (POSTGRES_POOL_MAX, POSTGRES_CONNECT_TIMEOUT_MS, POSTGRES_IDLE_TIMEOUT_MS). Called by server.ts and migrate.ts.
 import pg from "pg";
@@ -8,6 +8,16 @@ import { DB } from "./constants.ts";
 /** "host:port/database" for messages; never includes the user or password. */
 export function poolTarget(env = process.env): string {
   return `${env.POSTGRES_HOST || "localhost"}:${env.POSTGRES_PORT || 5432}/${env.POSTGRES_DATABASE || "(default database)"}`;
+}
+
+/**
+ * TLS for the connection (security review, 16 Nov 2026): POSTGRES_SSL=true encrypts it, which any database not on
+ * the same host should use. The server's certificate is verified unless POSTGRES_SSL_REJECT_UNAUTHORIZED=false
+ * (only for a self-signed certificate you trust). Off by default, for a local or same-host database.
+ */
+export function sslOption(env = process.env): pg.PoolConfig["ssl"] {
+  if (env.POSTGRES_SSL !== "true") return undefined;
+  return { rejectUnauthorized: env.POSTGRES_SSL_REJECT_UNAUTHORIZED !== "false" };
 }
 
 /** Pool for the shared AI Studio / AskMe Postgres (spec 2). */
@@ -21,5 +31,6 @@ export function createPool(env = process.env): pg.Pool {
     max: DB.poolMax,
     connectionTimeoutMillis: DB.connectTimeoutMs,
     idleTimeoutMillis: DB.idleTimeoutMs,
+    ssl: sslOption(env),
   });
 }

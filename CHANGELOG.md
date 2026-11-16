@@ -5,6 +5,21 @@ full pre-deploy test checklist passes.
 
 ## Unreleased: FRAC Studio review decisions (11 Nov 2026)
 
+Added 16 Nov 2026 (security review):
+- **Service key.** Every `/v1` request must carry `x-service-key` matching `SERVICE_KEY` (constant-time compare,
+  `401 NOT_FROM_PROXY`); required in production. The uiproxy sends it and no longer forwards the platform API key or
+  the user's token to this service.
+- **Dependencies.** zod 4.6.7 (memory-exhaustion advisory) with request schemas on the v4 API; `uuid` under exceljs
+  pinned to 11.1.1 by an override. `npm audit --omit=dev` is clean.
+- **Uploads.** .docx/.xlsx refused before parsing when they would unpack past `DOC_MAX_UNZIPPED_MB` or hold more than
+  `DOC_MAX_ZIP_ENTRIES` parts; document reading is limited to `DOC_PARSE_TIMEOUT_MS` (`400 FILE_TOO_COMPLEX`).
+- **Postgres TLS** with `POSTGRES_SSL` and `POSTGRES_SSL_REJECT_UNAUTHORIZED`.
+- **Per-user rate limits** (`RATE_LIMIT_PER_MINUTE`, `RATE_LIMIT_UPLOADS_PER_MINUTE`; `429 RATE_LIMITED`).
+- **Delete a FRAC** (`DELETE /v1/fracs/:id`) and keep at most `VERSIONS_MAX_PER_FRAC` versions per FRAC.
+- **Smaller fixes:** `lastFix.changes` counts what a fix changed; a
+  workbook with a "History" sheet is read by renaming it before loading (the flaky streaming fallback is now a last
+  resort).
+
 Added 16 Nov 2026:
 - **Competencies before roles, for every FRAC.** After research the competencies step derives the competencies from
   the research and the job description (a new `competenciesFromResearchPrompt`), and the roles job maps every

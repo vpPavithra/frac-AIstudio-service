@@ -10,7 +10,8 @@ import { LIMITS } from "../config/constants.ts";
 const text = () => z.string().max(LIMITS.maxTextChars).default("");
 /** `required` is the message for both a missing field and an empty one, so the person sees one sentence. */
 const shortText = (max = 200, required?: string) => {
-  const base = z.string(required ? { required_error: required } : undefined).trim().max(max);
+  // Zod 4: one `error` for the missing case (a number or null sent instead counts as missing too)
+  const base = z.string(required ? { error: required } : undefined).trim().max(max);
   return required ? base.min(1, required) : base;
 };
 
@@ -118,7 +119,7 @@ export const patchFracSchema = z.object({
   research: researchSchema.nullable().optional(),
   roles: z.array(roleSchema).max(LIMITS.maxRoles).optional(),
   competencies: z.array(competencySchema).max(LIMITS.maxCompetencies).optional(),
-  rolesDirty: z.literal(false, { errorMap: () => ({ message: "rolesDirty can only be set to false" }) }).optional(),
+  rolesDirty: z.literal(false, { error: "rolesDirty can only be set to false" }).optional(),
   /** Steps the team checked after an earlier one changed: they are no longer out of date. */
   checked: z.array(z.enum(["research", "roles", "competencies", "ladders"])).max(4).optional(),
   /** Removes roles copied from a matched position, so the roles step builds them from the research. */
@@ -131,7 +132,7 @@ export type PatchFracInput = z.infer<typeof patchFracSchema>;
  * competency codes to rewrite ("Revise {code}", "Fix these competencies").
  */
 export const stepSchema = z.object({
-  feedback: z.string().trim().max(5000).optional().transform((s) => s || undefined),
+  feedback: z.string().trim().max(5000).transform((s) => s || undefined).optional(),
   codes: z.array(shortText(20, "Competency code is required")).max(LIMITS.maxCompetencies).optional(),
 });
 export type StepInput = z.infer<typeof stepSchema>;
@@ -152,13 +153,13 @@ export const matchQuerySchema = z.object({
 export type MatchQuery = z.infer<typeof matchQuerySchema>;
 
 /** :versionId in POST /fracs/:id/versions/:versionId/restore. */
-export const versionIdSchema = z.coerce.number({ invalid_type_error: "versionId must be a number" }).int().positive();
+export const versionIdSchema = z.coerce.number({ error: "versionId must be a number" }).int().positive();
 
 /** Kinds of document a FRAC accepts: a brief document (JD or order) for research, or a standard sheet. */
 export const DOCUMENT_KINDS = ["brief", "roles", "competencies", "sources"] as const;
 
 /** POST /fracs/:id/documents form field, and :kind in GET /templates/:kind. */
 export const documentKindSchema = z.object({
-  kind: z.enum(DOCUMENT_KINDS, { errorMap: () => ({ message: "kind must be brief, roles, competencies or sources" }) }),
+  kind: z.enum(DOCUMENT_KINDS, { error: "kind must be brief, roles, competencies or sources" }),
 });
 export type DocumentKindInput = z.infer<typeof documentKindSchema>;

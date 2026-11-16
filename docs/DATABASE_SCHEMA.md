@@ -82,10 +82,13 @@ again finds the review by `fingerprint` and writes nothing new.
 
 ### Growth and clean-up
 
-No code deletes FRACs, versions, reviews, jobs or AI call rows; only a single `frac_documents` row is deleted, when
-the team removes that document. `frac_versions` grows fastest (a full FRAC copy at every step, revise, upload
-and restore). There is no retention job yet. If space matters, agree a retention period and prune old `frac_versions`,
-finished `jobs` and `ai_calls` first; never prune `fracs` or `reviews` without the owner's agreement.
+- **Deleting a FRAC** (`DELETE /v1/fracs/:id`, 16 Nov 2026) removes its `fracs` row, its `frac_versions` and its
+  `frac_documents`; its `reviews` stay with `frac_id` cleared. A FRAC with a running job cannot be deleted.
+- **Versions are capped**: each FRAC keeps its newest `VERSIONS_MAX_PER_FRAC` (50) versions; the oldest are deleted as
+  new ones are saved.
+- **Not pruned yet:** `jobs`, `ai_calls`, `server_runs` and `review_answer_cache` grow with use. If space matters,
+  agree a retention period and prune finished `jobs` and old `ai_calls` first; never prune `fracs` or `reviews` without
+  the owner's agreement.
 
 ## FRAC tables
 

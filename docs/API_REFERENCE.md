@@ -14,12 +14,21 @@ For the path a request takes through the code, with file and line, see [CODE_FLO
 orgportal (browser)                         sunbird-cb-uiproxy                     frac-studio-service
 FracStudioApiService                        protectedApi_v8/fracStudio             Express, port 3005 (3010 locally)
 /apis/protected/v8/fracStudio/<path>   →    checks the session, sets          →    /v1/<path>
-                                            x-user-id = user id
+                                            x-user-id = user id, x-service-key
 ```
 
+- **Proof it came through the proxy (16 Nov 2026).** Every `/v1` request must carry `x-service-key` equal to the
+  service's `SERVICE_KEY` (the uiproxy's `FRAC_STUDIO_SERVICE_KEY`); compared in constant time. Missing or wrong:
+  `401 NOT_FROM_PROXY`. The service refuses to start without `SERVICE_KEY` when `NODE_ENV=production`; locally it
+  is optional. The uiproxy sends no platform API key and no user token to this service.
 - **Identity.** Every `/v1` route needs the `x-user-id` header. The uiproxy sets it from the signed-in
   session and overwrites anything the browser sent. Missing header: `401 NOT_SIGNED_IN`. Every record is scoped to
   that user; another user's FRAC, review or job answers `404`, so ids cannot be probed.
+- **Rate limits.** `RATE_LIMIT_PER_MINUTE` (120) requests per user per minute, of which `RATE_LIMIT_UPLOADS_PER_MINUTE`
+  (20) may be uploads. Over the limit: `429 RATE_LIMITED` with `Retry-After`.
+- **Uploads.** A .docx or .xlsx that would unpack past `DOC_MAX_UNZIPPED_MB` (100) or holds more than
+  `DOC_MAX_ZIP_ENTRIES` (2,000) parts, or a document that takes over `DOC_PARSE_TIMEOUT_MS` (20 s) to read, answers
+  `400 FILE_TOO_COMPLEX` before or during parsing.
 - **Bodies.** JSON, up to `MAX_JSON_MB` (5 MB). Each body is checked with Zod before the controller runs; unknown
   fields are dropped. A bad body answers `400` with the field at fault.
 - **Long work runs as a job.** AI steps, the expert check and reviews answer `202 { jobId }` at once. The portal
@@ -66,6 +75,7 @@ Portal client: `project/ws/app/src/lib/routes/frac-studio/services/frac-studio-a
 | 29 | `GET /v1/fracs/:id/rule-checks` | `ruleChecks` | 200 | none |
 | 30 | `POST /v1/fracs/:id/fixes/outdated` | `replaceOutdated` | 200 | none |
 | 31 | `POST /v1/fracs/:id/fixes/all` | `fixAll` | 202 job | 1 + ladders |
+| 32 | `DELETE /v1/fracs/:id` | `deleteFrac` | 204 | none |
 
 Rows 22–26 and the `seed` on #3 were added for the Nov 2026 review decisions, rows 27–30 on 13 Nov 2026, row 31 on 16 Nov 2026
 (`docs/releases/REVIEW_DECISIONS_2026-11.md`). With documents or a seed, steps 7–10 make fewer AI calls; see
@@ -354,6 +364,14 @@ Rows 22–26 and the `seed` on #3 were added for the Nov 2026 review decisions, 
   `NOT_FOUND`, `VALIDATION_FAILED`.
 - **Cost:** about $0.02–0.05 for the content call, plus about $0.011 per competency for ladders, plus the expert check (about $0.05–0.16; unchanged competencies reuse stored answers).
 
+### 32. `DELETE /v1/fracs/:id` — delete a FRAC
+
+- **When:** Delete on a FRAC in My FRACs, after an inline confirm.
+- **What it does:** deletes the FRAC with its versions and documents. Its reviews stay, with `frac_id` cleared.
+- **Answer `204`.** Errors: `NOT_FOUND` (not yours), `JOB_RUNNING` 409 (a step or check is running on it).
+- Versions are also capped: each FRAC keeps the newest `VERSIONS_MAX_PER_FRAC` (50), the oldest dropped as new ones
+  are saved.
+
 ### 26. `GET /v1/templates/:kind` — upload templates
 
 - **When:** "Download template" next to any upload slot.
@@ -480,7 +498,10 @@ cut the ladders step to well under a cent in a test (4 ladders for $0.004). Repo
 
 | Code | HTTP / where | Meaning and what to do |
 | --- | --- | --- |
+| `NOT_FROM_PROXY` | 401 | Missing or wrong `x-service-key`: the call didn't come through the uiproxy, or the two keys differ |
 | `NOT_SIGNED_IN` | 401 | No `x-user-id` header: the call didn't come through the uiproxy |
+| `RATE_LIMITED` | 429 | Too many requests (or uploads) from this user in a minute; wait the `Retry-After` seconds |
+| `FILE_TOO_COMPLEX` | 400 | An upload would unpack too far, has too many parts, or takes too long to read; save it again as a plain file |
 | `NOT_FOUND` | 404 | No such FRAC, review, job or step, or it belongs to another user |
 | `BRIEF_LOCKED` | 409 | The brief can't change once research exists; start a new FRAC |
 | `STEP_NOT_READY` | 409 | An earlier step is missing |

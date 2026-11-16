@@ -318,6 +318,19 @@ export class FracService {
     };
   }
 
+  /**
+   * Deletes the owner's FRAC (security review, 16 Nov 2026): its versions and documents go with it; its reviews stay,
+   * with the link to the FRAC cleared. Refused with 409 JOB_RUNNING while a step or check is running on it.
+   */
+  async remove(ownerId: string, id: string): Promise<void> {
+    await this.get(ownerId, id);
+    const active = await this.repos.jobs.activeFor(id);
+    if (active) throw conflict("JOB_RUNNING", "A step is running on this FRAC. Wait for it to finish, then delete it.");
+    await this.repos.documents.deleteForFrac(id);
+    await this.repos.reviews.detachFrac(id);
+    await this.repos.fracs.delete(id);
+  }
+
   /** The FRAC if this owner has it; 404 NOT_FOUND otherwise, so other owners' ids are not revealed. */
   async get(ownerId: string, id: string): Promise<Frac> {
     const frac = await this.repos.fracs.get(id);
@@ -425,7 +438,10 @@ export class FracService {
       const done = await this.get(ownerId, id);
       await this.repos.fracs.update({
         ...done,
-        lastFix: { at: new Date().toISOString(), total, fixed: handled.filter((f) => !still.has(f.title)).length, skipped: content.skipped },
+        lastFix: {
+          at: new Date().toISOString(), total, fixed: handled.filter((f) => !still.has(f.title)).length, skipped: content.skipped,
+          changes: { ...content.counts, ladders: codes.length },
+        },
         updatedAt: new Date().toISOString(),
       });
     });

@@ -12,6 +12,8 @@ export interface DocumentRepository {
   listForFrac(fracId: string): Promise<FracDocument[]>;
   /** Removes one document of this FRAC; false when there is none. */
   delete(fracId: string, id: string): Promise<boolean>;
+  /** Removes every document of a FRAC (when the FRAC is deleted; Postgres also cascades). */
+  deleteForFrac(fracId: string): Promise<void>;
 }
 
 interface DocumentRow {
@@ -60,6 +62,10 @@ export class PgDocumentRepository implements DocumentRepository {
     const { rowCount } = await this.pool.query(`DELETE FROM frac_documents WHERE frac_id = $1 AND id = $2`, [fracId, id]);
     return (rowCount ?? 0) > 0;
   }
+
+  async deleteForFrac(fracId: string): Promise<void> {
+    await this.pool.query(`DELETE FROM frac_documents WHERE frac_id = $1`, [fracId]);
+  }
 }
 
 /** In-memory implementation for tests and FRAC_STUDIO_STORE=memory. Copies on the way in and out. */
@@ -79,5 +85,9 @@ export class MemoryDocumentRepository implements DocumentRepository {
     if (at < 0) return false;
     this.rows.splice(at, 1);
     return true;
+  }
+
+  async deleteForFrac(fracId: string): Promise<void> {
+    this.rows.splice(0, this.rows.length, ...this.rows.filter((d) => d.fracId !== fracId));
   }
 }

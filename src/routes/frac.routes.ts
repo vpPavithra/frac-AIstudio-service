@@ -20,6 +20,7 @@ export function fracRoutes(fracs: FracService, documents: DocumentService): Rout
   r.get("/match", c.match);
   r.get("/:id", c.get);
   r.patch("/:id", validateBody(patchFracSchema), c.patch);
+  r.delete("/:id", c.remove);
   r.get("/:id/rule-checks", c.ruleChecks);
   r.post("/:id/fixes/outdated", validateBody(outdatedFixSchema), c.replaceOutdated);
   r.post("/:id/fixes/all", validateBody(fixAllSchema), c.startFixAll);

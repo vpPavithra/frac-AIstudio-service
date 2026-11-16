@@ -2,6 +2,7 @@
 // and ReviewService (open-in-creator). Built by repositories/index.ts.
 import type { Pool } from "pg";
 import type { Frac, FracVersion } from "../models/frac.model.ts";
+import { LIMITS } from "../config/constants.ts";
 import { byNewest, clone, iso } from "./row-helpers.ts";
 
 // FRAC documents and their version snapshots. The FRAC lives in `doc`; the other columns are copies
@@ -15,8 +16,13 @@ export interface FracRepository {
   listByOwner(ownerId: string): Promise<Frac[]>;
   /** The owner's FRACs whose position (cadre) equals `cadre`, ignoring case and surrounding spaces; newest first. */
   findByCadre(ownerId: string, cadre: string): Promise<Frac[]>;
-  /** Saves a full copy of the FRAC as a new version, labelled with `reason` (e.g. "Expert check"). */
+  /**
+   * Saves a full copy of the FRAC as a new version, labelled with `reason` (e.g. "Expert check"), and drops the oldest
+   * versions beyond LIMITS.maxVersionsPerFrac so a busy FRAC cannot grow without bound.
+   */
   snapshot(frac: Frac, reason: string): Promise<void>;
+  /** Removes the FRAC and its versions (frac_versions cascades on Postgres). */
+  delete(id: string): Promise<void>;
   /** Version list (no documents), newest first. */
   versions(fracId: string): Promise<FracVersion[]>;
   version(fracId: string, versionId: number): Promise<Frac | null>;
@@ -63,12 +69,18 @@ export class PgFracRepository implements FracRepository {
   }
 
   async snapshot(f: Frac, reason: string): Promise<void> {
-    await this.pool.query(`INSERT INTO frac_versions (frac_id, step, reason, doc) VALUES ($1, $2, $3, $4)`, [
-      f.id,
-      f.step,
-      reason,
-      f,
-    ]);
+    await this.pool.query(`INSERT INTO frac_versions (frac_id, step, reason, doc) VALUES ($1, $2, $3, $4)`, [f.id, f.step, reason, f]);
+    // Then keep the newest maxVersionsPerFrac. Two plain statements (pg-mem has no data-modifying CTEs); if the prune
+    // ever failed, the only effect would be a few extra old versions until the next snapshot
+    await this.pool.query(
+      `DELETE FROM frac_versions WHERE frac_id = $1 AND id IN (
+         SELECT id FROM frac_versions WHERE frac_id = $1 ORDER BY id DESC OFFSET $2)`,
+      [f.id, LIMITS.maxVersionsPerFrac],
+    );
+  }
+
+  async delete(id: string): Promise<void> {
+    await this.pool.query(`DELETE FROM fracs WHERE id = $1`, [id]);
   }
 
   async versions(fracId: string): Promise<FracVersion[]> {
@@ -130,6 +142,14 @@ export class MemoryFracRepository implements FracRepository {
       createdAt: new Date().toISOString(),
       doc: clone(frac),
     });
+    const mine = this.snapshots.filter((v) => v.fracId === frac.id).sort((a, b) => b.id - a.id);
+    const dropped = new Set(mine.slice(LIMITS.maxVersionsPerFrac).map((v) => v.id));
+    if (dropped.size) this.snapshots.splice(0, this.snapshots.length, ...this.snapshots.filter((v) => !dropped.has(v.id)));
+  }
+
+  async delete(id: string): Promise<void> {
+    this.rows.delete(id);
+    this.snapshots.splice(0, this.snapshots.length, ...this.snapshots.filter((v) => v.fracId !== id));
   }
 
   async versions(fracId: string): Promise<FracVersion[]> {

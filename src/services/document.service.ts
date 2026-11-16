@@ -24,6 +24,7 @@ import { computeChecks, TITLES } from "./review-engine/checks.ts";
 import { fracToModel } from "./review-engine/convert.ts";
 import { normalizeCode } from "./review-engine/refs.ts";
 import type { ReviewRules } from "./review-engine/rules.ts";
+import { assertZipSafe } from "./documents/zip-guard.ts";
 
 /** What the portal lists for a document: everything except the extracted text. */
 export type DocumentInfo = Omit<FracDocument, "text" | "ownerId"> & { chars: number };
@@ -44,6 +45,7 @@ const info = ({ text, ownerId: _owner, ...rest }: FracDocument): DocumentInfo =>
 async function readSheets(file: UploadedFile): Promise<SheetData[]> {
   if (!SHEET_EXTENSIONS.test(file.name)) throw badRequest("FILE_TYPE_NOT_ALLOWED", "Upload the sheet as .xlsx or .csv");
   if (/\.csv$/i.test(file.name)) return readCsv(file.buffer, file.name);
+  assertZipSafe(file.buffer, file.name);
   try {
     return await readWorkbook(file.buffer);
   } catch {

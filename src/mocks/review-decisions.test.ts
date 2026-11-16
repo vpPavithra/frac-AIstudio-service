@@ -496,6 +496,9 @@ describe("review decisions on the mock provider", () => {
     expect(frac.review.findings.some((f: { title: string }) => f.title === "Outdated reference: VHND / Village Health and Nutrition Day")).toBe(false);
     expect(frac.lastFix).toMatchObject({ total: 5, skipped: [{ finding: "Does not reflect Uttar Pradesh" }] });
     expect(frac.lastFix.fixed).toBeGreaterThanOrEqual(1);
+    // What changed: VHND swapped and A-structure rewritten (2 activities), one competency added, ladders for the
+    // bloom finding's competency and the new one
+    expect(frac.lastFix.changes).toEqual({ activities: 2, competencies: 0, added: 1, ladders: 2 });
     expect(frac.lastFix.at > frac.review.at).toBe(true);
 
     const versions = await request(ctx.app).get(`/v1/fracs/${id}/versions`).set(OWNER).expect(200);
@@ -523,5 +526,31 @@ describe("review decisions on the mock provider", () => {
     // The re-run check replaced the injected findings, so that title is gone and the button would be refused
     await request(ctx.app).post(`/v1/fracs/${id}/fixes/all`).set(OWNER).send({ titles: ["Activities read as syllabus outcomes"] }).expect(409);
     await request(ctx.app).post(`/v1/fracs/${id}/fixes/all`).set(OWNER).send({ titles: ["No such finding"] }).expect(409);
+  });
+
+  it("deletes a FRAC with its versions and documents, keeps its expert-check review, and refuses while a step runs", async () => {
+    const ctx = setup();
+    const id = await create(ctx, { cadre: "ANM", state: "Bihar", size: "compact" });
+    for (const name of ["research", "competencies", "roles", "ladders"]) await step(ctx, id, name);
+    await upload(ctx, id, "brief", Buffer.from("Job description: ANM at the Sub-Centre."), "jd.txt").expect(201);
+    const check = await request(ctx.app).post(`/v1/fracs/${id}/steps/check`).set(OWNER).expect(202);
+    await ctx.runner.idle();
+    expect((await request(ctx.app).get(`/v1/jobs/${check.body.jobId}`).set(OWNER)).body.status).toBe("done");
+    const [review] = await ctx.repos.reviews.listByOwner("mock-user");
+    expect(review.fracId).toBe(id);
+
+    // Another owner cannot delete it; a running step blocks the delete
+    await request(ctx.app).delete(`/v1/fracs/${id}`).set(OTHER).expect(404);
+    const now = new Date().toISOString();
+    await ctx.repos.jobs.insert({ id: "job-live", ownerId: "mock-user", kind: "roles", targetId: id, status: "running", msg: "", done: 0, total: 0,
+      error: null, errorCode: null, usage: {}, createdAt: now, updatedAt: now });
+    await request(ctx.app).delete(`/v1/fracs/${id}`).set(OWNER).expect(409);
+    await ctx.repos.jobs.update("job-live", { status: "done" });
+
+    await request(ctx.app).delete(`/v1/fracs/${id}`).set(OWNER).expect(204);
+    await request(ctx.app).get(`/v1/fracs/${id}`).set(OWNER).expect(404);
+    expect(await ctx.repos.fracs.versions(id)).toHaveLength(0);
+    expect(await ctx.repos.documents.listForFrac(id)).toHaveLength(0);
+    expect((await ctx.repos.reviews.get(review.id))?.fracId).toBeNull();
   });
 });

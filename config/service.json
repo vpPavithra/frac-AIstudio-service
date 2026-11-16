@@ -36,6 +36,13 @@
   "DOC_MAX_CHARS": 30000,
   "DOC_MAX_BRIEF_FILES": 3,
   "RESEARCH_SEARCH_MAX_USES_WITH_DOCS": 1,
+  "// rate limits": "Security review (16 Nov 2026). Requests per signed-in user per minute across the API (RATE_LIMIT_PER_MINUTE) and uploads of documents and review workbooks (RATE_LIMIT_UPLOADS_PER_MINUTE). Over the limit the user gets 429 and a Retry-After. 0 turns a limit off.",
+  "RATE_LIMIT_PER_MINUTE": 120,
+  "RATE_LIMIT_UPLOADS_PER_MINUTE": 20,
+  "// upload safety": "Security review (16 Nov 2026). A .docx or .xlsx upload is a zip and is refused before parsing when it would unpack to more than DOC_MAX_UNZIPPED_MB or holds more than DOC_MAX_ZIP_ENTRIES parts; reading one document (PDF text) may take at most DOC_PARSE_TIMEOUT_MS.",
+  "DOC_MAX_UNZIPPED_MB": 100,
+  "DOC_MAX_ZIP_ENTRIES": 2000,
+  "DOC_PARSE_TIMEOUT_MS": 20000,
 
   "// source links": "The View button on each research source opens its page. A page the web search returned is kept only when its title matches the source title by more than SOURCE_LINK_MIN_MATCH (0.6 = 60%), else it is ignored; an address the model gave must be on RESEARCH_SEARCH_DOMAINS or SOURCE_LINK_DOMAINS (sites that host the guidelines but are not searched, such as nhsrcindia.org for IPHS and who.int) and answer a quick request (SOURCE_LINK_CHECK_TIMEOUT_MS, redirects included) or it is dropped. SOURCE_LINK_MAX_CHECKS caps the requests per research run; 0 keeps only searched pages.",
   "SOURCE_LINK_CHECK_TIMEOUT_MS": 3000,
@@ -49,6 +56,7 @@
   "MAX_ROLES": 200,
   "MAX_ACTIVITIES_PER_ROLE": 200,
   "MAX_COMPETENCIES": 500,
+  "VERSIONS_MAX_PER_FRAC": 50,
   "MAX_POSTINGS": 20,
 
   "JOB_STALE_AFTER_MS": 900000,

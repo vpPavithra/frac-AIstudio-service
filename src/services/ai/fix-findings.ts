@@ -87,6 +87,7 @@ export function applyFixEdits(frac: Frac, edits: FixEdits, maxNew = FIX_ALL.maxN
   added.forEach((c, i) => c.activities.forEach((a) => link.set(normalizeCode(a.code), `${codes[i]}@L${a.level}`)));
 
   let changes = 0;
+  const counts = { activities: 0, competencies: 0, added: 0 };
   const roles = frac.roles.map((r) => ({
     ...r,
     activities: r.activities.map((a) => {
@@ -95,6 +96,7 @@ export function applyFixEdits(frac: Frac, edits: FixEdits, maxNew = FIX_ALL.maxN
       const comp = link.get(key);
       if (!text && !comp) return a;
       changes += 1;
+      if (text && text !== a.text) counts.activities += 1;
       return { ...a, ...(text ? { text } : {}), ...(comp ? { comp } : {}) };
     }),
   }));
@@ -110,33 +112,45 @@ export function applyFixEdits(frac: Frac, edits: FixEdits, maxNew = FIX_ALL.maxN
       ...(e.type ? { type: e.type } : {}),
       ...(clip(e.area) ? { area: clip(e.area) } : {}),
     };
-    if (JSON.stringify(next) !== JSON.stringify(c)) changes += 1;
+    if (JSON.stringify(next) !== JSON.stringify(c)) {
+      changes += 1;
+      counts.competencies += 1;
+    }
     return next;
   });
   const fresh: FracCompetency[] = added.map((c, i) => ({
     code: codes[i], label: clip(c.label), description: clip(c.description), type: c.type, area: clip(c.area), kcm: "", levels: null,
   }));
   changes += fresh.length;
+  counts.added = fresh.length;
 
-  return { roles, competencies: [...competencies, ...fresh], newCodes: fresh.map((c) => c.code), changes };
+  return { roles, competencies: [...competencies, ...fresh], newCodes: fresh.map((c) => c.code), changes, counts };
 }
 
 /**
  * Step 2 of the job: one complex-tier call for the content findings, then applyFixEdits on the latest saved FRAC.
  * Returns the codes of added competencies (for the ladders step) and the agent's skipped list. Nothing to send → no call.
  */
-export async function fixContentFindings(ctx: StepContext, findings: Finding[]): Promise<{ newCodes: string[]; skipped: FracLastFix["skipped"]; changes: number }> {
-  if (!findings.length) return { newCodes: [], skipped: [], changes: 0 };
+export interface ContentFixResult {
+  newCodes: string[];
+  skipped: FracLastFix["skipped"];
+  changes: number;
+  /** Activities rewritten, competencies changed, competencies added: shown in the portal's Last fix box. */
+  counts: { activities: number; competencies: number; added: number };
+}
+
+export async function fixContentFindings(ctx: StepContext, findings: Finding[]): Promise<ContentFixResult> {
+  if (!findings.length) return { newCodes: [], skipped: [], changes: 0, counts: { activities: 0, competencies: 0, added: 0 } };
   const sent = findings.map((f) => ({ check: f.check, title: f.title, detail: f.detail, fix: f.fix, refs: f.refs }));
   const edits = await callModel(ctx, "fix-findings", "complex", fixFindingsPrompt(ctx.frac, sent, FIX_ALL.maxNewCompetencies),
     { cadre: ctx.frac.cadre, state: ctx.frac.state, findings: sent, prefix: ctx.frac.codePrefix || "C",
       activities: ctx.frac.roles.flatMap((r) => r.activities.map((a) => ({ code: a.code, text: a.text }))),
       competencies: ctx.frac.competencies.map((c) => ({ code: c.code, label: c.label, type: c.type })) },
     fixFindingsOutput);
-  let result = { newCodes: [] as string[], changes: 0 };
+  let result: Omit<ContentFixResult, "skipped"> = { newCodes: [], changes: 0, counts: { activities: 0, competencies: 0, added: 0 } };
   await ctx.save((latest) => {
     const applied = applyFixEdits(latest, edits);
-    result = { newCodes: applied.newCodes, changes: applied.changes };
+    result = { newCodes: applied.newCodes, changes: applied.changes, counts: applied.counts };
     return { roles: applied.roles, competencies: applied.competencies, reviewStale: !!latest.review };
   });
   // Kept as the agent wrote them: it may shorten a finding's title, and a dropped skip would hide work left to do

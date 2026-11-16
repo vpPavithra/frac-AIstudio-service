@@ -1,5 +1,5 @@
 // Builds the Express app: request id, access log, security headers, CORS, JSON body parsing,
-// GET /health (no auth), then the /v1 API behind requireOwner, and the one error handler last.
+// GET /health (no auth), then the /v1 API behind requireServiceKey and requireOwner, and the one error handler last.
 // Called by server.ts (and by the API tests) with the services already wired. Reads CORS and
 // LIMITS from config/constants.ts. Has no side effects of its own: it does not listen.
 import express from "express";
@@ -8,7 +8,8 @@ import helmet from "helmet";
 import { CORS, LIMITS } from "./config/constants.ts";
 import { health } from "./health/health.controller.ts";
 import { errorHandler } from "./middleware/errorHandler.ts";
-import { requireOwner, USER_ID_HEADER } from "./middleware/auth.ts";
+import { requireOwner, requireServiceKey, USER_ID_HEADER } from "./middleware/auth.ts";
+import { rateLimitPerOwner } from "./middleware/rate-limit.ts";
 import { requestContextMiddleware } from "./middleware/requestContext.ts";
 import { requestLogger } from "./middleware/requestLogger.ts";
 import { apiRoutes, type RouteDeps } from "./routes/index.ts";
@@ -34,7 +35,7 @@ export function createApp(deps: RouteDeps): express.Express {
   app.use(express.json({ limit: `${LIMITS.maxJsonMb}mb` }));
 
   app.get("/health", health);
-  app.use("/v1", requireOwner, apiRoutes(deps));
+  app.use("/v1", requireServiceKey, requireOwner, rateLimitPerOwner(), apiRoutes(deps));
   app.use(errorHandler);
 
   return app;

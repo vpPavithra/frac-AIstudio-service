@@ -158,6 +158,8 @@ export interface FracLastFix {
   fixed: number;
   /** Findings the agent could not fix without inventing facts, with the reason, for a hand fix. */
   skipped: { finding: string; reason: string }[];
+  /** What the fix changed: activities rewritten, competencies changed and added, ladders rewritten. Missing on older runs. */
+  changes?: { activities: number; competencies: number; added: number; ladders: number };
 }
 
 /** The Creator tab a quick check belongs on. */

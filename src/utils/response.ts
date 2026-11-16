@@ -29,7 +29,7 @@ export class ApiError extends Error {
 // Shorthands for the common statuses. Codes fixed here: NOT_SIGNED_IN (401), NOT_FOUND (404), PAYLOAD_TOO_LARGE (413)
 export const badRequest = (code: string, message: string, details?: unknown) =>
   new ApiError(400, code, message, details);
-export const unauthorized = (message = "Not signed in") => new ApiError(401, "NOT_SIGNED_IN", message);
+export const unauthorized = (message = "Not signed in", code = "NOT_SIGNED_IN") => new ApiError(401, code, message);
 export const notFound = (what: string) => new ApiError(404, "NOT_FOUND", `${what} not found`);
 export const conflict = (code: string, message: string) => new ApiError(409, code, message);
 export const payloadTooLarge = (message: string) => new ApiError(413, "PAYLOAD_TOO_LARGE", message);
