@@ -2,7 +2,7 @@
 // 3a: one complex-tier call drafts the roles. 3b: default-tier calls write the activities, AI.stepBatchSize
 // roles per call with AI.stepParallel calls at once (AI_BATCH_SIZE, AI_BATCH_PARALLEL). Counts come from the
 // brief size (config/frac-sizes.json). Activities are saved once, at the end, not per batch.
-// Flow: brief -> research -> roles & activities -> competencies -> ladders -> expert check.
+// Flow: brief -> research -> competencies -> roles & activities -> ladders -> expert check.
 import type { Frac, FracActivity, FracRole } from "../../models/frac.model.ts";
 import { JOB_MESSAGES } from "../queue/job-messages.ts";
 import { runInBatches } from "./batching.ts";
@@ -66,13 +66,12 @@ export function keepGivenRoles(frac: Frac, briefDocuments: number): boolean {
 }
 
 /**
- * With a team's Competencies sheet (uploaded on the Research tab, review 13 Nov 2026) the competencies exist before
- * the roles, so the roles job ends by mapping the new activities to them (mapToSheet, one default-tier call). The
- * roles are saved first: a write that changes roles and mappings together leaves Competencies out of date
- * (step-changes.ts), while a mappings-only write stamps it. Without a sheet the patch is returned as it is.
+ * Competencies come before roles (from a team's sheet, or derived from the research; 16 Nov 2026), so the roles job
+ * ends by mapping the new activities to them (mapToSheet, one default-tier call). The roles are saved first, then the
+ * mapping is a mappings-only write (step-changes.ts). An older FRAC with no competencies yet gets the patch as it is.
  */
-async function withSheetMapping(ctx: StepContext, patch: Partial<Frac>): Promise<Partial<Frac>> {
-  if (!ctx.frac.uploads?.competencies || !ctx.frac.competencies.length) return patch;
+async function withCompetencyMapping(ctx: StepContext, patch: Partial<Frac>): Promise<Partial<Frac>> {
+  if (!ctx.frac.competencies.length) return patch;
   const saved = await ctx.save(() => patch);
   return mapToSheet({ ...ctx, frac: saved, feedback: undefined });
 }
@@ -88,7 +87,7 @@ async function fillGaps(ctx: StepContext): Promise<Partial<Frac>> {
   if (!empty.length) return { roles: renumberRoles(frac.roles) };
   const written = await writeActivities(ctx, empty.map((r) => ({ code: r.code, title: r.title })), SIZE_TARGETS[frac.size]);
   const roles = frac.roles.map((r) => (r.activities.length ? r : { ...r, activities: written.get(r.code) ?? [] }));
-  return withSheetMapping(ctx, { roles: renumberRoles(roles), rolesDirty: frac.competencies.length > 0, review: null, reviewStale: false });
+  return withCompetencyMapping(ctx, { roles: renumberRoles(roles), rolesDirty: frac.competencies.length > 0, review: null, reviewStale: false });
 }
 
 /**
@@ -125,5 +124,5 @@ export async function runRoles(ctx: StepContext): Promise<Partial<Frac>> {
 
   // Copied roles, if any, are replaced now
   const seededFrom = frac.seededFrom ? { seededFrom: { ...frac.seededFrom, withRoles: false } } : {};
-  return withSheetMapping(ctx, { roles: renumberRoles(built), ...seededFrom, rolesDirty: frac.competencies.length > 0, review: null, reviewStale: false });
+  return withCompetencyMapping(ctx, { roles: renumberRoles(built), ...seededFrom, rolesDirty: frac.competencies.length > 0, review: null, reviewStale: false });
 }

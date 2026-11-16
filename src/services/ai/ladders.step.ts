@@ -2,7 +2,7 @@
 // for "Revise {code}" and the expert check's "Fix these competencies" (both pass `codes`). Default-tier calls,
 // AI.stepBatchSize competencies per call with AI.stepParallel calls at once (AI_BATCH_SIZE, AI_BATCH_PARALLEL).
 // Unlike the other steps it saves after every batch, so a failed job keeps the ladders already written.
-// Flow: brief -> research -> roles & activities -> competencies -> ladders -> expert check.
+// Flow: brief -> research -> competencies -> roles & activities -> ladders -> expert check.
 import type { Frac, FracCompetency, Level } from "../../models/frac.model.ts";
 import { JOB_MESSAGES } from "../queue/job-messages.ts";
 import { runInBatches } from "./batching.ts";

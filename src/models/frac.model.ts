@@ -121,6 +121,8 @@ export interface Frac {
   reviewStale?: boolean;
   /** The agent's last "Check roles against the job description" on the Roles tab; out of date when changedAt.roles is later than its `at`. */
   rolesCheck?: FracRolesCheck;
+  /** The last "Fix all findings" run on the expert check: how many findings it handled and what the agent skipped. */
+  lastFix?: FracLastFix;
   /**
    * When each step's content last changed (an edit, an AI run, a sheet upload) or the team marked it checked.
    * A step with output is out of date when an earlier step changed after it. Missing on older FRACs.
@@ -145,6 +147,17 @@ export interface FracRolesCheck {
   at: string;
   summary: string;
   findings: FracRoleFinding[];
+}
+
+/** What the last "Fix all findings" did (FracService.startFixAll). `fixed` counts findings it acted on. */
+export interface FracLastFix {
+  at: string;
+  /** Open findings when it started. */
+  total: number;
+  /** Findings it acted on: names replaced, ladders rewritten, content edited. The next expert check confirms them. */
+  fixed: number;
+  /** Findings the agent could not fix without inventing facts, with the reason, for a hand fix. */
+  skipped: { finding: string; reason: string }[];
 }
 
 /** The Creator tab a quick check belongs on. */

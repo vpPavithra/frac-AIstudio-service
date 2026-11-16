@@ -124,6 +124,8 @@ export class MockTextProvider implements TextProvider {
         return this.reviewState(input);
       case "verify-roles":
         return this.verifyRoles(input);
+      case "fix-findings":
+        return this.fixFindings(input);
     }
   }
 
@@ -195,6 +197,34 @@ export class MockTextProvider implements TextProvider {
    * "Check roles against the job description" answer: two sample findings on the first role (an unclear activity, a posting to
    * look at) so the panel has something to show; none when the FRAC has no activities.
    */
+  /**
+   * "Fix all findings" answer: rewrites the first activity a finding names, adds one competency for a coverage
+   * finding (linked to the activities it names), and skips state-fit findings, so every branch is exercised.
+   */
+  private fixFindings(input: Record<string, unknown>) {
+    const findings = (input.findings ?? []) as { check: string; title: string; fix: string; refs: string[] }[];
+    const activities = (input.activities ?? []) as { code: string; text: string }[];
+    const activityCodes = new Set(activities.map((a) => a.code));
+    const named = (f: { refs: string[] }) => f.refs.map((r) => r.split("@")[0]).filter((r) => activityCodes.has(r));
+    const structure = findings.find((f) => f.check === "structure" && named(f).length);
+    const coverage = findings.find((f) => f.check === "coverage" && named(f).length);
+    // "Outdated reference: VHND / …" with fix "Replace with VHSND.": swap the name in the activities it names
+    const swaps = findings.filter((f) => f.title.startsWith("Outdated reference:")).flatMap((f) => {
+      const found = f.title.replace("Outdated reference:", "").split("/")[0].trim();
+      const correct = /^Replace with (.+?)\.?$/.exec(f.fix)?.[1]?.replace(/\s*\(\d{4}\)$/, "");
+      return correct ? activities.filter((a) => named(f).includes(a.code)).map((a) => ({ code: a.code, text: a.text.split(found).join(correct) })) : [];
+    });
+    return {
+      activities: [...swaps, ...(structure ? [{ code: named(structure)[0], text: "Conduct the task at the workplace and record it in the register." }] : [])],
+      competencies: [],
+      newCompetencies: coverage
+        ? [{ label: "Core area care", description: "Delivers the core service areas the FRAC was missing.", type: "Domain", area: "Service delivery",
+          activities: named(coverage).slice(0, 5).map((code) => ({ code, level: 3 })) }]
+        : [],
+      skipped: findings.filter((f) => f.title.startsWith("Does not reflect")).map((f) => ({ finding: f.title, reason: "The research names no state scheme to add; add it by hand." })),
+    };
+  }
+
   private verifyRoles(input: Record<string, unknown>) {
     const roles = (input.roles ?? []) as { code: string; activities: { code: string }[] }[];
     const first = roles.find((r) => r.activities.length);
@@ -256,7 +286,9 @@ export class MockTextProvider implements TextProvider {
     const p = this.profile(String(input.cadre ?? ""));
     const prefix = String(input.prefix ?? "C");
     const activities = (input.activities as { code: string; text: string }[] | undefined) ?? [];
-    const count = Math.min(Number(input.count ?? p.competencies.length), p.competencies.length, Math.max(activities.length, 1));
+    // Before roles (competencies first) there are no activities to cap the count by: the brief size decides it
+    const wanted = Number(input.count ?? p.competencies.length);
+    const count = Math.min(wanted, p.competencies.length, activities.length ? activities.length : wanted);
     const comps = byScope(p.competencies, String(input.scope ?? ""), (c) => `${c.label} ${c.description} ${c.area}`, count)
       .map((c, i) => ({ code: `${prefix}${i + 1}`, ...c }));
     const compWords = comps.map((c) => words(`${c.label} ${c.description}`));

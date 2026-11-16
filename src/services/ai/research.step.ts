@@ -5,7 +5,7 @@
 // With team documents attached (review, Nov 2026) it runs in two parts: a cheaper default-tier call reads the
 // documents alone and says what they cover, then the research call (with web search) fills only the gaps, and is
 // skipped when nothing is left. research.origin records which parts came from the documents and which from the agent.
-// Flow: brief -> research -> roles & activities -> competencies -> ladders -> expert check.
+// Flow: brief -> research -> competencies -> roles & activities -> ladders -> expert check.
 import type { z } from "zod/v4";
 import { DOCUMENTS, LIMITS } from "../../config/constants.ts";
 import type { Frac, FracResearch, FracSize, FracSource, ResearchField } from "../../models/frac.model.ts";

@@ -5,6 +5,21 @@ full pre-deploy test checklist passes.
 
 ## Unreleased: FRAC Studio review decisions (11 Nov 2026)
 
+Added 16 Nov 2026:
+- **Competencies before roles, for every FRAC.** After research the competencies step derives the competencies from
+  the research and the job description (a new `competenciesFromResearchPrompt`), and the roles job maps every
+  activity to them, as it already did with a competency sheet. `FRAC_STEPS` is now brief, research, competencies,
+  roles, ladders; mappings (and `rolesDirty`) belong to the roles step. With activities and current competencies, the
+  competencies step only maps ("Map activities to competencies"). Older roles-first FRACs keep working.
+- **Fix all re-runs the expert check** in the same `fix-all` job, so one click fixes and re-checks; `lastFix.fixed`
+  counts the findings the new check no longer raises.
+- **Fix findings with the agent.** `POST /v1/fracs/:id/fixes/all` runs a `fix-all` job, for every open finding or for
+  the `titles` given (each finding's "Fix with the agent" button). One `fix-findings` agent call handles coverage,
+  structure, state-fit and outdated-name findings, then ladders run.
+  The agent call returns activity rewrites, competency changes and up to 5 new competencies, applied only to codes
+  that exist. The job saves `frac.lastFix` with what the agent skipped and why. A version is saved first, so History
+  can undo it. Before this, Fix all covered ladder findings only.
+
 Added 13 Nov 2026, actions on the Roles tab after a sheet upload:
 - **Re-apply a sheet.** `POST /v1/fracs/:id/documents/:documentId/apply` puts an uploaded sheet's rows back over
   later edits, after saving a version. Sheets now keep their imported rows in `frac_documents.parsed`; older

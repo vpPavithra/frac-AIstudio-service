@@ -80,14 +80,18 @@ Kaushal drafts the roles, then writes the activities for each role. It needs res
 
 **Roles tab (13 Nov 2026):** roles and activities are built by the agent. The tab has no upload box, re-apply or roles check; a Roles sheet uploaded earlier still works on that FRAC. The quick checks at the top show its Bloom's verbs and FRAC structure findings. (`POST /v1/fracs/:id/roles/verify` stays in the service but the portal no longer offers it.)
 
-**Fixing expert-check findings (13 Nov 2026):** "Fix these competencies" and "Fix all findings" rewrite level ladders, so they show only for findings about ladder text (Bloom's verbs, the ladder shape, scope quoted from a level). An outdated name gets **Replace with … (no AI)**, which swaps it everywhere the check reads it (names, descriptions, ladders, activities). Missing competencies, types and state fit are fixed by hand on their tab. After an upload or edit leaves a step out of date, the footer follows the tab you are updating, as the first build did: on Research, Competencies, Roles & activities or Level ladders it offers **Re-run …** for that tab's own step, with its rough cost; on Expert check or History it offers **Open … to re-run it** for the earliest out-of-date step (no AI call until you are there).
+**Fixing expert-check findings (16 Nov 2026):** every open finding has **Fix with the agent**, and **Fix all findings** fixes them all in one job (`POST /v1/fracs/:id/fixes/all`). The agent replaces outdated names, rewrites activities, changes or adds competencies and rewrites the ladders a finding names; whatever it cannot fix without inventing facts is listed with the reason. After an upload or edit leaves a step out of date, the footer follows the tab you are updating, as the first build did: on Research, Competencies, Roles & activities or Level ladders it offers **Re-run …** for that tab's own step, with its rough cost; on Expert check or History it offers **Open … to re-run it** for the earliest out-of-date step (no AI call until you are there).
 
 **Quick checks (13 Nov 2026):** the Roles, Competencies and Level ladders tabs show the expert check's Bloom's verbs and FRAC structure findings for that tab at the top, re-run after every upload, step and save (rules only, no AI, no cost). Each roles and competency sheet also lists the rule findings about its rows under the sheet at upload. When quick-check issues are still open, a line next to "Run expert check" says so. The expert check still runs every rule and the AI checklist.
 
 **Flow changes (13 Nov 2026, after testing):**
 - **Competency sheet first:** it uploads on the Research tab, under the Sources sheet. The tabs and the progress tracker run Research, Competencies, Roles & activities, Level ladders, Expert check: the sheet's competencies show right after research, and a step counts as done only once it is reached. The roles job then maps each new activity to them (one mapping call at the end), so there is no separate mapping click. Without a sheet, competencies are derived after Roles & activities, as before.
 - **Roles are built by the agent:** the Roles tab has no upload box and no roles check. A Roles sheet uploaded earlier still works on that FRAC.
-- **Fix all on the expert check:** one button rewrites the ladders of every competency the open findings name, in one run (about $0.011 per competency), then the check shows out of date. Findings that name only activities, roles or missing areas are listed under it for a hand fix.
+- **Fixing findings with the agent (16 Nov 2026):** every open finding has a **Fix with the agent** button, and **Fix all findings** fixes them all in one job. Each saves a version first:
+  - one agent call replaces outdated names and rewrites the activities and competencies that coverage, structure and state-fit findings name, and adds missing competencies (up to 5);
+  - the ladders step rewrites the ladders that ladder findings name and writes ladders for the new competencies.
+
+  Findings the agent cannot fix without inventing facts are listed under the button with the reason. The same job then re-runs the expert check, so the findings shown are what is left. Cost: about $0.02–0.05, plus about $0.011 per competency.
 - **Create FRAC form:** the job description box has no "Download template" link; the Research tab keeps it.
 
 1. **Roles:** one high-effort call returns the target number of roles for the size, each with a title and source.
@@ -102,7 +106,7 @@ Kaushal drafts the roles, then writes the activities for each role. It needs res
 
 ## Step 4: Competencies
 
-Kaushal derives the competencies from the activities in one high-effort call, and maps every activity to one competency at one level. It needs at least one role with activities.
+Competencies come before roles (16 Nov 2026). After research, Kaushal derives the competencies the job needs from the research and any job description, in one high-effort call. The roles step then builds the roles and activities and maps every activity to one competency at one level in the same job. A competency sheet replaces the derive call. When activities change after mapping, "Map activities to competencies" maps them again without changing the competencies; a revise with feedback re-derives them.
 
 **Each competency has:** a code (the FRAC's prefix plus a number, e.g. ANM7), a label, a description, a type (Domain, Functional or Behavioural), an area and an optional KCM tag.
 
@@ -294,7 +298,7 @@ The service's automated suite passes: 168 tests passed and 3 skipped (the 3 need
 - [ ] Exact METHOD and SOURCE\_LIBRARY prompt text from `frac-studio.html`
 - [ ] Clinical team answers: ME68 operative-procedure flags on define/assist indicators; ASHA scope "instead" texts marked (verify); scope lists for Staff Nurse, GNM and CHO ("planning" fixed 9 Nov)
 - [x] First runs with a real key: three FRACs on Claude, cost per step in `reports/fracs/`
-- [ ] "Fix these competencies" for label and state findings (proposed: route each finding to the step that can fix it)
+- [x] Label, structure, coverage and state findings: "Fix all findings" sends them to the agent as content edits (16 Nov 2026)
 - [ ] Quality comparison before switching to `claude-mixed` or lower effort (about $5)
 - [ ] View-only user walkthrough in the app, then one deploy after full testing
 

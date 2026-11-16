@@ -140,6 +140,10 @@ export type StepInput = z.infer<typeof stepSchema>;
 export const outdatedFixSchema = z.object({ title: shortText(300, "Finding title is required") });
 export type OutdatedFixInput = z.infer<typeof outdatedFixSchema>;
 
+/** POST /fracs/:id/fixes/all: optional finding titles to fix ("Fix with the agent" on one finding); none means all open findings. */
+export const fixAllSchema = z.object({ titles: z.array(shortText(300, "Finding title is required")).max(100).optional() });
+export type FixAllInput = z.infer<typeof fixAllSchema>;
+
 /** GET /fracs/match: the position typed on the brief, and its state to rank same-state FRACs first. */
 export const matchQuerySchema = z.object({
   cadre: shortText(200, "Position is required"),

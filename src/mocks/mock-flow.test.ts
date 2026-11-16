@@ -58,27 +58,28 @@ describe("full flow on the mock AI provider", () => {
     await request(app).patch(`/v1/fracs/${id}`).set(OWNER).send({ cadre: "GNM" }).expect(200);
     await request(app).patch(`/v1/fracs/${id}`).set(OWNER).send({ cadre: "ANM" }).expect(200);
 
-    // Step 3: roles then activities in batches of 4 (spec 5.3)
+    // Competencies come first, from the research: no activities to map yet (16 Nov 2026)
+    await step(app, runner, id, "competencies");
+    frac = await getFrac(app, id);
+    expect(frac.roles).toHaveLength(0);
+    expect(frac.competencies).toHaveLength(18);
+    expect(frac.competencies[0].code).toBe("ANM1");
+    expect(frac.competencies.every((c: { levels: unknown }) => c.levels === null)).toBe(true);
+
+    // Roles then activities in batches of 4 (spec 5.3), then every activity mapped to a competency in the same job
     const roles = await step(app, runner, id, "roles");
     frac = await getFrac(app, id);
     expect(frac.roles).toHaveLength(7);
     const activities = frac.roles.flatMap((r: { activities: { code: string; comp: string; postings: object }[] }) => r.activities);
     expect(activities).toHaveLength(35);
     expect(activities.map((a: { code: string }) => a.code)).toEqual(activities.map((_: unknown, i: number) => `A${i + 1}`));
-    expect(activities.every((a: { comp: string }) => a.comp === "")).toBe(true);
     expect(Object.keys(activities[0].postings)).toEqual(["P1", "P2"]);
-    expect(roles.usage.calls).toBe(1 + 2); // 1 roles call + 2 activity batches (4 + 3 roles)
-
-    // Step 4: competencies; every activity mapped, every competency used (spec 5.4)
-    await step(app, runner, id, "competencies");
-    frac = await getFrac(app, id);
-    expect(frac.competencies).toHaveLength(18);
-    expect(frac.competencies[0].code).toBe("ANM1");
-    const mapped = frac.roles.flatMap((r: { activities: { comp: string }[] }) => r.activities.map((a) => a.comp));
+    expect(roles.usage.calls).toBe(1 + 2 + 1); // 1 roles call + 2 activity batches (4 + 3 roles) + 1 mapping call
+    const mapped = activities.map((a: { comp: string }) => a.comp);
     expect(mapped.every((c: string) => /^ANM\d+@L[3-5]$/.test(c))).toBe(true);
-    const used = new Set(mapped.map((c: string) => c.split("@")[0]));
-    expect(frac.competencies.every((c: { code: string }) => used.has(c.code))).toBe(true);
-    expect(frac.competencies.every((c: { levels: unknown }) => c.levels === null)).toBe(true);
+    expect(frac.rolesDirty).toBe(false);
+    // Built in flow order, so no step is left older than the one before it
+    expect(frac.changedAt.roles >= frac.changedAt.competencies).toBe(true);
 
     // Step 5: ladders, 4 per batch, progress counts competencies (spec 5.5)
     const ladders = await step(app, runner, id, "ladders");
@@ -104,7 +105,7 @@ describe("full flow on the mock AI provider", () => {
     expect(frac.review).toMatchObject({ engine: "r3", fingerprint: expect.stringMatching(/^[0-9a-f]{40}$/) });
     expect(frac.review.verdict).toMatch(/^(Revise before use|Usable with minor edits|Rebuild from the job before use) — /);
     expect(frac.review.strengths.length).toBeGreaterThan(0);
-    expect(frac.log.map((l: { step: number }) => l.step)).toEqual([2, 3, 4, 5]);
+    expect(frac.log.map((l: { step: number }) => l.step)).toEqual([2, 4, 3, 5]); // step numbers: competencies 4 now runs before roles 3
 
     // Download, then re-import through the Reviewer (spec 7 round trip)
     const file = await request(app).get(`/v1/fracs/${id}/export.xlsx`).set(OWNER).buffer(true).parse((res, done) => {
@@ -133,7 +134,7 @@ describe("full flow on the mock AI provider", () => {
   it("revises with feedback, keeps team-added activities and rewrites only the named ladders", async () => {
     const { app, runner } = setup();
     const id = (await request(app).post("/v1/fracs").set(OWNER).send({ cadre: "ANM", size: "compact" })).body.id as string;
-    for (const s of ["research", "roles", "competencies", "ladders"]) await step(app, runner, id, s);
+    for (const s of ["research", "competencies", "roles", "ladders"]) await step(app, runner, id, s);
 
     // Research revise records the feedback (log + version)
     await step(app, runner, id, "research", { feedback: "Add the state's 104 helpline" });
@@ -143,7 +144,7 @@ describe("full flow on the mock AI provider", () => {
     const versions = await request(app).get(`/v1/fracs/${id}/versions`).set(OWNER);
     expect(versions.body.versions[0].reason).toBe("Job research (revised)");
 
-    // A team-added activity survives a roles revise; competencies are kept and flagged (gap 2)
+    // A team-added activity survives a roles revise; the roles job maps every activity to the competencies again
     const roles = frac.roles.map((r: { activities: object[] }, i: number) =>
       i === 0 ? { ...r, activities: [...r.activities, { code: "", text: "Hold a team huddle", postings: {}, source: "Added by team", tier: "", comp: "" }] } : r);
     await request(app).patch(`/v1/fracs/${id}`).set(OWNER).send({ roles }).expect(200);
@@ -151,10 +152,11 @@ describe("full flow on the mock AI provider", () => {
     frac = await getFrac(app, id);
     expect(frac.roles[0].activities.some((a: { text: string }) => a.text === "Hold a team huddle")).toBe(true);
     expect(frac.competencies).toHaveLength(18);
-    expect(frac.rolesDirty).toBe(true);
+    expect(frac.rolesDirty).toBe(false);
+    expect(frac.roles.flatMap((r: { activities: { comp: string }[] }) => r.activities).every((a: { comp: string }) => a.comp)).toBe(true);
 
-    // Re-derive: ladders kept where code and label are unchanged
-    await step(app, runner, id, "competencies");
+    // Re-derive with feedback: ladders kept where code and label are unchanged
+    await step(app, runner, id, "competencies", { feedback: "Keep them broad" });
     frac = await getFrac(app, id);
     expect(frac.rolesDirty).toBe(false);
     expect(frac.competencies.every((c: { levels: unknown[] | null }) => c.levels?.length === 5)).toBe(true);
@@ -171,7 +173,7 @@ describe("full flow on the mock AI provider", () => {
   it("marks the expert check out of date after a fix or a hand edit, until it is run again", async () => {
     const { app, runner } = setup();
     const id = (await request(app).post("/v1/fracs").set(OWNER).send({ cadre: "ANM", size: "compact" })).body.id as string;
-    for (const s of ["research", "roles", "competencies", "ladders", "check"]) await step(app, runner, id, s);
+    for (const s of ["research", "competencies", "roles", "ladders", "check"]) await step(app, runner, id, s);
     let frac = await getFrac(app, id);
     expect(frac.review).not.toBeNull();
     expect(frac.reviewStale).toBe(false);

@@ -1,13 +1,14 @@
-// CREATOR STEP 4, competencies (spec 5.4). Runs as a job started by FracService.startStep("competencies").
-// One complex-tier call derives the competencies last, from the activities, and maps every activity to one
-// competency at a level. The count comes from the brief size (config/frac-sizes.json via sizes.ts).
-// Flow: brief -> research -> roles & activities -> competencies -> ladders -> expert check.
+// CREATOR STEP: competencies (spec 5.4). Runs as a job started by FracService.startStep("competencies").
+// Competencies come before roles (16 Nov 2026): after research, one complex-tier call derives the competencies the job
+// needs from the research and the team's documents; the roles job then maps every activity to them. A team's
+// Competencies sheet replaces that call. The count comes from the brief size (config/frac-sizes.json via sizes.ts).
+// Flow: brief -> research -> competencies -> roles & activities -> ladders -> expert check.
 import type { z } from "zod/v4";
 import type { Frac, FracCompetency } from "../../models/frac.model.ts";
 import { ApiError } from "../../utils/response.ts";
 import { JOB_MESSAGES } from "../queue/job-messages.ts";
-import { competenciesPrompt, mappingPrompt } from "./prompts.ts";
-import { competenciesOutput, mappingOutput } from "./schemas.ts";
+import { competenciesFromResearchPrompt, competenciesPrompt, mappingPrompt } from "./prompts.ts";
+import { competenciesOnlyOutput, competenciesOutput, mappingOutput } from "./schemas.ts";
 import { SIZE_TARGETS } from "./sizes.ts";
 import { callModel, type StepContext } from "./step-context.ts";
 
@@ -52,14 +53,44 @@ export async function mapToSheet(ctx: StepContext): Promise<Partial<Frac>> {
 }
 
 /**
- * Step 4, competencies (Kaushal), complex tier, one call; derived last, from the activities. With a team's
- * Competencies sheet it only maps activities to those competencies (mapToSheet).
+ * Competencies before roles: written from the research, with no mappings yet. A ladder survives only when its
+ * competency keeps both code and label (as in competenciesPatch). The review is cleared: the content changed.
+ */
+export function researchCompetenciesPatch(frac: Frac, out: z.infer<typeof competenciesOnlyOutput>): Partial<Frac> {
+  const previous = new Map(frac.competencies.map((c) => [c.code, c]));
+  const competencies: FracCompetency[] = out.competencies.map((c) => {
+    const old = previous.get(c.code);
+    const keepLadder = old && old.label.trim().toLowerCase() === c.label.trim().toLowerCase();
+    return { ...c, levels: keepLadder ? old.levels : null };
+  });
+  return { competencies, rolesDirty: false, review: null, reviewStale: false };
+}
+
+/**
+ * The competencies step (Kaushal). Which call it makes:
+ * 1. a team's Competencies sheet → map the activities to it only (mapToSheet; nothing to map before roles);
+ * 2. no activities yet (the usual case, competencies first) → derive them from the research and documents;
+ * 3. activities but no competencies, or a revise with feedback → derive them and map every activity in one call;
+ * 4. activities and competencies, no feedback, and the competencies are current with the research (activities changed
+ *    after mapping: "Map activities to competencies") → map only, competencies unchanged. When research changed after
+ *    them, the same click re-derives them (3).
  * Codes use the FRAC's codePrefix, or "C" before research has set one.
  */
 export async function runCompetencies(ctx: StepContext): Promise<Partial<Frac>> {
   const { frac, feedback } = ctx;
-  if (frac.uploads?.competencies && frac.competencies.length) return mapToSheet(ctx);
+  const hasActivities = frac.roles.some((r) => r.activities.length);
+  if (frac.uploads?.competencies && frac.competencies.length) return hasActivities ? mapToSheet(ctx) : {};
   const count = SIZE_TARGETS[frac.size].comps;
+  if (!hasActivities) {
+    await ctx.progress(JOB_MESSAGES.competencies);
+    const docs = (ctx.documents ?? []).filter((d) => d.kind === "brief").map((d) => ({ name: d.filename, text: d.text }));
+    const out = await callModel(ctx, "competencies", "complex", competenciesFromResearchPrompt(frac, count, docs, feedback),
+      { cadre: frac.cadre, scope: frac.prompt, prefix: frac.codePrefix || "C", count, activities: [], existing: frac.competencies.map((c) => c.code), feedback },
+      competenciesOnlyOutput);
+    return researchCompetenciesPatch(frac, out);
+  }
+  const current = (frac.changedAt?.competencies ?? "") >= (frac.changedAt?.research ?? "");
+  if (frac.competencies.length && !feedback && (frac.rolesDirty || current)) return mapToSheet(ctx);
   await ctx.progress(JOB_MESSAGES.competencies);
   const activities = frac.roles.flatMap((r) => r.activities.map((a) => ({ code: a.code, text: a.text })));
   const out = await callModel(ctx, "competencies", "complex", competenciesPrompt(frac, count, feedback),

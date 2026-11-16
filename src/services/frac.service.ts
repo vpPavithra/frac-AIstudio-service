@@ -1,15 +1,15 @@
 // FRAC SERVICE: the Creator (spec 5) and My FRACs. Creates, reads, edits, versions and exports FRACs, and
-// starts each AI step as a job: brief -> research -> roles & activities -> competencies -> ladders -> expert
+// starts each AI step as a job: brief -> research -> competencies -> roles & activities -> ladders -> expert
 // check. Each step function (services/ai/*.step.ts) calls the TextProvider, validates the JSON with Zod and
 // records usage/cost; this file checks the step may run (STEP_NOT_READY), merges the result into the latest
 // saved FRAC, logs it and snapshots a version. Called by controllers/frac.controller.ts; wired in server.ts.
 import { randomUUID } from "node:crypto";
 import { fracToModel } from "./review-engine/convert.ts";
 import type { Frac, FracRole, FracSeed, FracVersion, QuickCheck, QuickCheckTab } from "../models/frac.model.ts";
-import type { CheckKey, Finding } from "../models/report.model.ts";
+import type { CheckKey, Finding, Report } from "../models/report.model.ts";
 import { normalizeCode } from "./review-engine/refs.ts";
 import { buildFracWorkbook, fracWorkbookFilename } from "./excel/workbook-writer.ts";
-import type { JobRunner } from "./queue/job-runner.ts";
+import type { JobRunner, RecordUsage } from "./queue/job-runner.ts";
 import { EXPERT_CHECK_NOTES, JOB_MESSAGES } from "./queue/job-messages.ts";
 import type { Repositories } from "../repositories/index.ts";
 import type { TextProvider } from "../providers/text/types.ts";
@@ -21,6 +21,7 @@ import { runLadders } from "./ai/ladders.step.ts";
 import { runResearch } from "./ai/research.step.ts";
 import { renumberRoles, runRoles } from "./ai/roles.step.ts";
 import { rolesVerifyNotReady, verifyRoles } from "./ai/roles-verify.ts";
+import { fixAllNotReady, fixContentFindings, groupFindings } from "./ai/fix-findings.ts";
 import { outdatedTitle, replaceable, replaceOutdated } from "./outdated-fix.ts";
 import type { StepContext } from "./ai/step-context.ts";
 import { type ReviewService, worstSeverity } from "./review.service.ts";
@@ -95,7 +96,7 @@ export function newFrac(ownerId: string, brief: Omit<CreateFracInput, "seed">, i
  * a brief change stamps changedAt.brief, so research and the steps after it show as needing attention;
  * editing roles after competencies exist sets rolesDirty (5.3); the team may clear it. codePrefix is sanitised.
  * A content change after an expert check sets reviewStale, so the portal asks for a re-run before the download.
- * Changed steps are stamped in changedAt; `checked` (or clearing rolesDirty, for competencies) marks a step checked.
+ * Changed steps are stamped in changedAt; `checked` (or clearing rolesDirty, for roles) marks a step checked.
  * Pure: the caller saves the result.
  */
 export function applyEdits(frac: Frac, edits: PatchFracInput, now = new Date()): Frac {
@@ -117,10 +118,10 @@ export function applyEdits(frac: Frac, edits: PatchFracInput, now = new Date()):
     next.reviewStale = true;
   }
   next = stampChanges(frac, next, at);
-  if (rolesDirty === false && !roles) next = markChecked(next, "competencies", at);
+  if (rolesDirty === false && !roles) next = markChecked(next, "roles", at);
   for (const step of checked ?? []) next = markChecked(next, step, at);
-  // Checking competencies also confirms the mappings a roles edit asked about
-  if (checked?.includes("competencies")) next.rolesDirty = false;
+  // Checking the roles also confirms the mappings an activity edit asked about
+  if (checked?.includes("roles")) next.rolesDirty = false;
   return next;
 }
 
@@ -189,7 +190,7 @@ const STEPS: Record<GenerationStep, StepSpec> = {
   },
   competencies: {
     number: 4, label: "Competencies", msg: JOB_MESSAGES.competencies, run: runCompetencies,
-    notReady: (f) => (f.roles.some((r) => r.activities.length) ? null : "Build roles and activities before deriving competencies"),
+    notReady: (f) => (f.research || f.imported ? null : "Run job research before deriving competencies"),
   },
   ladders: {
     number: 5, label: "Level ladders", msg: JOB_MESSAGES.ladders(0), run: runLadders,
@@ -265,9 +266,9 @@ export class FracService {
         await this.repos.fracs.update(next);
         return next;
       };
-      // Research reads the team's uploaded documents (brief text, a standard source list); roles checks for a job
-      // description, which means roles copied from a matched position are rebuilt rather than kept
-      const documents = step === "research" || step === "roles" ? await this.repos.documents.listForFrac(id) : [];
+      // Research reads the team's uploaded documents (brief text, a standard source list); competencies read the brief
+      // text too; roles check for a job description, which means roles copied from a matched position are rebuilt
+      const documents = step === "research" || step === "roles" || step === "competencies" ? await this.repos.documents.listForFrac(id) : [];
       const patch = await spec.run({ frac, feedback: body.feedback, codes: body.codes, documents, provider: this.provider, progress, recordUsage, save });
       const done = await save((latest) => ({
         ...patch,
@@ -369,6 +370,85 @@ export class FracService {
   }
 
   /**
+   * Fixes expert-check findings with the agent (Nov 2026), as one job: every open finding ("Fix all findings"), or
+   * only those whose titles are given (a finding's "Fix with the agent"). One agent call for the content findings
+   * (coverage, structure, state fit, outdated names), then the ladders step for the competencies ladder findings and
+   * outdated names point at, plus any the agent added. Snapshots "Before …" first so History can undo it; ends with
+   * the check out of date and a `lastFix` summary (what it acted on, what the agent skipped).
+   * Throws 409 STEP_NOT_READY with no open findings (among `titles`).
+   */
+  async startFixAll(ownerId: string, id: string, titles?: string[]) {
+    const frac = await this.get(ownerId, id);
+    const reason = fixAllNotReady(frac, titles);
+    if (reason) throw conflict("STEP_NOT_READY", reason);
+    const label = titles?.length === 1 ? `Fix: ${titles[0]}`.slice(0, 200) : "Fix all findings";
+
+    return this.runner.startExclusive({ ownerId, kind: "fix-all", targetId: id, msg: JOB_MESSAGES.fixAll }, async (progress, recordUsage) => {
+      // Re-reads before each write so team edits saved during the job are kept, as in startStep
+      const save = async (update: (latest: Frac) => Partial<Frac>) => {
+        const latest = await this.get(ownerId, id);
+        const at = new Date().toISOString();
+        const next = stampChanges(latest, { ...latest, ...update(latest), updatedAt: at }, at);
+        await this.repos.fracs.update(next);
+        return next;
+      };
+      await this.repos.fracs.snapshot(frac, `Before ${label}`);
+      const groups = groupFindings(frac, frac.review?.findings ?? [], titles);
+      const total = new Set([...groups.ladders, ...groups.content]).size;
+
+      // 1. Content findings: one agent call, edits applied by code to codes that exist
+      const ctx: StepContext = { frac, provider: this.provider, progress, recordUsage, save };
+      if (groups.content.length) await progress(JOB_MESSAGES.fixContent(groups.content.length), 0, 0);
+      const content = await fixContentFindings(ctx, groups.content);
+
+      // 2. Ladders for the competencies ladder findings and outdated names point at, plus the ones step 1 added
+      const current = await this.get(ownerId, id);
+      const named = (f: Finding) => current.competencies.filter((c) => f.refs.some((r) => normalizeCode(r) === normalizeCode(c.code))).map((c) => c.code);
+      const codes = [...new Set([...groups.ladders.flatMap(named), ...content.newCodes])];
+      if (codes.length) {
+        const feedback = [
+          ...groups.ladders.map((f) => `${named(f).join(", ")}: ${f.title}.${f.fix ? ` ${f.fix}` : ""}`),
+          ...(content.newCodes.length ? [`${content.newCodes.join(", ")}: new competencies; write their ladders from the activities that use them.`] : []),
+        ].join("\n").slice(0, 5000);
+        await runLadders({ ...ctx, frac: current, codes, feedback });
+      }
+
+      const fixedFrac = await save((latest) => ({ reviewStale: !!latest.review }));
+      await this.repos.fracs.snapshot(fixedFrac, label);
+
+      // 3. The expert check again, in the same job, so the team sees what is left without a second click. A finding
+      //    counts as fixed when the new check no longer raises it.
+      await progress(JOB_MESSAGES.check, 0, 0);
+      const report = await this.runExpertCheck(ownerId, id, fixedFrac, recordUsage);
+      const still = new Set(report.findings.map((f) => f.title));
+      const handled = [...new Set([...groups.ladders, ...groups.content])];
+      const done = await this.get(ownerId, id);
+      await this.repos.fracs.update({
+        ...done,
+        lastFix: { at: new Date().toISOString(), total, fixed: handled.filter((f) => !still.has(f.title)).length, skipped: content.skipped },
+        updatedAt: new Date().toISOString(),
+      });
+    });
+  }
+
+  /**
+   * Runs the expert check on `frac` and saves it: the report on the FRAC (out of date if the team saved edits while it
+   * ran), a version "Expert check", and the review record. Shared by the check job and the end of Fix all.
+   */
+  private async runExpertCheck(ownerId: string, id: string, frac: Frac, recordUsage: RecordUsage): Promise<Report> {
+    const model = fracToModel(frac);
+    const report = await this.reviews.review(model, { cadre: frac.cadre, state: frac.state, notes: EXPERT_CHECK_NOTES }, recordUsage);
+    // Re-read so edits saved while the check ran are kept
+    const latest = await this.get(ownerId, id);
+    // Still out of date if the team saved edits while the check ran
+    const checked: Frac = { ...latest, review: report, reviewStale: latest.updatedAt !== frac.updatedAt, step: 6, updatedAt: new Date().toISOString() };
+    await this.repos.fracs.update(checked);
+    await this.repos.fracs.snapshot(checked, "Expert check");
+    await this.reviews.recordExpertCheck(ownerId, checked, model, report);
+    return report;
+  }
+
+  /**
    * Step 6 expert check: the Reviewer engine on fracToModel (spec 5.6), with the fixed EXPERT_CHECK_NOTES.
    * Saves the report on the FRAC, snapshots it, and stores it as a review of kind "expert-check" (gap 10).
    * Throws 400 NO_COMPETENCIES before any job starts. The check reviews the FRAC as it was when it started.
@@ -380,15 +460,7 @@ export class FracService {
     }
 
     return this.runner.startExclusive({ ownerId, kind: "check", targetId: id, msg: JOB_MESSAGES.check }, async (_progress, recordUsage) => {
-      const model = fracToModel(frac);
-      const report = await this.reviews.review(model, { cadre: frac.cadre, state: frac.state, notes: EXPERT_CHECK_NOTES }, recordUsage);
-      // Re-read so edits saved while the check ran are kept
-      const latest = await this.get(ownerId, id);
-      // Still out of date if the team saved edits while the check ran
-      const checked: Frac = { ...latest, review: report, reviewStale: latest.updatedAt !== frac.updatedAt, step: 6, updatedAt: new Date().toISOString() };
-      await this.repos.fracs.update(checked);
-      await this.repos.fracs.snapshot(checked, "Expert check");
-      await this.reviews.recordExpertCheck(ownerId, checked, model, report);
+      await this.runExpertCheck(ownerId, id, frac, recordUsage);
     });
   }
 

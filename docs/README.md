@@ -9,6 +9,7 @@
 | [ONBOARDING.md](ONBOARDING.md) | Setup, commands, error codes, the working rules |
 | [API_REFERENCE.md](API_REFERENCE.md) | Every endpoint and AI call: payload, when, why, what it does, error codes, what to improve |
 | [DATABASE.md](DATABASE.md) | Opening the Postgres database in pgAdmin 4 and what each table holds |
+| [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md) | Every table, column, constraint, index and JSONB shape |
 | [COST_IMPACT_REVIEW_DECISIONS.md](COST_IMPACT_REVIEW_DECISIONS.md) | What the Nov 2026 review decisions (documents, templates, position matching, agent-chosen size) do to AI calls, tokens and cost |
 | [releases/REVIEW_DECISIONS_2026-11.md](releases/REVIEW_DECISIONS_2026-11.md) | The eight review decisions: what the user sees, and what changed where in the service and the portal |
 | [spec/](spec/) | The source spec, the r3 review rules and the r3 gap analysis (copies; do not edit the first two) |

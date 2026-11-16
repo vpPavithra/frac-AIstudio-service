@@ -416,9 +416,9 @@ describe("review decisions on the mock provider", () => {
     const frac = await getFrac(ctx, id);
     expect(frac.rolesDirty).toBe(false);
     expect(frac.roles.flatMap((r: { activities: { comp: string }[] }) => r.activities).every((a: { comp: string }) => /^ANM[12]@L[1-5]$/.test(a.comp))).toBe(true);
-    // Mapped in a write of its own, so Competencies is not left older than Roles, and the sheet's ladders stay current
-    expect(frac.changedAt.competencies >= frac.changedAt.roles).toBe(true);
-    expect(frac.changedAt.ladders >= frac.changedAt.competencies).toBe(true);
+    // Competencies come first; the mapping is a write of the roles step, and the sheet's ladders stay current
+    expect(frac.changedAt.roles >= frac.changedAt.competencies).toBe(true);
+    expect(frac.changedAt.ladders >= frac.changedAt.roles).toBe(true);
     expect(frac.competencies[0].levels).toHaveLength(5);
 
     // Without a sheet the roles job makes no mapping call
@@ -446,5 +446,82 @@ describe("review decisions on the mock provider", () => {
     await request(ctx.app).post(`/v1/fracs/${id}/fixes/outdated`).set(OWNER).send({}).expect(400);
     await request(ctx.app).post(`/v1/fracs/${id}/fixes/outdated`).set(OTHER)
       .send({ title: "Outdated reference: VHND / Village Health and Nutrition Day" }).expect(404);
+  });
+
+  it("fixes every kind of expert-check finding in one job, then re-runs the expert check", async () => {
+    const ctx = setup();
+    const id = await create(ctx, { cadre: "ANM", state: "Uttar Pradesh", size: "compact" });
+    await request(ctx.app).post(`/v1/fracs/${id}/fixes/all`).set(OWNER).expect(409);
+    for (const name of ["research", "competencies", "roles", "ladders"]) await step(ctx, id, name);
+
+    // A review with one finding of each kind, and VHND in an activity for the name swap
+    const saved = await ctx.repos.fracs.get(id);
+    if (!saved) throw new Error("FRAC not saved");
+    const [a1, a2, a3] = saved.roles.flatMap((r) => r.activities);
+    const comp = saved.competencies[0].code;
+    a1.text = "Mobilise mothers for the VHND";
+    const finding = (check: string, title: string, refs: string[], fix = "") => ({ check, sev: "m", title, detail: "", refs, fix, source: "computed" });
+    const injected = { at: "2026-11-16T00:00:00.000Z", findings: [
+      finding("context", "Outdated reference: VHND / Village Health and Nutrition Day", [a1.code], "Replace with VHSND."),
+      finding("bloom", "Level labels use non-measurable verbs", [comp]),
+      finding("structure", "Activities read as syllabus outcomes", [a2.code]),
+      finding("coverage", "Core ANM areas with no dedicated competency", [a3.code]),
+      finding("context", "Does not reflect Uttar Pradesh", [comp]),
+    ] } as never;
+    saved.review = injected;
+    await ctx.repos.fracs.update(saved);
+
+    const before = ctx.calls.length;
+    const started = await request(ctx.app).post(`/v1/fracs/${id}/fixes/all`).set(OWNER).expect(202);
+    await ctx.runner.idle();
+    const job = await request(ctx.app).get(`/v1/jobs/${started.body.jobId}`).set(OWNER).expect(200);
+    expect(job.body).toMatchObject({ status: "done", error: null, kind: "fix-all" });
+    // The fixes, then the expert check in the same job (no second click)
+    const tasks = tasksSince(ctx, before);
+    expect(tasks.slice(0, 2)).toEqual(["fix-findings", "ladders"]);
+    expect(tasks.slice(2).every((t) => t.startsWith("review-"))).toBe(true);
+    expect(tasks).toContain("review-state");
+
+    const frac = await getFrac(ctx, id);
+    const activities = frac.roles.flatMap((r: { activities: { code: string; text: string; comp: string }[] }) => r.activities);
+    expect(activities.find((a: { code: string }) => a.code === a1.code).text).toBe("Mobilise mothers for the VHSND");
+    expect(activities.find((a: { code: string }) => a.code === a2.code).text).toMatch(/^Conduct the task/);
+    const added = frac.competencies.at(-1);
+    expect(added).toMatchObject({ label: "Core area care" });
+    expect(added.levels).toHaveLength(5);
+    expect(activities.find((a: { code: string }) => a.code === a3.code).comp).toBe(`${added.code}@L3`);
+    // The re-run check replaced the old report and is current; lastFix counts what it no longer raises
+    expect(frac.reviewStale).toBe(false);
+    expect(frac.review.at > "2026-11-16T00:00:00.000Z").toBe(true);
+    expect(frac.review.findings.some((f: { title: string }) => f.title === "Outdated reference: VHND / Village Health and Nutrition Day")).toBe(false);
+    expect(frac.lastFix).toMatchObject({ total: 5, skipped: [{ finding: "Does not reflect Uttar Pradesh" }] });
+    expect(frac.lastFix.fixed).toBeGreaterThanOrEqual(1);
+    expect(frac.lastFix.at > frac.review.at).toBe(true);
+
+    const versions = await request(ctx.app).get(`/v1/fracs/${id}/versions`).set(OWNER).expect(200);
+    const reasons = versions.body.versions.map((v: { reason: string }) => v.reason);
+    expect(reasons.slice(0, 3)).toEqual(["Expert check", "Fix all findings", "Before Fix all findings"]);
+    await request(ctx.app).post(`/v1/fracs/${id}/fixes/all`).set(OTHER).expect(404);
+
+    // One finding's "Fix": only that finding goes to the agent, no ladders run for it, then the check re-runs
+    const again = await ctx.repos.fracs.get(id);
+    if (!again) throw new Error("FRAC not saved");
+    again.review = injected;
+    await ctx.repos.fracs.update(again);
+    const one = ctx.calls.length;
+    const single = await request(ctx.app).post(`/v1/fracs/${id}/fixes/all`).set(OWNER)
+      .send({ titles: ["Activities read as syllabus outcomes"] }).expect(202);
+    await ctx.runner.idle();
+    expect((await request(ctx.app).get(`/v1/jobs/${single.body.jobId}`).set(OWNER)).body.status).toBe("done");
+    const singleTasks = tasksSince(ctx, one);
+    expect(singleTasks[0]).toBe("fix-findings");
+    expect(singleTasks.slice(1).every((t) => t.startsWith("review-"))).toBe(true);
+    const fixCall = ctx.calls[one];
+    expect(fixCall.prompt).toContain("Activities read as syllabus outcomes");
+    expect(fixCall.prompt).not.toContain("Core ANM areas");
+    expect((await getFrac(ctx, id)).lastFix).toMatchObject({ total: 1 });
+    // The re-run check replaced the injected findings, so that title is gone and the button would be refused
+    await request(ctx.app).post(`/v1/fracs/${id}/fixes/all`).set(OWNER).send({ titles: ["Activities read as syllabus outcomes"] }).expect(409);
+    await request(ctx.app).post(`/v1/fracs/${id}/fixes/all`).set(OWNER).send({ titles: ["No such finding"] }).expect(409);
   });
 });

@@ -3,8 +3,11 @@
 // stampChanges runs on every FRAC write in frac.service.ts and document.service.ts. Pure, no I/O.
 import type { Frac, FracStep } from "../models/frac.model.ts";
 
-/** The steps in flow order: a step is out of date when any step before it changed after it. */
-export const FRAC_STEPS: readonly FracStep[] = ["brief", "research", "roles", "competencies", "ladders"];
+/**
+ * The steps in flow order: a step is out of date when any step before it changed after it. Competencies come before
+ * roles (16 Nov 2026): the roles job maps its activities to them, so a competency change leaves the roles to check.
+ */
+export const FRAC_STEPS: readonly FracStep[] = ["brief", "research", "competencies", "roles", "ladders"];
 
 // cadreFull is left out: research rewrites it, and that is not a brief change
 const brief = (f: Frac) => JSON.stringify([f.cadre, f.state, f.prompt]);
@@ -20,11 +23,10 @@ function laddersWritten(prev: Frac, next: Frac): boolean {
 }
 
 /**
- * `next` with `changedAt` set to `at` for every step whose content differs from `prev`. Mappings belong to the
- * competencies step, but not when the roles changed in the same write: a roles rebuild drops mappings of new
- * activities, and that must leave competencies out of date, not mark them current. A mappings-only change (the
- * roles job mapping to a Competencies sheet, or a hand edit of competency@level) leaves the ladders current too:
- * a ladder describes its competency, not which activities map to it.
+ * `next` with `changedAt` set to `at` for every step whose content differs from `prev`. Mappings (activity →
+ * competency@level) belong to the roles step, which writes them. A mappings-only change (the roles job mapping to
+ * the competencies, "Map activities to competencies", or a hand edit of competency@level) leaves the ladders current
+ * too: a ladder describes its competency, not which activities map to it.
  */
 export function stampChanges(prev: Frac, next: Frac, at: string): Frac {
   const rolesChanged = roles(prev) !== roles(next);
@@ -33,8 +35,9 @@ export function stampChanges(prev: Frac, next: Frac, at: string): Frac {
   const changes: Record<FracStep, boolean> = {
     brief: brief(prev) !== brief(next),
     research: research(prev) !== research(next),
-    roles: rolesChanged,
-    competencies: contentChanged || mappingsOnly,
+    competencies: contentChanged,
+    // A re-derive that maps the activities in the same write keeps the roles current too
+    roles: rolesChanged || mappings(prev) !== mappings(next),
     ladders: laddersWritten(prev, next) || (mappingsOnly && next.competencies.some((c) => c.levels !== null)),
   };
   const changed = FRAC_STEPS.filter((step) => changes[step]);

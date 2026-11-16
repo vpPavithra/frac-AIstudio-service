@@ -230,6 +230,22 @@ export const competenciesPrompt = (f: Frac, count: number, feedback?: string) =>
 };
 
 /**
+ * Step 4 before roles exist (competencies first, 16 Nov 2026): the competencies the job needs, derived from the
+ * research and the team's documents. The roles job then maps every activity to them (mappingPrompt).
+ */
+export const competenciesFromResearchPrompt = (f: Frac, count: number, documents: { name: string; text: string }[], feedback?: string) => {
+  const prefix = f.codePrefix || "C";
+  return [KAUSHAL, SOURCE_DATA, brief(f), reviewGuard(f), METHOD,
+    f.research ? `RESEARCH\nSummary: ${f.research.summary}\n${scope(f)}\nSTATE CONTEXT:\n${f.research.stateContext}` : "",
+    `POSTINGS: ${postings(f)}`,
+    teamDocuments(documents, "JOB DESCRIPTION AND ORDERS FROM THE TEAM (authoritative)"),
+    f.competencies.length ? `EXISTING COMPETENCIES (keep existing codes; mint new codes after the highest one):\n${f.competencies.map((c) => `${c.code} ${c.label}`).join("\n")}` : "",
+    revise(feedback),
+    `Derive the ${count} competencies this job needs, from the research, the authorised scope and the team's documents, coded ${prefix}1, ${prefix}2, …. The roles and activities are written afterwards and mapped to these, so cover every area of work the job does. Each has a label (noun phrase), a description (one sentence starting with a verb), a type (Domain, Functional or Behavioural), an area, and kcm (the KCM competency name, or "Domain – department-defined").`,
+    `${JSON_ONLY}\n{"competencies":[{"code":"${prefix}1","label":"","description":"","type":"Domain","area":"","kcm":""}]}`].filter(Boolean).join("\n\n");
+};
+
+/**
  * Step 4 with a team's Competencies sheet (review decisions, Nov 2026): the competencies are fixed, so the
  * model only maps each activity to one of them at a level. Much shorter answer than competenciesPrompt.
  */
@@ -261,6 +277,43 @@ export const rolesVerifyPrompt = (f: Frac, documents: { name: string; text: stri
 - unclear: an activity too vague to train or assess.
 Quote the activity code. Give a one-line suggestion. Return an empty list when nothing is wrong; do not invent problems.`,
     `${JSON_ONLY}\n{"summary":"one or two sentences","findings":[{"kind":"missing | outside-scope | posting | duplicate | unclear","role":"R1","activity":"A3","note":"","suggestion":""}]}`].filter(Boolean).join("\n\n");
+};
+
+/** One expert-check finding as "Fix all findings" sends it to the agent. */
+export interface FixFindingInput {
+  check: string;
+  title: string;
+  detail: string;
+  fix: string;
+  refs: string[];
+}
+
+/**
+ * "Fix all findings" on the expert check (Nov 2026): the content findings (coverage, structure, state fit) with the
+ * activities and competencies they name. The agent returns edits; code applies them only to codes that exist.
+ * Ladder findings go to the ladders step instead; an outdated name is sent here and to the ladders step.
+ */
+export const fixFindingsPrompt = (f: Frac, findings: FixFindingInput[], maxNew: number) => {
+  const named = new Set(findings.flatMap((x) => x.refs.map((r) => r.split("@")[0].trim().toUpperCase())));
+  const activities = f.roles.flatMap((r) => r.activities.map((a) => ({ role: r, a })))
+    .filter(({ a }) => named.has(a.code.toUpperCase()));
+  const competencies = f.competencies.filter((c) => named.has(c.code.toUpperCase()));
+  return [PERSONAS, SOURCE_DATA, brief(f),
+    f.research ? `RESEARCH\nSummary: ${f.research.summary}\n${scope(f)}\nSTATE CONTEXT:\n${f.research.stateContext}` : "",
+    `POSTINGS: ${postings(f)}`,
+    `FINDINGS TO FIX:\n${findings.map((x, i) => `${i + 1}. [${x.check}] ${x.title}\n   ${x.detail}\n   Suggested fix: ${x.fix || "-"}\n   Names: ${x.refs.join(", ") || "-"}`).join("\n")}`,
+    `ACTIVITIES THE FINDINGS NAME:\n${activities.map(({ role, a }) => `${a.code} (${role.code} ${role.title}) ${a.text} → ${a.comp || "not mapped"}`).join("\n") || "(none)"}`,
+    `COMPETENCIES THE FINDINGS NAME:\n${competencies.map((c) => `${c.code} ${c.label} [${c.type}] (${c.area || "-"}) ${c.description}`).join("\n") || "(none)"}`,
+    `ALL COMPETENCY NAMES (do not add a duplicate): ${f.competencies.map((c) => `${c.code} ${c.label}`).join("; ") || "none"}`,
+    `Fix each finding by editing the FRAC:
+- activities: rewrite an activity the findings name as one observable workplace action starting with a performance verb (Conduct, Screen, Refer, Maintain…). Keep its meaning and scope; add state context (scheme, portal or programme names) only when the research or the brief states it.
+- competencies: change a named competency's label, description, type (Domain, Functional, Behavioural) or area when a finding asks for it, for example a Domain competency that is really Functional or Behavioural.
+- newCompetencies: for a coverage gap, add a competency (at most ${maxNew} in all) and list the activities it covers with the level the job demands (usually 3 or 4). Level ladders are written afterwards, not here.
+- outdated references ("Outdated reference: …"): replace the old name with the current one the finding gives, in the named activities and in the named competencies' labels and descriptions, keeping the rest of the text (their level ladders are rewritten afterwards).
+- skipped: every finding you cannot fix without inventing facts (a scheme, number, guideline or legal power the research and brief do not state), with a one-line reason the team can act on.
+Use only codes listed above. Change nothing a finding does not ask for. Never invent schemes, numbers or guidelines: skip instead.`,
+    `${JSON_ONLY}\n{"activities":[{"code":"A12","text":""}],"competencies":[{"code":"${competencies[0]?.code ?? "C1"}","label":"","description":"","type":"Functional","area":""}],"newCompetencies":[{"label":"","description":"","type":"Domain","area":"","activities":[{"code":"A16","level":3}]}],"skipped":[{"finding":"title of the finding","reason":""}]}`,
+  ].filter(Boolean).join("\n\n");
 };
 
 /**

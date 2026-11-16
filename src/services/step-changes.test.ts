@@ -36,9 +36,9 @@ describe("stampChanges", () => {
     // A mapping change keeps existing ladders current: a ladder describes its competency, not the mappings
     const mapped = structuredClone(f);
     mapped.roles[0].activities[0].comp = "C1@L3";
-    expect(stamped(f, mapped)).toEqual(["competencies", "ladders"]);
+    expect(stamped(f, mapped)).toEqual(["ladders", "roles"]);
     const noLadders = { ...f, competencies: [comp("C1")] };
-    expect(stamped(noLadders, { ...structuredClone(mapped), competencies: [comp("C1")] })).toEqual(["competencies"]);
+    expect(stamped(noLadders, { ...structuredClone(mapped), competencies: [comp("C1")] })).toEqual(["roles"]);
     expect(stamped(f, { ...f, competencies: [{ ...comp("C1", [level]), label: "Newborn care" }] })).toEqual(["competencies"]);
     expect(stamped(f, { ...f, competencies: [comp("C1", [{ label: "L1", desc: "Does it well" }])] })).toEqual(["ladders"]);
   });
@@ -69,16 +69,17 @@ describe("applyEdits stamps", () => {
     expect(applyEdits(f, { research: { ...f.research!, summary: "edited" } }, now).changedAt).toEqual({ research: AT });
   });
 
-  it("marks a step checked, and checking competencies clears rolesDirty", () => {
+  it("marks a step checked, and checking the roles clears rolesDirty (mappings belong to the roles step)", () => {
     const f = { ...frac(), rolesDirty: true };
-    const next = applyEdits(f, { checked: ["competencies"] }, now);
-    expect(next.changedAt).toEqual({ competencies: AT });
+    const next = applyEdits(f, { checked: ["roles"] }, now);
+    expect(next.changedAt).toEqual({ roles: AT });
     expect(next.rolesDirty).toBe(false);
-    expect(applyEdits(f, { checked: ["roles", "ladders"] }, now).changedAt).toEqual({ roles: AT, ladders: AT });
+    expect(applyEdits(f, { checked: ["competencies"] }, now).rolesDirty).toBe(true);
+    expect(applyEdits(f, { checked: ["competencies", "ladders"] }, now).changedAt).toEqual({ competencies: AT, ladders: AT });
   });
 
-  it("treats Mapping checked (rolesDirty false) as checking competencies", () => {
-    expect(applyEdits({ ...frac(), rolesDirty: true }, { rolesDirty: false }, now).changedAt).toEqual({ competencies: AT });
+  it("treats Mapping checked (rolesDirty false) as checking the roles", () => {
+    expect(applyEdits({ ...frac(), rolesDirty: true }, { rolesDirty: false }, now).changedAt).toEqual({ roles: AT });
   });
 });
 

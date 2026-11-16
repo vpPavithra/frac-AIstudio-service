@@ -79,6 +79,11 @@ export const DOCUMENTS = Object.freeze({
 });
 
 /** Research source links (services/ai/source-links.ts): checks that an address the model gave really answers. */
+export const FIX_ALL = Object.freeze({
+  /** Most competencies one "Fix all findings" may add for coverage findings. */
+  maxNewCompetencies: int("FIX_ALL_MAX_NEW_COMPETENCIES", 5, 0),
+});
+
 export const SOURCE_LINKS = Object.freeze({
   /** Time allowed for one link check, redirects included. */
   checkTimeoutMs: int("SOURCE_LINK_CHECK_TIMEOUT_MS", 3000),
@@ -207,6 +212,7 @@ export const KNOWN_SETTINGS = [
   "LLM_TIMEOUT_MS", "LLM_RETRIES", "LLM_MAX_TOKENS", "LLM_MAX_RESUMES", "LLM_MAX_RETRY_DELAY_MS", "LLM_INVALID_RETRIES",
   "MAX_UPLOAD_MB", "MAX_JSON_MB", "MAX_TEXT_CHARS", "MAX_ROLES", "MAX_ACTIVITIES_PER_ROLE", "MAX_COMPETENCIES", "MAX_POSTINGS",
   "DOC_MAX_CHARS", "DOC_MAX_BRIEF_FILES", "RESEARCH_SEARCH_MAX_USES_WITH_DOCS",
+  "FIX_ALL_MAX_NEW_COMPETENCIES",
   "SOURCE_LINK_CHECK_TIMEOUT_MS", "SOURCE_LINK_MAX_CHECKS", "SOURCE_LINK_DOMAINS", "SOURCE_LINK_MIN_MATCH",
   "JOB_STALE_AFTER_MS", "JOB_SWEEP_EVERY_MS", "JOB_HEARTBEAT_MS", "JOB_MAX_COST_USD", "JOB_MAX_ACTIVE_PER_USER", "JOB_DAILY_BUDGET_PER_USER_USD",
   "POSTGRES_POOL_MAX", "POSTGRES_CONNECT_TIMEOUT_MS", "POSTGRES_IDLE_TIMEOUT_MS", "CORS_ORIGINS", "LOG_FORMAT", "LOG_LEVEL",

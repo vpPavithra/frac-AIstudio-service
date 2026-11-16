@@ -65,8 +65,9 @@ Portal client: `project/ws/app/src/lib/routes/frac-studio/services/frac-studio-a
 | 28 | `POST /v1/fracs/:id/roles/verify` | `verifyRoles` | 202 job | 1 |
 | 29 | `GET /v1/fracs/:id/rule-checks` | `ruleChecks` | 200 | none |
 | 30 | `POST /v1/fracs/:id/fixes/outdated` | `replaceOutdated` | 200 | none |
+| 31 | `POST /v1/fracs/:id/fixes/all` | `fixAll` | 202 job | 1 + ladders |
 
-Rows 22–26 and the `seed` on #3 were added for the Nov 2026 review decisions, rows 27–30 on 13 Nov 2026
+Rows 22–26 and the `seed` on #3 were added for the Nov 2026 review decisions, rows 27–30 on 13 Nov 2026, row 31 on 16 Nov 2026
 (`docs/releases/REVIEW_DECISIONS_2026-11.md`). With documents or a seed, steps 7–10 make fewer AI calls; see
 "Fewer calls with documents or a match" in section 5.
 
@@ -148,8 +149,8 @@ Rows 22–26 and the `seed` on #3 were added for the Nov 2026 review decisions, 
 
 ### 7–10. `POST /v1/fracs/:id/steps/:step` — run an AI step (Steps 2–5)
 
-- **When:** the sidebar's next-step button ("Research the job", "Build roles & activities", "Derive competencies",
-  "Write level ladders"), or "Revise" with feedback on a finished step.
+- **When:** the next-step button, in flow order since 16 Nov 2026 ("Research the job", "Derive competencies",
+  "Build roles & activities", "Write level ladders"), "Map activities to competencies", or "Revise" with feedback.
 - **Why:** Kaushal (and Vidya, for ladders) writes that part of the FRAC. See section 5 for each AI call.
 - **Body (all optional):**
 
@@ -165,8 +166,8 @@ Rows 22–26 and the `seed` on #3 were added for the Nov 2026 review decisions, 
 
 - **Answer `202`:** `{ "jobId": "<uuid>" }`, then poll #21.
 - **Before the job starts** (answers at once):
-  - `409 STEP_NOT_READY` when an earlier step is missing: roles need research (or an imported FRAC),
-    competencies need a role with activities, ladders need a competency.
+  - `409 STEP_NOT_READY` when an earlier step is missing: competencies and roles need research (or an imported
+    FRAC), ladders need a competency.
   - `404 NOT_FOUND` for an unknown step name.
   - `409 JOB_RUNNING` when a step or check is already running on this FRAC; `error.details` has its `jobId` and
     `kind`, and the portal follows that job. A job silent for two heartbeats (2 minutes) is taken as dead, marked
@@ -179,8 +180,8 @@ Rows 22–26 and the `seed` on #3 were added for the Nov 2026 review decisions, 
 | Step | What changes in the FRAC |
 | --- | --- |
 | research | `cadreFull`, `codePrefix` (≤4 capital letters, fallback `C`), `postings` (every posting the brief and documents name, renamed P1, P2…; none is fine), `research` (lists one item per line; "verify" items added to assumptions as `VERIFY: …`) |
-| roles | `roles` renumbered R1…Rn, activities A1…An across all roles. Team-added activities kept. Every mapping cleared, the expert check result cleared. Competencies kept, and `rolesDirty` set |
-| competencies | `competencies`, and each activity's `comp` set to `CODE@Ln`. A competency keeps its ladder only if its code and label are unchanged. On a revise, new codes start after the highest existing one |
+| competencies | Competencies come first (16 Nov 2026). With no activities yet: `competencies` derived from the research and brief documents, no mappings. With activities: a revise with feedback (or competencies out of date with the research) re-derives them and sets each activity's `comp` to `CODE@Ln`; otherwise it maps the activities only ("Map activities to competencies"). With a competency sheet: map only. A competency keeps its ladder only if its code and label are unchanged |
+| roles | `roles` renumbered R1…Rn, activities A1…An across all roles. Team-added activities kept, the expert check result cleared. When competencies exist, the same job maps every activity to them (one `mapping` call), so `rolesDirty` ends false |
 | ladders | `levels` for the competencies asked for (without `codes`: only those with no ladder). Saved after every batch. Marks an earlier expert check out of date (`reviewStale`) |
 
 ### 11. `POST /v1/fracs/:id/steps/check` — expert check (Step 6)
@@ -322,13 +323,36 @@ Rows 22–26 and the `seed` on #3 were added for the Nov 2026 review decisions, 
 
 ### 30. `POST /v1/fracs/:id/fixes/outdated` — replace an outdated name
 
-- **When:** "Replace with VHSND (no AI)" on an expert-check finding "Outdated reference: …".
+- **When:** kept for API callers. Since 16 Nov 2026 the portal fixes outdated names through #31, with the agent.
 - **Body:** `{ "title": "Outdated reference: VHND / Village Health and Nutrition Day" }`, the finding's title.
 - **What it does:** swaps the outdated name for the current one (from `config/outdated.json`, a trailing year note
   dropped) in activities and in competency names, descriptions and ladders, the same texts the check reads. Saves a
   version "Before replacing …" first and marks the expert check out of date. No AI.
 - **Answer `200`:** `{ frac, replaced }`, how many places changed (0 leaves the FRAC as it was).
 - **Errors:** `NOT_FOUND` (no outdated pattern with that title, or not your FRAC), `NOT_REPLACEABLE`, `VALIDATION_FAILED`.
+
+### 31. `POST /v1/fracs/:id/fixes/all` — fix all expert-check findings
+
+- **When:** "Fix all findings" on the expert check (every open finding), or "Fix with the agent" on one finding.
+- **Body:** `{ "titles"?: string[] }`. The finding titles to fix; leave it out to fix every open finding.
+- **What it does:** one `fix-all` job. It saves a version "Before Fix all findings" (or "Before Fix: …") first, then
+  works in two parts, both with the agent:
+  1. content findings (coverage, structure, state fit, outdated names, anything else): one complex-tier `fix-findings`
+     call returns edits. The service applies them only to codes that exist:
+     - rewritten activity texts;
+     - changes to named competencies (label, description, type, area);
+     - up to `FIX_ALL_MAX_NEW_COMPETENCIES` (5) new competencies, with the activities they cover relinked at the
+       given level;
+     - a `skipped` list for findings the agent cannot fix without inventing facts;
+  2. ladders: one ladders run for the competencies that ladder findings and outdated names name, plus every
+     competency part 1 added.
+- **At the end:** it saves a version "Fix all findings", then re-runs the expert check in the same job (a version
+  "Expert check" and a review record, as #11). `frac.lastFix` (`at`, `total`, `fixed`, `skipped`) counts as fixed the
+  findings the new check no longer raises.
+- **Answer `202`:** `{ jobId }`. Poll `GET /v1/jobs/:id`.
+- **Errors:** `STEP_NOT_READY` 409 (no expert check, or none of the named findings is open), `JOB_RUNNING` 409,
+  `NOT_FOUND`, `VALIDATION_FAILED`.
+- **Cost:** about $0.02–0.05 for the content call, plus about $0.011 per competency for ladders, plus the expert check (about $0.05–0.16; unchanged competencies reuse stored answers).
 
 ### 26. `GET /v1/templates/:kind` — upload templates
 

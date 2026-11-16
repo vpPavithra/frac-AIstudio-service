@@ -41,6 +41,8 @@ values and keep them in pgAdmin's saved password or your `.env` only.
 | `frac_documents` | Documents attached to a FRAC (migration 010): `kind` is `brief` (a job description or order; its extracted text is in `text`) or `roles` / `competencies` / `sources` (a standard sheet; `parsed` holds the counts and warnings, and for sources the rows). The uploaded file itself is never stored. |
 | `schema_migrations` | Which files in `migrations/` have been applied. |
 
+For every column, type, constraint, index and JSONB shape, see [DATABASE_SCHEMA.md](DATABASE_SCHEMA.md).
+
 The tables come from `migrations/` (`npm run migrate`, or on server start when `MIGRATE_ON_START` is on). If a table is
 missing, the migrations have not run against this database.
 

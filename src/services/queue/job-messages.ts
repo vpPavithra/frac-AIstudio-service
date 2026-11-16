@@ -10,10 +10,12 @@ export const JOB_MESSAGES = {
   researchGaps: (parts: string) => `The agent is researching what your documents leave out: ${parts}…`,
   roles: "The agent is drafting the roles from the job description…",
   activities: (n: number) => `The agent is writing activities for ${n} roles…`,
-  competencies: "The agent is deriving competencies from the activities…",
+  competencies: "The agent is deriving the competencies this job needs…",
   mapping: "The agent is mapping activities to your competencies…",
   ladders: (n: number) => `The agent is writing level ladders for ${n} competencies…`,
   verifyRoles: "The agent is checking the roles and activities against your documents and the research…",
+  fixAll: "Fixing the expert check findings…",
+  fixContent: (n: number) => `The agent is fixing ${n} ${n === 1 ? "finding" : "findings"} in the activities and competencies…`,
   check: "Running the expert check (rule-based checks, then the agent's checklist)…",
   review: "Reviewing — rule-based checks, then the agent's checklist…",
 } as const;

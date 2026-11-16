@@ -9,6 +9,7 @@ import {
   matchQuerySchema,
   versionIdSchema,
   type CreateFracInput,
+  type FixAllInput,
   type OutdatedFixInput,
   type PatchFracInput,
   type StepInput,
@@ -65,6 +66,12 @@ export function fracController(fracs: FracService) {
     /** The agent checks the roles and activities against the documents and the research; nothing is changed. */
     async startRolesVerify(req: Request, res: Response) {
       const job = await fracs.startRolesVerify(ownerOf(res), param(req.params.id));
+      res.status(202).json({ jobId: job.id });
+    },
+
+    /** Fixes expert-check findings with the agent: body { titles? } (one finding's button); none means every open finding. */
+    async startFixAll(req: Request, res: Response) {
+      const job = await fracs.startFixAll(ownerOf(res), param(req.params.id), (req.body as FixAllInput).titles);
       res.status(202).json({ jobId: job.id });
     },
 

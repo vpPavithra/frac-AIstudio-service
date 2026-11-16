@@ -70,6 +70,13 @@ export const competenciesOutput = z.object({
   mapping: z.array(z.object({ a: z.string(), c: z.string(), l: z.coerce.number().int().min(1).max(5) })),
 });
 
+/** Step 4 before roles exist (competencies first, 16 Nov 2026): the competencies only, no mapping yet. */
+export const competenciesOnlyOutput = z.object({
+  competencies: z
+    .array(z.object({ code: z.string().min(1), label: z.string().min(1), description: s(), type: s(), area: s(), kcm: s() }))
+    .min(1),
+});
+
 /** Step 4 with a team's Competencies sheet: only the activity -> competency@level mapping, to the given codes. */
 /** The agent's check of the roles and activities against the documents and research (roles-verify.ts). */
 export const ROLE_FINDING_KINDS = ["missing", "outside-scope", "posting", "duplicate", "unclear"] as const;
@@ -82,6 +89,26 @@ export const rolesVerifyOutput = z.object({
     note: z.string().min(1),
     suggestion: s(),
   })).default([]),
+});
+
+/** "Fix all findings" on the expert check (Nov 2026): edits that fix the content findings, and what was skipped. */
+export const fixFindingsOutput = z.object({
+  activities: z.array(z.object({ code: z.string(), text: z.string().min(1) })).default([]),
+  competencies: z.array(z.object({
+    code: z.string(),
+    label: s(),
+    description: s(),
+    type: z.enum(["Domain", "Functional", "Behavioural", ""]).default(""),
+    area: s(),
+  })).default([]),
+  newCompetencies: z.array(z.object({
+    label: z.string().min(1),
+    description: s(),
+    type: z.enum(["Domain", "Functional", "Behavioural"]),
+    area: s(),
+    activities: z.array(z.object({ code: z.string(), level: z.coerce.number().int().min(1).max(5) })).default([]),
+  })).default([]),
+  skipped: z.array(z.object({ finding: z.string(), reason: z.string() })).default([]),
 });
 
 export const mappingOutput = z.object({
