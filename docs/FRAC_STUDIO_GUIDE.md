@@ -270,9 +270,9 @@ Calls retry up to 3 times on network and rate-limit errors, with a 10-minute tim
 
 | Role | Can |
 | --- | --- |
-| `frac_ai_creator` | Everything in FRAC Studio: create, run steps, edit, check, review, download |
+| `frac_ai_admin` | Everything in FRAC Studio: create, run steps, edit, check, review, download |
 
-FRAC Studio has its own role (16 Nov 2026), separate from the FRAC module's `frac_admin` / `frac_read`. The menu (`requiredRoles: ["frac_ai_creator"]`), the route guard and the uiproxy (`ROLE_CHECK: [FRAC_AI_CREATOR]`) all require it. `FRAC_AI_CREATOR` is in the portal's bootstrap role list, so a user holding only this role is not logged out; DevOps must add it to `window.env.portalRoles` and to the host-served `home.json`.
+FRAC Studio has its own role (16 Nov 2026), separate from the FRAC module's `frac_admin` / `frac_read`. The menu (`requiredRoles: ["frac_ai_admin"]`), the route guard and the uiproxy (`ROLE_CHECK: [FRAC_AI_ADMIN]`) all require it. `FRAC_AI_ADMIN` is in the portal's bootstrap role list, so a user holding only this role is not logged out; DevOps must add it to `window.env.portalRoles` and to the host-served `home.json`.
 
 ## Conditions verified
 
