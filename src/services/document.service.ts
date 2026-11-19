@@ -194,6 +194,8 @@ export class DocumentService {
    * DOCUMENTS.maxBriefFiles); after research it stamps the brief as changed, so research shows as needing attention. A sheet: imported into the FRAC, which is snapshotted
    * first so the upload can be undone from History; a newer sheet of the same kind replaces the older record.
    * Refused with 409 JOB_RUNNING while a step runs on the FRAC, whose result would overwrite the import.
+   * Every other document stays, a dictionary included (19 Nov 2026): the feedback agent can still pick rows from an
+   * earlier sheet ("only ASHA1–ASHA5 from the competency sheet, the roles from the dictionary").
    */
   async upload(ownerId: string, fracId: string, kind: DocumentKind, file: UploadedFile): Promise<{ document: DocumentInfo; frac: Frac }> {
     const frac = await this.fracs.get(ownerId, fracId);
@@ -216,9 +218,6 @@ export class DocumentService {
     const sheets = await readSheets(file);
     let next: Frac;
     let parsed: DocumentSummary;
-    // Older records this upload makes obsolete: the same kind, and for a dictionary the sheets it replaces
-    // (a Roles or Competencies sheet after a dictionary leaves its record: the rest of the FRAC may still come from it)
-    let replaces: DocumentKind[] = [kind];
     if (kind === "dictionary") {
       const imported = importDictionary(sheets, file.name);
       next = applyDictionaryImport(frac, imported, file.name);
@@ -233,7 +232,6 @@ export class DocumentService {
         warnings: imported.warnings, roles: imported.roles, postings: imported.postings, competencies: imported.competencies,
         sources: imported.sources, prefix: imported.prefix,
       };
-      replaces = ["dictionary", "roles", "competencies", ...(imported.sources.length ? ["sources" as const] : [])];
     } else if (kind === "roles") {
       const imported = importRolesSheet(sheets);
       next = applyRolesImport(frac, imported, file.name);
@@ -256,12 +254,13 @@ export class DocumentService {
 
     if (kind === "dictionary") parsed.checks = dictionaryChecks(next, this.rules());
     else if (kind !== "sources") parsed.checks = sheetChecks(next, kind, this.rules());
+    const doc: FracDocument = { ...base, text: "", parsed };
     await this.repos.fracs.snapshot(frac, `Before ${SHEET_LABELS[kind]} sheet upload`);
     const at = new Date().toISOString();
     next = stampChanges(frac, { ...next, updatedAt: at }, at);
     await this.repos.fracs.update(next);
-    for (const old of existing.filter((d) => replaces.includes(d.kind))) await this.repos.documents.delete(fracId, old.id);
-    const doc: FracDocument = { ...base, text: "", parsed };
+    // Only an older file of the same kind is replaced; every other document stays listed
+    for (const old of existing.filter((d) => d.kind === kind)) await this.repos.documents.delete(fracId, old.id);
     await this.repos.documents.insert(doc);
     return { document: info(doc), frac: next };
   }

@@ -314,8 +314,8 @@ over, and is skipped when the agent replaced that step's own section. The result
     has one. It replaces the roles, activities, postings, competencies (ladders kept where all five levels are filled)
     and, with a Sources sheet and research done, the sources. It sets `uploads.dictionary`, `roles`, `competencies` (and
     `sources`) to its file name, so the steps keep it: Roles only writes activities for empty roles, Competencies maps
-    only unmapped activities (no call when all are mapped), Ladders writes only missing ladders. It replaces older
-    Roles, Competencies (and Sources) sheet records. `parsed.counts`: roles, activities, postings, mapped, competencies,
+    only unmapped activities (no call when all are mapped), Ladders writes only missing ladders. Every other
+    document stays listed (only an older dictionary is replaced), so the feedback agent can still pick rows from them. `parsed.counts`: roles, activities, postings, mapped, competencies,
     ladders, sources. A file with no Role–Activity sheet is refused (`SHEET_NOT_RECOGNISED`: upload it as a
     Competency sheet).
   - **Answer `201`:** `{ document, frac }`, the FRAC after the import.

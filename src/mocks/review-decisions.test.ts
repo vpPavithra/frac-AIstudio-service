@@ -293,6 +293,23 @@ describe("review decisions on the mock provider", () => {
     expect(frac.roles).toHaveLength(2);
   });
 
+  it("keeps the other documents when a dictionary is uploaded, like any other upload", async () => {
+    const ctx = setup();
+    const id = await create(ctx, { cadre: "ANM", state: "Bihar", size: "compact" });
+    await upload(ctx, id, "competencies", await download(ctx, "/v1/templates/competencies"), "competencies.xlsx").expect(201);
+    const template = await download(ctx, "/v1/templates/dictionary");
+
+    const res = await upload(ctx, id, "dictionary", template, "dictionary.xlsx").expect(201);
+    expect(res.body.frac.roles).toHaveLength(2);
+    const listed = async () => (await request(ctx.app).get(`/v1/fracs/${id}/documents`).set(OWNER).expect(200)).body.documents
+      .map((d: { kind: string; filename: string }) => `${d.kind} ${d.filename}`);
+    expect(await listed()).toEqual(["competencies competencies.xlsx", "dictionary dictionary.xlsx"]);
+
+    // A newer dictionary replaces the older one only
+    await upload(ctx, id, "dictionary", template, "dictionary v2.xlsx").expect(201);
+    expect(await listed()).toEqual(["competencies competencies.xlsx", "dictionary dictionary v2.xlsx"]);
+  });
+
   it("refuses a FRAC dictionary with no roles sheet, pointing to the Competencies slot", async () => {
     const ctx = setup();
     const id = await create(ctx, { cadre: "ANM" });
