@@ -2,7 +2,7 @@
 // and the Reviewer's checklist (ai-review.service.ts, also run by the expert check). Pure string builders;
 // the step files call them and pass the text to the TextProvider. Brief size wording comes from
 // config/frac-sizes.json (via sizes.ts). Never edit the text inside the templates without the spec owner.
-import type { Frac, FracActivity, FracSource, ResearchField } from "../../models/frac.model.ts";
+import type { Frac, FracActivity, FracCompetency, FracRole, FracSource, ResearchField } from "../../models/frac.model.ts";
 import { DOCUMENTS } from "../../config/constants.ts";
 import { loadReviewRules } from "../../config/review-rules.ts";
 import { cadreFamily } from "../review-engine/rules.ts";
@@ -57,11 +57,16 @@ const sizeUndecided = (f: Frac) => f.sizeBy === "agent" && !f.research;
 const sizeChoices = () =>
   (Object.keys(SIZE_TARGETS) as (keyof typeof SIZE_TARGETS)[]).map((k) => `${k} (${SIZE_TARGETS[k].ranges})`).join("; ");
 
-// Shared prompt blocks. `revise` is empty on a first run, so filter(Boolean) drops it.
+// Shared prompt blocks. Blocks that are empty (e.g. `revise`) are dropped by filter(Boolean).
 const brief = (f: Frac) =>
   `BRIEF\nCadre: ${f.cadreFull || f.cadre}\nState: ${f.state}\nSize: ${sizeUndecided(f) ? "decide from the research" : `${f.size} (${SIZE_TARGETS[f.size].ranges})`}\nWhat this FRAC should cover: ${f.prompt || "-"}`;
+/**
+ * The team's feedback no longer sits in the middle of the prompt, where the step's own instructions after it won
+ * (19 Nov 2026): callModel puts it first, as the top priority (step-context.ts withTeamDirection). The builders still
+ * take `feedback` so the call sites read the same; here it only notes that a revise keeps the team's edits otherwise.
+ */
 const revise = (feedback?: string) =>
-  feedback ? `TEAM FEEDBACK (apply it; keep what the team edited unless the feedback says otherwise):\n${feedback}` : "";
+  feedback ? "This is a revise: keep what the team edited, except where the TEAM FEEDBACK at the top asks for a change." : "";
 const scope = (f: Frac) =>
   `AUTHORISED (treat as authoritative):\n${f.research?.authorised ?? ""}\nNOT AUTHORISED (must be referred):\n${f.research?.notAuthorised ?? ""}`;
 const postings = (f: Frac) => f.postings.map((p) => `${p.key} ${p.label}`).join("; ") || "none (the job has no separate postings)";
@@ -313,6 +318,50 @@ export const fixFindingsPrompt = (f: Frac, findings: FixFindingInput[], maxNew: 
 - skipped: every finding you cannot fix without inventing facts (a scheme, number, guideline or legal power the research and brief do not state), with a one-line reason the team can act on.
 Use only codes listed above. Change nothing a finding does not ask for. Never invent schemes, numbers or guidelines: skip instead.`,
     `${JSON_ONLY}\n{"activities":[{"code":"A12","text":""}],"competencies":[{"code":"${competencies[0]?.code ?? "C1"}","label":"","description":"","type":"Functional","area":""}],"newCompetencies":[{"label":"","description":"","type":"Domain","area":"","activities":[{"code":"A16","level":3}]}],"skipped":[{"finding":"title of the finding","reason":""}]}`,
+  ].filter(Boolean).join("\n\n");
+};
+
+/** One source the feedback agent can take competencies and roles from: the FRAC itself ("F") or an uploaded document. */
+export interface FeedbackSource {
+  ref: string;
+  name: string;
+  kind: string;
+  competencies: FracCompetency[];
+  roles: FracRole[];
+  text: string;
+}
+
+const TAB_NAMES: Record<string, string> = { research: "Research", competencies: "Competencies", roles: "Roles & activities", ladders: "Level ladders" };
+
+/**
+ * The team feedback agent (feedback-agent.ts, 19 Nov 2026): reads the team's feedback (callModel puts it first) with
+ * every source's competencies and roles, and answers which ones the FRAC keeps and how its activities map. It answers
+ * by reference; code copies the rows.
+ */
+export const feedbackAgentPrompt = (f: Frac, step: string, sources: FeedbackSource[]) => {
+  const block = (x: FeedbackSource) => {
+    const comps = x.competencies.map((c) => `  ${c.code} | ${c.label} | ${c.type}${c.description ? ` | ${c.description}` : ""}`).join("\n");
+    const roles = x.roles.map((r) => `  ${r.code} ${r.title}\n${r.activities.map((a) => `    ${a.code} ${a.text}${a.comp ? ` → ${a.comp}` : ""}`).join("\n")}`).join("\n");
+    return [`[${x.ref}] ${x.name} (${x.kind})`,
+      comps ? ` Competencies:\n${comps}` : " Competencies: none",
+      roles ? ` Roles and activities:\n${roles}` : " Roles: none",
+      x.text ? ` Text:\n${x.text}` : ""].filter(Boolean).join("\n");
+  };
+  return [KAUSHAL, SOURCE_DATA, brief(f),
+    `The team wrote the feedback on the ${TAB_NAMES[step] ?? step} tab. Your job is to carry it out on the FRAC's competencies, roles and mappings before the ${TAB_NAMES[step] ?? step} step runs. The feedback may refer to any source below, by file name or by what it is ("the dictionary", "the template", "the competency sheet", "the job description").`,
+    `SOURCES:\n${sources.map(block).join("\n\n")}`,
+    `Decide, following the feedback exactly:
+- competencies: set change true only when the feedback asks to choose, add, drop or change competencies. Then list every competency the FRAC should have, in order. For one taken from a source give "from" (its ref, e.g. "D1") and its "code" exactly as listed, and leave the other fields empty unless the feedback asks to change them. For one the feedback asks you to write, use "from":"NEW" with a new code and all fields.
+- roles: set change true only when the feedback asks to choose, take, drop or change roles. Then list every role the FRAC should have, in order: "from" and the role "code" as listed (all its activities come with it; give "title" only to rename it). Use "from":"NEW" with a title and its activities only when the feedback asks you to write a role.
+- mapping: whenever the FRAC will have both activities and competencies and roles or competencies change, map every activity of the roles it will have to exactly one of the competencies it will have, at the level the job demands (l = 1–5, usually 3 or 4). Name an activity by source and code, e.g. "D2:A14" for a role taken from D2, or "F:A3" for a role the FRAC keeps. Use only competency codes the FRAC will have.
+- remaining: the part of the feedback that is not about which competencies and roles to have or how to map (research facts, wording, level ladders), word for word, for the step to apply. Empty when nothing is left.
+- notApplied: only points you did not carry out at all (for example roles from a dictionary that is not uploaded), with a one-line reason the team can act on, such as which file to upload. A point you carried out never goes here, even with a caveat.
+- notes: caveats about what you did, one line each (a choice you had to make, a document that does not fit the cadre or state). Empty when none.
+- summary: one plain sentence on what you did.
+In summary, notApplied and notes, name documents by their file name, never by ref (D1, F).
+Never invent a code or a row a source does not list; if the feedback names something that is not there, report it in notApplied.`,
+    `${JSON_ONLY}
+{"summary":"","competencies":{"change":true,"items":[{"from":"D1","code":"","label":"","description":"","type":"","area":"","kcm":""}]},"roles":{"change":true,"items":[{"from":"D2","code":"R1","title":"","activities":[]}]},"mapping":[{"a":"D2:A1","c":"","l":3}],"remaining":"","notApplied":[{"point":"","reason":""}]}`,
   ].filter(Boolean).join("\n\n");
 };
 

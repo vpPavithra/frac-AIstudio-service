@@ -79,11 +79,30 @@ export interface FracCompetency {
 /** A Creator step whose content can go out of date when an earlier step changes (see services/step-changes.ts). */
 export type FracStep = "brief" | "research" | "roles" | "competencies" | "ladders";
 
-/** One feedback entry the team gave when revising a step. */
+/** One step run: the revise feedback and the instructions the team gave, if any. */
 export interface FracLogEntry {
   at: string;
   step: number;
   feedback: string;
+  /** Instructions typed before the run (StepContext.guidance); absent on entries before Nov 2026 and when none. */
+  guidance?: string;
+  /** What the feedback agent changed from the feedback (services/ai/feedback-agent.ts); absent when nothing. */
+  applied?: string[];
+}
+
+/** What the feedback agent did on the last run that had feedback or instructions (FracService.startStep). */
+export interface FracFeedbackResult {
+  at: string;
+  step: "research" | "roles" | "competencies" | "ladders";
+  summary: string;
+  /** What changed, e.g. "5 competencies (ASHA1, …) from Competencies.xlsx". */
+  applied: string[];
+  /** Points the agent could not carry out, with the reason. */
+  notApplied: { point: string; reason: string }[];
+  /** Caveats about what was done, e.g. a document that does not fit the cadre. Missing on older runs. */
+  notes?: string[];
+  /** False when the feedback was carried out and the step itself did not need to run. */
+  stepRan: boolean;
 }
 
 /**
@@ -109,8 +128,12 @@ export interface Frac {
   imported?: string;
   /** The earlier FRAC or Positions entry whose postings and roles this FRAC started from (position matching). */
   seededFrom?: FracSeed;
-  /** Standard sheets the team uploaded, by kind, with the file name. While set, that step uses the sheet instead of the AI. */
-  uploads?: Partial<Record<SheetKind, string>>;
+  /**
+   * Standard sheets the team uploaded, by kind, with the file name. While set, that step uses the sheet instead of the AI.
+   * A FRAC dictionary sets roles, competencies (and sources) to its file name, plus `dictionary`, which keeps its
+   * activity mappings when the Competencies step maps (only unmapped activities go to the AI).
+   */
+  uploads?: Partial<Record<SheetKind | "dictionary", string>>;
   codePrefix: string;
   postings: Posting[];
   research: FracResearch | null;
@@ -123,6 +146,8 @@ export interface Frac {
   rolesCheck?: FracRolesCheck;
   /** The last "Fix all findings" run on the expert check: how many findings it handled and what the agent skipped. */
   lastFix?: FracLastFix;
+  /** The last run with feedback or instructions: what the feedback agent changed and what it could not. */
+  lastFeedback?: FracFeedbackResult;
   /**
    * When each step's content last changed (an edit, an AI run, a sheet upload) or the team marked it checked.
    * A step with output is out of date when an earlier step changed after it. Missing on older FRACs.

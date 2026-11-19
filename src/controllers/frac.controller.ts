@@ -77,7 +77,8 @@ export function fracController(fracs: FracService) {
 
     /** Fixes expert-check findings with the agent: body { titles? } (one finding's button); none means every open finding. */
     async startFixAll(req: Request, res: Response) {
-      const job = await fracs.startFixAll(ownerOf(res), param(req.params.id), (req.body as FixAllInput).titles);
+      const body = req.body as FixAllInput;
+      const job = await fracs.startFixAll(ownerOf(res), param(req.params.id), body.titles, body.guidance);
       res.status(202).json({ jobId: job.id });
     },
 

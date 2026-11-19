@@ -156,7 +156,12 @@ export async function runResearch(ctx: StepContext): Promise<Partial<Frac>> {
   const docs = ctx.documents ?? [];
   const briefDocs = docs.filter((d) => d.kind === "brief").map((d) => ({ name: d.filename, text: d.text }));
   // An uploaded Sources sheet: its rows (kept on the document) replace the model's sources, and search is off
-  const sources = frac.uploads?.sources ? (docs.find((d) => d.kind === "sources")?.parsed?.sources ?? null) : null;
+  // The Sources sheet, or a FRAC dictionary that had one: the document named in uploads.sources, else the Sources sheet
+  const withSources = docs.filter((d) => (d.kind === "sources" || d.kind === "dictionary") && d.parsed?.sources?.length);
+  const sourcesDoc = frac.uploads?.sources
+    ? withSources.find((d) => d.filename === frac.uploads?.sources) ?? withSources.find((d) => d.kind === "sources")
+    : undefined;
+  const sources = sourcesDoc?.parsed?.sources ?? null;
   const fixedPostings = !!(frac.seededFrom || frac.uploads?.roles);
   if (briefDocs.length && !feedback) return researchFromDocuments(ctx, briefDocs, sources, fixedPostings);
   let citations: Citation[] = [];

@@ -1,5 +1,5 @@
 // Reads the standard sheets a team uploads in place of an AI step (review decisions, Nov 2026): Roles with
-// activities, Competencies with optional ladders, and Sources. Input is SheetData from the workbook or CSV
+// activities, Competencies with optional ladders, and Sources; and a FRAC dictionary, all three in one workbook. Input is SheetData from the workbook or CSV
 // reader; sheets are found by their header row (sheet-formats.ts gives the layouts), reusing the Reviewer's
 // header helpers and competency reader. Pure: DocumentService applies the result to the FRAC.
 import { LIMITS } from "../../config/constants.ts";
@@ -7,6 +7,8 @@ import type { FracCompetency, FracRole, FracSource, Posting } from "../../models
 import {
   ACTIVITY,
   cell,
+  parseWorkbook,
+  WorkbookParseError,
   col,
   COMP_CODE,
   COMP_SHEET,
@@ -19,6 +21,7 @@ import {
   type SheetData,
 } from "../review-engine/parse-workbook.ts";
 import { badRequest } from "../../utils/response.ts";
+import { dominantPrefix, formatRefs } from "../review-engine/refs.ts";
 import { renumberRoles } from "../ai/roles.step.ts";
 import { SOURCE_TIERS } from "./sheet-formats.ts";
 
@@ -39,6 +42,17 @@ export interface CompetenciesImport {
 
 export interface SourcesImport {
   sources: FracSource[];
+  warnings: string[];
+}
+
+export interface DictionaryImport {
+  roles: FracRole[];
+  postings: Posting[];
+  competencies: FracCompetency[];
+  /** From a Sources sheet in the same file (a Creator download has one); empty when it has none. */
+  sources: FracSource[];
+  /** The competency code prefix most codes share (e.g. "GNM"); "" when there is none. */
+  prefix: string;
   warnings: string[];
 }
 
@@ -179,4 +193,74 @@ export function importSourcesSheet(sheets: SheetData[]): SourcesImport {
   }
   if (!sources.length) throw badRequest("SHEET_NOT_RECOGNISED", `The sources sheet has no rows with a title. ${TEMPLATE_HINT}`);
   return { sources, warnings };
+}
+
+/**
+ * A FRAC dictionary: a whole FRAC in one workbook, as the Reviewer reads it (parseWorkbook): the Role–Activity sheet
+ * with its posting columns and competency mappings, every competency sheet (ladders kept where all five level labels
+ * are filled), and a Sources sheet when the file has one (a Creator download). Codes of roles and activities are
+ * renumbered; competency codes and the mappings to them are kept as written.
+ * Throws 400 SHEET_NOT_RECOGNISED when there is no competency sheet or no Role–Activity sheet (a competencies-only
+ * file belongs in the Competencies slot).
+ */
+export function importDictionary(sheets: SheetData[], filename: string): DictionaryImport {
+  let parsed: ReturnType<typeof parseWorkbook>;
+  try {
+    parsed = parseWorkbook(sheets, filename);
+  } catch (err) {
+    if (err instanceof WorkbookParseError) {
+      throw badRequest("SHEET_NOT_RECOGNISED", `Could not find the competencies in this FRAC dictionary. It needs a competency sheet with "Competency Code" and "Competency Level 1 Label" columns. ${TEMPLATE_HINT}`);
+    }
+    throw err;
+  }
+  const { model } = parsed;
+  if (!model.hasFrac || !model.roles.length) {
+    throw badRequest("SHEET_NOT_RECOGNISED", "This file has competencies but no roles and activities sheet. Upload it as a Competency sheet instead, or add the FRAC sheet with \"Role\" and \"Activity\" columns.");
+  }
+
+  const warnings = [...parsed.warnings];
+  if (model.postings.length > MAX_POSTINGS) warnings.push(`Only the first ${MAX_POSTINGS} posting columns were kept.`);
+  const keptPostings = model.postings.slice(0, MAX_POSTINGS);
+  const postings = keptPostings.map((p, i) => ({ key: `P${i + 1}`, label: (model.postingLabels[i] || p).replace(/^P\d+\s*:\s*/i, "") }));
+  const keyOf = new Map(keptPostings.map((p, i) => [p, `P${i + 1}`]));
+
+  const roles: FracRole[] = model.roles.map((r) => ({
+    code: "",
+    title: r.title,
+    source: "",
+    activities: r.activities.map((a) => ({
+      code: "",
+      text: a.text,
+      postings: Object.fromEntries(Object.entries(a.postings).filter(([header]) => keyOf.has(header)).map(([header, v]) => [keyOf.get(header) as string, yesNo(v)])),
+      source: "",
+      tier: "",
+      comp: formatRefs(a.refs),
+    })),
+  }));
+
+  const seen = new Set<string>();
+  const competencies: FracCompetency[] = [];
+  for (const c of model.competencies) {
+    if (seen.has(c.code)) {
+      warnings.push(`Competency ${c.code} appears more than once; the first row was kept.`);
+      continue;
+    }
+    seen.add(c.code);
+    const full = c.format !== "kcm" && c.levels.length === 5 && c.levels.every((l) => l.label.trim());
+    competencies.push({ code: c.code, label: c.label, description: c.description, type: c.type, area: c.area, kcm: c.kcm ?? "", levels: full ? c.levels : null });
+  }
+
+  const unknown = new Set(roles.flatMap((r) => r.activities.flatMap((a) => a.comp.split(",").map((x) => x.split("@")[0].trim()).filter(Boolean)))
+    .filter((code) => !seen.has(code)));
+  if (unknown.size) warnings.push(`${unknown.size} competency code(s) used in the FRAC sheet are not in the competency sheet: ${[...unknown].slice(0, 5).join(", ")}${unknown.size > 5 ? "…" : ""}.`);
+  const unmapped = roles.reduce((n, r) => n + r.activities.filter((a) => !a.comp).length, 0);
+  if (unmapped) warnings.push(`${unmapped} activit${unmapped === 1 ? "y has" : "ies have"} no competency; Map activities fills them in.`);
+
+  let sources: FracSource[] = [];
+  try {
+    sources = importSourcesSheet(sheets).sources;
+  } catch {
+    // A dictionary without a Sources sheet is normal; research finds the sources
+  }
+  return { roles: renumberRoles(roles), postings, competencies, sources, prefix: dominantPrefix(competencies.map((c) => c.code)), warnings };
 }

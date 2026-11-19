@@ -5,6 +5,7 @@
 
 /** The `msg` a job shows while it runs; the functions take the count shown in the text. */
 export const JOB_MESSAGES = {
+  feedback: "The agent is reading your feedback and the uploaded documents first…",
   research: "The agent is gathering the job description, postings and sources…",
   researchDocuments: "The agent is reading your documents to see what they cover…",
   researchGaps: (parts: string) => `The agent is researching what your documents leave out: ${parts}…`,

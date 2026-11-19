@@ -225,6 +225,83 @@ describe("review decisions on the mock provider", () => {
     expect(busy.body.error.code).toBe("JOB_RUNNING");
   });
 
+  it("imports a Creator download as a FRAC dictionary: same roles, mappings, competencies and ladders, and no AI to keep them", async () => {
+    const ctx = setup();
+    const built = await create(ctx, { cadre: "ANM", state: "Bihar", size: "compact" });
+    for (const name of ["research", "competencies", "roles", "ladders"]) await step(ctx, built, name);
+    const original = await getFrac(ctx, built);
+    const file = await download(ctx, `/v1/fracs/${built}/export.xlsx`);
+
+    const id = await create(ctx, { cadre: "ANM", state: "Bihar", size: "compact" });
+    await step(ctx, id, "research");
+    const res = await upload(ctx, id, "dictionary", file, "ANM dictionary.xlsx").expect(201);
+    const activities = original.roles.flatMap((r: { activities: unknown[] }) => r.activities).length;
+    expect(res.body.document.parsed.counts).toMatchObject({
+      roles: original.roles.length, activities, mapped: activities,
+      competencies: original.competencies.length, ladders: original.competencies.length,
+    });
+    expect(res.body.document.parsed.counts.sources).toBeGreaterThan(0);
+    const frac = res.body.frac;
+    expect(frac.uploads).toEqual({ dictionary: "ANM dictionary.xlsx", roles: "ANM dictionary.xlsx", competencies: "ANM dictionary.xlsx", sources: "ANM dictionary.xlsx" });
+    expect(frac.rolesDirty).toBe(false);
+    const flat = (f: { roles: { title: string; activities: { text: string; comp: string }[] }[] }) =>
+      f.roles.flatMap((r) => r.activities.map((a) => `${r.title}|${a.text}|${a.comp}`));
+    expect(flat(frac)).toEqual(flat(original));
+    expect(frac.competencies.map((c: { code: string }) => c.code)).toEqual(original.competencies.map((c: { code: string }) => c.code));
+    expect(frac.postings).toEqual(original.postings);
+
+    // The steps keep it: nothing to write or map, so no AI calls
+    const before = ctx.calls.length;
+    for (const name of ["competencies", "roles", "ladders"]) await step(ctx, id, name);
+    expect(tasksSince(ctx, before)).toEqual([]);
+    expect(flat(await getFrac(ctx, id))).toEqual(flat(original));
+  });
+
+  it("serves a FRAC dictionary template that imports, maps only unmapped activities, and can be removed", async () => {
+    const ctx = setup();
+    const id = await create(ctx, { cadre: "ANM", state: "Bihar", size: "compact" });
+    const template = await download(ctx, "/v1/templates/dictionary");
+    expect((await readWorkbook(template)).map((s) => s.name)).toEqual(["FRAC", "Competencies", "Sources", "Instructions"]);
+
+    // The template with the first activity's (A1) mapping left blank
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(template);
+    const sheet = wb.getWorksheet("FRAC");
+    if (!sheet) throw new Error("FRAC sheet missing");
+    const mapCol = (sheet.getRow(1).values as string[]).indexOf("Competency");
+    sheet.getRow(3).getCell(mapCol).value = "";
+    const file = Buffer.from(await wb.xlsx.writeBuffer());
+
+    const res = await upload(ctx, id, "dictionary", file, "dictionary.xlsx").expect(201);
+    expect(res.body.document.parsed.counts).toMatchObject({ roles: 2, activities: 3, mapped: 2, competencies: 2, ladders: 1, sources: 2 });
+    expect(res.body.document.parsed.warnings).toEqual(["1 activity has no competency; Map activities fills them in."]);
+    expect(res.body.frac.rolesDirty).toBe(true);
+
+    await step(ctx, id, "research");
+    const before = ctx.calls.length;
+    await step(ctx, id, "competencies");
+    expect(tasksSince(ctx, before)).toEqual(["mapping"]);
+    const sent = ctx.calls[before].input as { activities: { code: string }[] };
+    expect(sent.activities.map((a) => a.code)).toEqual(["A1"]);
+    let frac = await getFrac(ctx, id);
+    expect(frac.roles.flatMap((r: { activities: { comp: string }[] }) => r.activities.map((a) => a.comp))).toEqual([expect.stringMatching(/^ANM[12]@L[1-5]$/), "ANM1@L3", "ANM2@L2"]);
+
+    const doc = (await request(ctx.app).get(`/v1/fracs/${id}/documents`).set(OWNER).expect(200)).body.documents[0];
+    await request(ctx.app).delete(`/v1/fracs/${id}/documents/${doc.id}`).set(OWNER).expect(200);
+    frac = await getFrac(ctx, id);
+    expect(frac.uploads ?? {}).toEqual({});
+    expect(frac.roles).toHaveLength(2);
+  });
+
+  it("refuses a FRAC dictionary with no roles sheet, pointing to the Competencies slot", async () => {
+    const ctx = setup();
+    const id = await create(ctx, { cadre: "ANM" });
+    const competenciesOnly = await download(ctx, "/v1/templates/competencies");
+    const res = await upload(ctx, id, "dictionary", competenciesOnly, "competencies.xlsx").expect(400);
+    expect(res.body.error.code).toBe("SHEET_NOT_RECOGNISED");
+    expect(res.body.error.message).toContain("Competency sheet");
+  });
+
   it("matches a position exactly and seeds a new FRAC from it", async () => {
     const ctx = setup();
     const first = await create(ctx, { cadre: "ANM", state: "Bihar", size: "compact" });

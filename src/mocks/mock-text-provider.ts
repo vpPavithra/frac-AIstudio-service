@@ -126,6 +126,8 @@ export class MockTextProvider implements TextProvider {
         return this.verifyRoles(input);
       case "fix-findings":
         return this.fixFindings(input);
+      case "feedback":
+        return this.feedback(input);
     }
   }
 
@@ -201,6 +203,16 @@ export class MockTextProvider implements TextProvider {
    * "Fix all findings" answer: rewrites the first activity a finding names, adds one competency for a coverage
    * finding (linked to the activities it names), and skips state-fit findings, so every branch is exercised.
    */
+  /**
+   * Team feedback agent: the mock cannot read feedback, so it changes no section and hands all of it on to the step,
+   * which then runs as it always has (the sample answers echo the feedback).
+   */
+  private feedback(input: Record<string, unknown>) {
+    const remaining = [input.feedback, input.guidance].map((x) => String(x ?? "").trim()).filter(Boolean).join("\n");
+    return { summary: "The sample agent passed the feedback on to the step.", competencies: { change: false, items: [] },
+      roles: { change: false, items: [] }, mapping: [], remaining, notApplied: [], notes: [] };
+  }
+
   private fixFindings(input: Record<string, unknown>) {
     const findings = (input.findings ?? []) as { check: string; title: string; fix: string; refs: string[] }[];
     const activities = (input.activities ?? []) as { code: string; text: string }[];

@@ -7,8 +7,12 @@ import type { Finding } from "./report.model.ts";
 /** A rule-based expert-check finding about an uploaded sheet, worked out at upload (no AI). */
 export type SheetCheck = Pick<Finding, "check" | "sev" | "title" | "detail" | "fix" | "refs">;
 
-/** "brief": a JD or government order (PDF, DOCX, TXT) for research; the others are standard sheets. */
-export type DocumentKind = "brief" | SheetKind;
+/**
+ * "brief": a JD or government order (PDF, DOCX, TXT) for research; "dictionary": a whole existing FRAC (roles,
+ * activities, mappings, competencies, ladders, and sources if it has them) that the steps then update; the others
+ * are standard sheets.
+ */
+export type DocumentKind = "brief" | "dictionary" | SheetKind;
 
 /**
  * What an import read from a standard sheet. The rows are kept so the sheet can be re-applied after edits
@@ -21,6 +25,8 @@ export interface DocumentSummary {
   roles?: FracRole[];
   postings?: Posting[];
   competencies?: FracCompetency[];
+  /** A FRAC dictionary: its competency code prefix, put on the FRAC when the dictionary is applied. */
+  prefix?: string;
   /** The expert check's rule-based findings about this sheet's rows, as at the upload (roles and competencies sheets). */
   checks?: SheetCheck[];
 }

@@ -100,6 +100,24 @@ export const SHEET_FORMATS: Record<SheetKind, SheetFormat> = {
   },
 };
 
+/**
+ * The FRAC sheet of a dictionary template: the Roles sheet plus the competency each activity needs, as a Creator
+ * download writes it ("ANM1@L3"; several separated by commas). The importer finds the column by its header.
+ */
+export const DICTIONARY_FRAC_FORMAT: SheetFormat = {
+  ...SHEET_FORMATS.roles,
+  columns: [
+    ...SHEET_FORMATS.roles.columns,
+    { header: "Competency", help: 'On activity rows: the competency codes it needs, each with its level, e.g. "ANM1@L3" or "ANM1@L3, ANM2@L2". Leave blank to have FRAC Studio map it.' },
+  ],
+  example: SHEET_FORMATS.roles.example.map((row) => [...row, row[0].startsWith("A") ? (row[0] === "A3" ? "ANM2@L2" : "ANM1@L3") : ""]),
+  notes: [
+    ...SHEET_FORMATS.roles.notes,
+    "A FRAC dictionary is the FRAC, Competencies and Sources sheets in one file; a Creator download is one already.",
+    "Uploading it replaces the FRAC's roles and competencies. FRAC Studio then updates it: research, the expert check and Fix all.",
+  ],
+};
+
 /** What a brief document (JD or government order) should contain; served as the "brief" template. */
 export const BRIEF_GUIDE = `FRAC Studio: what to upload as a job description or government order
 ====================================================================

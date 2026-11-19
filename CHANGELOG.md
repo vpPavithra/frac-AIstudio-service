@@ -5,6 +5,27 @@ full pre-deploy test checklist passes.
 
 ## Unreleased: FRAC Studio review decisions (11 Nov 2026)
 
+Added 19 Nov 2026:
+- **Feedback first.** The team's feedback and instructions now open every AI prompt ("TEAM FEEDBACK: FIRST PRIORITY"),
+  overriding the step's counts, earlier output and what to keep (never facts, legal scope or the answer shape), with a
+  point-by-point check just before the output shape. Before, feedback sat mid-prompt and lost to the instructions after it.
+- **Feedback agent.** With feedback or instructions, one complex-tier call (task `feedback`) runs before the step. It
+  reads every uploaded document's competencies and roles and decides which ones the FRAC keeps and how each activity
+  maps; it answers by reference and code copies the rows exactly (codes, wording, postings, ladders). The step then runs
+  only for the feedback left over, and never re-runs a section the agent just replaced. With no feedback, nothing
+  changes. What it did is on `lastFeedback` (applied, notApplied, notes) and `log[].applied`.
+
+Added 18 Nov 2026:
+- **Instructions before a run.** `POST /steps/:step` and `POST /fixes/all` take `guidance`: the team's instructions,
+  typed in each tab's box before running. `callModel` adds them to every AI call of the job (document reading,
+  mapping, activities, fixes, ladders), and the step keeps its usual path, unlike revise `feedback`, so an uploaded
+  sheet or document is still used. The expert check never sees them. Logged on `log[].guidance`; the version is named
+  "… (with instructions)".
+- **FRAC dictionary upload.** Document kind `dictionary` (.xlsx): a whole existing FRAC, read with the Reviewer's
+  workbook reader, keeping its activity → competency mappings, postings, ladders and sources. The steps then only fill
+  gaps (Competencies maps only unmapped activities), and the expert check and Fix all update it. Template at
+  `GET /v1/templates/dictionary`. Migration `011` allows the new kind in `frac_documents`.
+
 Added 16 Nov 2026 (security review):
 - **Service key.** Every `/v1` request must carry `x-service-key` matching `SERVICE_KEY` (constant-time compare,
   `401 NOT_FROM_PROXY`); required in production. The uiproxy sends it and no longer forwards the platform API key or

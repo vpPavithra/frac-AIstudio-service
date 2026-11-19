@@ -212,25 +212,34 @@ export async function buildFracWorkbook(frac: Frac, methodParagraph: string): Pr
 }
 
 /**
- * A standard-sheet template (documents/sheet-formats.ts): the sheet with its header row and example rows,
- * then an "Instructions" sheet with one row per column and the notes. The importer reads the same headers.
+ * A standard-sheet template (documents/sheet-formats.ts): each sheet with its header row and example rows (one
+ * sheet, or several for a FRAC dictionary), then an "Instructions" sheet with one row per column and the notes.
+ * The importer reads the same headers.
  */
-export async function buildTemplateWorkbook(format: SheetFormat): Promise<Buffer> {
+export async function buildTemplateWorkbook(formats: SheetFormat | SheetFormat[]): Promise<Buffer> {
+  const list = Array.isArray(formats) ? formats : [formats];
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "FRAC Studio";
-  const sheet = workbook.addWorksheet(format.sheet);
-  sheet.addRow(format.columns.map((c) => c.header));
-  format.example.forEach((row) => sheet.addRow(row));
-  sheet.columns.forEach((column) => {
-    column.width = 28;
-  });
-  styleSheet(sheet, [1]);
+  for (const format of list) {
+    const sheet = workbook.addWorksheet(format.sheet);
+    sheet.addRow(format.columns.map((c) => c.header));
+    format.example.forEach((row) => sheet.addRow(row));
+    sheet.columns.forEach((column) => {
+      column.width = 28;
+    });
+    styleSheet(sheet, [1]);
+  }
 
+  // One Instructions sheet; with several sheets, each block is headed by its sheet's name
   const help = workbook.addWorksheet("Instructions");
   help.addRow(["Column", "What to write"]);
-  format.columns.forEach((c) => help.addRow([c.header, c.help]));
-  help.addRow([]);
-  format.notes.forEach((note) => help.addRow(["Note", note]));
+  for (const format of list) {
+    if (list.length > 1) help.addRow([`${format.sheet} sheet`, ""]);
+    format.columns.forEach((c) => help.addRow([c.header, c.help]));
+    help.addRow([]);
+    format.notes.forEach((note) => help.addRow(["Note", note]));
+    if (list.length > 1) help.addRow([]);
+  }
   help.addRow(["Note", "Replace the example rows with your own. Keep the header row as it is."]);
   help.getColumn(1).width = 40;
   help.getColumn(2).width = 90;

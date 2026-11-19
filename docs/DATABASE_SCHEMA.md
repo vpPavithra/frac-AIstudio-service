@@ -1,7 +1,7 @@
 # Database schema
 
 FRAC Studio stores everything in one PostgreSQL database: 9 tables, created by the 10 files in `migrations/`
-(`001_init.sql` to `010_frac_documents.sql`). Each FRAC is kept whole as one JSONB document; the other tables hold
+(`001_init.sql` to `011_frac_dictionary_documents.sql`). Each FRAC is kept whole as one JSONB document; the other tables hold
 history, uploads, reviews, background jobs and AI cost records. This file is the reference for every table, column,
 constraint, index and JSONB shape. To open the database in pgAdmin, see [DATABASE.md](DATABASE.md).
 
@@ -22,7 +22,7 @@ The migrations are the source of truth. When you add one, update this file in th
 | --- | --- | --- | --- |
 | `fracs` | One row per FRAC, the whole FRAC as JSONB | Create FRAC, every edit and every step | 001 |
 | `frac_versions` | Snapshots of a FRAC for History and restore | Each completed step, revise, upload, re-apply, restore | 001 |
-| `frac_documents` | Uploaded job descriptions and sheets (extracted text and parsed rows) | Upload on the Research tab | 010 |
+| `frac_documents` | Uploaded job descriptions and sheets (extracted text and parsed rows) | Upload on the Research tab | 010, 011 |
 | `reviews` | Review FRAC reports and Creator expert checks | Review upload, expert check | 001, 003 |
 | `jobs` | Background steps, their progress and AI spend | Every AI step, check or review | 001, 002, 009 |
 | `review_answer_cache` | Stored AI checklist answers, reused when the text has not changed | Expert check | 008 |
@@ -137,7 +137,7 @@ keeps its extracted text, and a sheet keeps what was read from it, so it can be 
 | `id` | UUID | No | | Primary key |
 | `frac_id` | UUID | No | | `REFERENCES fracs (id) ON DELETE CASCADE` |
 | `owner_id` | TEXT | No | | Uploader |
-| `kind` | TEXT | No | | `CHECK (kind IN ('brief', 'roles', 'competencies', 'sources'))`. `brief` = job description or government order |
+| `kind` | TEXT | No | | `CHECK (kind IN ('brief', 'dictionary', 'roles', 'competencies', 'sources'))` (`dictionary` added by migration 011). `brief` = job description or government order; `dictionary` = a whole existing FRAC |
 | `filename` | TEXT | No | | Original file name |
 | `mime` | TEXT | No | `''` | File type |
 | `bytes` | INTEGER | No | `0` | File size |

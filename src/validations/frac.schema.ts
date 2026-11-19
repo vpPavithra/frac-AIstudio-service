@@ -127,12 +127,17 @@ export const patchFracSchema = z.object({
 });
 export type PatchFracInput = z.infer<typeof patchFracSchema>;
 
+/** Optional free text from the team, at most 5,000 characters; blank means none. */
+const teamText = () => z.string().trim().max(5000).transform((s) => s || undefined).optional();
+
 /**
- * POST /fracs/:id/steps/:step (spec 8): optional team feedback for a revise; ladders also take the
- * competency codes to rewrite ("Revise {code}", "Fix these competencies").
+ * POST /fracs/:id/steps/:step (spec 8): optional team feedback for a revise, or guidance (instructions typed before
+ * a run, which steer the step without changing what it does); ladders also take the competency codes to rewrite
+ * ("Revise {code}", "Fix these competencies").
  */
 export const stepSchema = z.object({
-  feedback: z.string().trim().max(5000).transform((s) => s || undefined).optional(),
+  feedback: teamText(),
+  guidance: teamText(),
   codes: z.array(shortText(20, "Competency code is required")).max(LIMITS.maxCompetencies).optional(),
 });
 export type StepInput = z.infer<typeof stepSchema>;
@@ -142,7 +147,11 @@ export const outdatedFixSchema = z.object({ title: shortText(300, "Finding title
 export type OutdatedFixInput = z.infer<typeof outdatedFixSchema>;
 
 /** POST /fracs/:id/fixes/all: optional finding titles to fix ("Fix with the agent" on one finding); none means all open findings. */
-export const fixAllSchema = z.object({ titles: z.array(shortText(300, "Finding title is required")).max(100).optional() });
+export const fixAllSchema = z.object({
+  titles: z.array(shortText(300, "Finding title is required")).max(100).optional(),
+  /** Instructions the fixes follow (the Expert check tab's box); the expert check itself never sees them. */
+  guidance: teamText(),
+});
 export type FixAllInput = z.infer<typeof fixAllSchema>;
 
 /** GET /fracs/match: the position typed on the brief, and its state to rank same-state FRACs first. */
@@ -156,10 +165,10 @@ export type MatchQuery = z.infer<typeof matchQuerySchema>;
 export const versionIdSchema = z.coerce.number({ error: "versionId must be a number" }).int().positive();
 
 /** Kinds of document a FRAC accepts: a brief document (JD or order) for research, or a standard sheet. */
-export const DOCUMENT_KINDS = ["brief", "roles", "competencies", "sources"] as const;
+export const DOCUMENT_KINDS = ["brief", "dictionary", "roles", "competencies", "sources"] as const;
 
 /** POST /fracs/:id/documents form field, and :kind in GET /templates/:kind. */
 export const documentKindSchema = z.object({
-  kind: z.enum(DOCUMENT_KINDS, { error: "kind must be brief, roles, competencies or sources" }),
+  kind: z.enum(DOCUMENT_KINDS, { error: "kind must be brief, dictionary, roles, competencies or sources" }),
 });
 export type DocumentKindInput = z.infer<typeof documentKindSchema>;

@@ -120,6 +120,29 @@ export const laddersOutput = z.object({
   ladders: z.array(z.object({ code: z.string(), levels: z.array(z.object({ label: s(), desc: s() })).length(5) })),
 });
 
+/**
+ * The team feedback agent (feedback-agent.ts): which competencies and roles the FRAC should have, by reference to a
+ * source ("F" the FRAC, "D1".. a document, "NEW" written because the feedback asked), and the mapping of every activity
+ * ("D2:A14" or "F:A3") to a competency at a level. `change: false` leaves that section as it is.
+ */
+export const feedbackAgentOutput = z.object({
+  summary: s(),
+  competencies: z.object({
+    change: z.boolean().default(false),
+    items: z.array(z.object({ from: s(), code: s(), label: s(), description: s(), type: s(), area: s(), kcm: s() })).default([]),
+  }).default({ change: false, items: [] }),
+  roles: z.object({
+    change: z.boolean().default(false),
+    items: z.array(z.object({ from: s(), code: s(), title: s(), activities: lines() })).default([]),
+  }).default({ change: false, items: [] }),
+  mapping: z.array(z.object({ a: z.string(), c: z.string(), l: z.number().default(3) })).default([]),
+  remaining: s(),
+  notApplied: z.array(z.object({ point: s(), reason: s() })).default([]),
+  /** Caveats about what was done (e.g. a choice the agent made, or a document that does not fit the cadre). */
+  notes: lines(),
+});
+export type FeedbackAgentOutput = z.infer<typeof feedbackAgentOutput>;
+
 // Rules r3 §6: the Reviewer's fixed checklist. Answers carry quotes that code verifies against the file.
 /** Q1 scope and Q2 accuracy flags per competency (rules r3 §6.1). An empty list is a valid answer. */
 export const reviewChecklistOutput = z.object({

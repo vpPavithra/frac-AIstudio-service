@@ -44,12 +44,21 @@ export function competenciesPatch(frac: Frac, out: z.infer<typeof competenciesOu
  */
 export async function mapToSheet(ctx: StepContext): Promise<Partial<Frac>> {
   const { frac, feedback } = ctx;
+  // From a FRAC dictionary, the mappings it came with are kept and only unmapped activities are mapped (no call when
+  // none are); a revise with feedback maps them all again
+  const keepMapped = !!frac.uploads?.dictionary && !feedback;
+  const all = frac.roles.flatMap((r) => r.activities);
+  const toMap = keepMapped ? all.filter((a) => !a.comp.trim()) : all;
+  if (keepMapped && !toMap.length) return { rolesDirty: false };
   await ctx.progress(JOB_MESSAGES.mapping);
-  const activities = frac.roles.flatMap((r) => r.activities.map((a) => ({ code: a.code, text: a.text })));
+  const activities = toMap.map((a) => ({ code: a.code, text: a.text }));
   const out = await callModel(ctx, "mapping", "default", mappingPrompt(frac, feedback),
     { cadre: frac.cadre, activities, competencies: frac.competencies.map((c) => ({ code: c.code, label: c.label, description: c.description })), feedback },
     mappingOutput);
-  return competenciesPatch(frac, { competencies: frac.competencies.map(({ levels: _levels, ...c }) => c), mapping: out.mapping });
+  const patch = competenciesPatch(frac, { competencies: frac.competencies.map(({ levels: _levels, ...c }) => c), mapping: out.mapping });
+  if (!keepMapped) return patch;
+  const kept = new Map(all.filter((a) => a.comp.trim()).map((a) => [a.code, a.comp]));
+  return { ...patch, roles: patch.roles?.map((r) => ({ ...r, activities: r.activities.map((a) => ({ ...a, comp: kept.get(a.code) ?? a.comp })) })) };
 }
 
 /**

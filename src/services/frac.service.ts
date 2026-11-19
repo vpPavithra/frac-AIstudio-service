@@ -24,6 +24,7 @@ import { rolesVerifyNotReady, verifyRoles } from "./ai/roles-verify.ts";
 import { fixAllNotReady, fixContentFindings, groupFindings } from "./ai/fix-findings.ts";
 import { outdatedTitle, replaceable, replaceOutdated } from "./outdated-fix.ts";
 import type { StepContext } from "./ai/step-context.ts";
+import { runFeedbackAgent, type FeedbackOutcome } from "./ai/feedback-agent.ts";
 import { type ReviewService, worstSeverity } from "./review.service.ts";
 import { markChecked, stampChanges } from "./step-changes.ts";
 
@@ -198,6 +199,26 @@ const STEPS: Record<GenerationStep, StepSpec> = {
   },
 };
 
+/**
+ * What the clicked step still does after the feedback agent (19 Nov 2026):
+ * - the agent changed nothing (or there was no feedback): the step runs as before, with the team's text as given;
+ * - the agent replaced this step's own section (competencies on Competencies, roles on Roles): the step does not run
+ *   again, so it cannot undo the team's choice; feedback left over is reported for another Revise;
+ * - the agent changed other sections and nothing is left: done, the step does not run;
+ * - otherwise the step runs with only the feedback left over.
+ */
+export function stepAfterFeedback(step: GenerationStep, feedback: string | undefined, guidance: string | undefined, outcome?: FeedbackOutcome):
+  { run: boolean; feedback?: string; guidance?: string; notApplied: { point: string; reason: string }[] } {
+  if (!outcome || (!outcome.changed.competencies && !outcome.changed.roles)) return { run: true, feedback, guidance, notApplied: [] };
+  const own = (step === "competencies" && outcome.changed.competencies) || (step === "roles" && outcome.changed.roles);
+  const rest = outcome.remaining;
+  if (own) {
+    return { run: false, notApplied: rest ? [{ point: rest, reason: "Not applied in this run: run Revise again on this tab with this feedback." }] : [] };
+  }
+  if (!rest) return { run: false, notApplied: [] };
+  return feedback ? { run: true, feedback: rest, notApplied: [] } : { run: true, guidance: rest, notApplied: [] };
+}
+
 /** Rule groups the quick checks run while a FRAC is built. Add a CheckKey (ladder, context, coverage) to run more. */
 const QUICK_CHECKS: readonly CheckKey[] = ["bloom", "structure"];
 const SEVERITY_ORDER = { B: 0, M: 1, m: 2 } as const;
@@ -246,7 +267,8 @@ export class FracService {
   /**
    * Runs one generation step as a job (spec 5.2–5.5). The step reads the FRAC as it was when the job
    * started; its result is merged into the latest saved FRAC, so edits made meanwhile are kept. Then
-   * the step and its feedback are logged and a version is snapshotted, so a bad revise can be undone.
+   * the step, its feedback and its guidance are logged and a version is snapshotted, so a bad revise can be undone.
+   * Guidance (instructions typed before the run) is added to every AI call of the step but never changes its path.
    * Throws 409 STEP_NOT_READY (before any job starts) when an earlier step is missing, and 409 JOB_RUNNING when
    * a step or check is already running on this FRAC (JobRunner.startExclusive). Returns the queued job;
    * step errors (AI_OUTPUT_INVALID, AI_* from the provider) end up on the job, not here.
@@ -266,16 +288,34 @@ export class FracService {
         await this.repos.fracs.update(next);
         return next;
       };
+      const { feedback, guidance } = body;
+      const teamText = !!(feedback?.trim() || guidance?.trim());
       // Research reads the team's uploaded documents (brief text, a standard source list); competencies read the brief
-      // text too; roles check for a job description, which means roles copied from a matched position are rebuilt
-      const documents = step === "research" || step === "roles" || step === "competencies" ? await this.repos.documents.listForFrac(id) : [];
-      const patch = await spec.run({ frac, feedback: body.feedback, codes: body.codes, documents, provider: this.provider, progress, recordUsage, save });
+      // text too; roles check for a job description, which means roles copied from a matched position are rebuilt.
+      // With feedback, the feedback agent reads every document first, whatever the step
+      const allDocuments = teamText || step !== "ladders" ? await this.repos.documents.listForFrac(id) : [];
+      const documents = step === "ladders" ? [] : allDocuments;
+      const ctx: StepContext = { frac, feedback, guidance, codes: body.codes, documents, provider: this.provider, progress, recordUsage, save };
+
+      // 1. Feedback first (19 Nov 2026): with feedback or instructions, the agent carries it out on the competencies, roles
+      //    and mappings, taking rows from the uploaded documents. Without either, the step runs its normal flow.
+      const agent = teamText ? await runFeedbackAgent(ctx, step, allDocuments) : null;
+      const plan = stepAfterFeedback(step, feedback, guidance, agent?.outcome);
+
+      // 2. The clicked step, with the feedback the agent left for it (all of it when the agent changed nothing)
+      const patch = plan.run ? await spec.run({ ...ctx, frac: agent?.frac ?? frac, feedback: plan.feedback, guidance: plan.guidance }) : {};
+      const outcome = agent?.outcome ? { ...agent.outcome, notApplied: [...agent.outcome.notApplied, ...plan.notApplied] } : undefined;
+      const at = new Date().toISOString();
       const done = await save((latest) => ({
         ...patch,
-        step: Math.max(latest.step, spec.number),
-        log: [...latest.log, { at: new Date().toISOString(), step: spec.number, feedback: body.feedback ?? "" }],
+        step: plan.run ? Math.max(latest.step, spec.number) : latest.step,
+        ...(outcome ? { lastFeedback: { at, step, summary: outcome.summary, applied: outcome.applied, notApplied: outcome.notApplied, notes: outcome.notes, stepRan: plan.run } } : {}),
+        log: [...latest.log, {
+          at, step: spec.number, feedback: feedback ?? "", ...(guidance ? { guidance } : {}),
+          ...(outcome?.applied.length ? { applied: outcome.applied } : {}),
+        }],
       }));
-      await this.repos.fracs.snapshot(done, body.feedback ? `${spec.label} (revised)` : spec.label);
+      await this.repos.fracs.snapshot(done, feedback ? `${spec.label} (revised)` : guidance ? `${spec.label} (with instructions)` : spec.label);
     });
   }
 
@@ -387,10 +427,11 @@ export class FracService {
    * only those whose titles are given (a finding's "Fix with the agent"). One agent call for the content findings
    * (coverage, structure, state fit, outdated names), then the ladders step for the competencies ladder findings and
    * outdated names point at, plus any the agent added. Snapshots "Before …" first so History can undo it; ends with
-   * the check out of date and a `lastFix` summary (what it acted on, what the agent skipped).
+   * the check out of date and a `lastFix` summary (what it acted on, what the agent skipped). `guidance` (the team's
+   * instructions) goes to the fix and ladder calls only; the expert check that follows never sees it.
    * Throws 409 STEP_NOT_READY with no open findings (among `titles`).
    */
-  async startFixAll(ownerId: string, id: string, titles?: string[]) {
+  async startFixAll(ownerId: string, id: string, titles?: string[], guidance?: string) {
     const frac = await this.get(ownerId, id);
     const reason = fixAllNotReady(frac, titles);
     if (reason) throw conflict("STEP_NOT_READY", reason);
@@ -410,7 +451,7 @@ export class FracService {
       const total = new Set([...groups.ladders, ...groups.content]).size;
 
       // 1. Content findings: one agent call, edits applied by code to codes that exist
-      const ctx: StepContext = { frac, provider: this.provider, progress, recordUsage, save };
+      const ctx: StepContext = { frac, guidance, provider: this.provider, progress, recordUsage, save };
       if (groups.content.length) await progress(JOB_MESSAGES.fixContent(groups.content.length), 0, 0);
       const content = await fixContentFindings(ctx, groups.content);
 

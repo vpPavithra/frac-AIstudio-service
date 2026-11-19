@@ -166,13 +166,26 @@ Rows 22–26 and the `seed` on #3 were added for the Nov 2026 review decisions, 
 
 | Field | Type | Used by |
 | --- | --- | --- |
-| `feedback` | string, ≤5,000 characters | Any step: turns the run into a revise ("make activities shorter") |
+| `feedback` | string, ≤5,000 characters | Any step: turns the run into a revise ("make activities shorter"); may redo what an uploaded sheet gave |
+| `guidance` | string, ≤5,000 characters | Any step: instructions typed before the run (the tab's box). Added to every AI call of the job; the step still takes its usual path, so uploaded sheets and documents are kept. Logged on `log[]` and the version is named "… (with instructions)" |
 | `codes` | string[] of competency codes | Ladders only: rewrite just these ("Revise ANM7", "Fix these competencies") |
 
 ```json
+{ "guidance": "Include the state's 104 helpline." }
 { "feedback": "Add HBNC home visits under the community role." }
 { "codes": ["ANM7", "ANM12"], "feedback": "MgSO4 is given by the MO, not the ANM." }
 ```
+With `feedback` or `guidance`, the job first runs the **feedback agent** (task `feedback`, one complex-tier call): it
+reads the text first, with every uploaded document's competencies and roles, and may replace the FRAC's competencies
+and roles with rows picked from those documents and map every activity. The step then runs only for the feedback left
+over, and is skipped when the agent replaced that step's own section. The result is on the FRAC:
+
+```json
+"lastFeedback": { "at": "…", "step": "research", "summary": "…",
+  "applied": ["5 competencies (ASHA1, …) from Competencies.xlsx", "9 roles with 38 activities from Dictionary.xlsx"],
+  "notApplied": [{ "point": "…", "reason": "…" }], "notes": ["…"], "stepRan": false }
+```
+
 
 - **Answer `202`:** `{ "jobId": "<uuid>" }`, then poll #21.
 - **Before the job starts** (answers at once):
@@ -296,14 +309,25 @@ Rows 22–26 and the `seed` on #3 were added for the Nov 2026 review decisions, 
 - **`POST /v1/fracs/:id/documents`:** multipart `file` plus `kind`:
   - `brief`: PDF, DOCX or TXT, up to 3, before research only.
   - `roles`, `competencies`, `sources`: .xlsx or .csv.
+  - `dictionary`: .xlsx, a whole existing FRAC (a Creator download, or an older dictionary such as the GNM one): the
+    Role–Activity sheet with its postings and competency mappings, every competency sheet, and a Sources sheet if it
+    has one. It replaces the roles, activities, postings, competencies (ladders kept where all five levels are filled)
+    and, with a Sources sheet and research done, the sources. It sets `uploads.dictionary`, `roles`, `competencies` (and
+    `sources`) to its file name, so the steps keep it: Roles only writes activities for empty roles, Competencies maps
+    only unmapped activities (no call when all are mapped), Ladders writes only missing ladders. It replaces older
+    Roles, Competencies (and Sources) sheet records. `parsed.counts`: roles, activities, postings, mapped, competencies,
+    ladders, sources. A file with no Role–Activity sheet is refused (`SHEET_NOT_RECOGNISED`: upload it as a
+    Competency sheet).
   - **Answer `201`:** `{ document, frac }`, the FRAC after the import.
-  - A sheet replaces that part of the FRAC, saves a version first, and sets `uploads[kind]`.
+  - A sheet replaces that part of the FRAC, saves a version first, and sets `uploads[kind]`. A Roles or Competencies
+    sheet uploaded after a dictionary clears `uploads.dictionary`.
   - **Errors:** `FILE_REQUIRED`, `FILE_TYPE_NOT_ALLOWED`, `FILE_UNREADABLE`, `SHEET_NOT_RECOGNISED`, `TOO_MANY_DOCUMENTS`, `BRIEF_LOCKED`, `JOB_RUNNING`.
-- **`DELETE /v1/fracs/:id/documents/:documentId`:** `{ frac }`. For a sheet, the content stays and `uploads[kind]` is cleared, so the step uses the AI again.
+- **`DELETE /v1/fracs/:id/documents/:documentId`:** `{ frac }`. For a sheet, the content stays and `uploads[kind]` is cleared, so the step uses the AI again. For a dictionary, each `uploads` entry still naming it is cleared.
 - **`POST /v1/fracs/:id/documents/:documentId/apply` (27):** puts a sheet's rows back on the FRAC over edits made
   since the upload (the "Re-apply sheet" control). A version "Before re-applying the … sheet" is saved first.
   - **Answer `200`:** `{ frac }`.
-  - Sheets keep their rows in `parsed` (`roles` and `postings`, `competencies`, or `sources`) from 13 Nov 2026.
+  - Sheets keep their rows in `parsed` (`roles` and `postings`, `competencies`, or `sources`) from 13 Nov 2026; a
+    dictionary keeps all of them and its code `prefix`.
   - **Errors:** `NOT_FOUND`, `SHEET_NOT_STORED` (a brief document, or a sheet uploaded before rows were kept), `JOB_RUNNING`.
 
 ### 28. `POST /v1/fracs/:id/roles/verify` — verify the roles with the agent
@@ -344,7 +368,9 @@ Rows 22–26 and the `seed` on #3 were added for the Nov 2026 review decisions, 
 ### 31. `POST /v1/fracs/:id/fixes/all` — fix all expert-check findings
 
 - **When:** "Fix all findings" on the expert check (every open finding), or "Fix with the agent" on one finding.
-- **Body:** `{ "titles"?: string[] }`. The finding titles to fix; leave it out to fix every open finding.
+- **Body:** `{ "titles"?: string[], "guidance"?: string }`. The finding titles to fix; leave it out to fix every open
+  finding. `guidance` (≤5,000 characters, the Expert check tab's box) goes to the fix and ladder calls only; the expert
+  check that follows never sees it.
 - **What it does:** one `fix-all` job. It saves a version "Before Fix all findings" (or "Before Fix: …") first, then
   works in two parts, both with the agent:
   1. content findings (coverage, structure, state fit, outdated names, anything else): one complex-tier `fix-findings`
@@ -377,6 +403,8 @@ Rows 22–26 and the `seed` on #3 were added for the Nov 2026 review decisions, 
 - **When:** "Download template" next to any upload slot.
 - **Answer:**
   - `roles`, `competencies`, `sources`: an .xlsx with the sheet layout, an example and an "Instructions" sheet;
+  - `dictionary`: one .xlsx with the FRAC (roles, activities and a Competency mapping column), Competencies and
+    Sources sheets, and one "Instructions" sheet;
   - `brief`: a text guide to what a job description should contain.
 - The layouts are the Creator's own Excel download, so a downloaded FRAC re-imports.
 

@@ -211,6 +211,30 @@ describe("full flow on the mock AI provider", () => {
     expect(frac.roles.some((r: { title: string }) => /immuni[sz]/i.test(r.title))).toBe(true);
   });
 
+  it("follows instructions given before a run without dropping an uploaded sheet, and records them", async () => {
+    const { app, runner } = setup();
+    const id = (await request(app).post("/v1/fracs").set(OWNER).send({ cadre: "ANM", state: "Bihar", size: "compact" })).body.id as string;
+    await step(app, runner, id, "research", { guidance: "Include the state's 104 helpline" });
+    await step(app, runner, id, "competencies");
+
+    const sheet = "Role,Activity,P1: ANM at Sub-Centre\nR1,Conduct VHSND sessions,\nA1,Conduct immunisation sessions as per the UIP schedule,Yes\n";
+    await request(app).post(`/v1/fracs/${id}/documents`).set(OWNER).field("kind", "roles").attach("file", Buffer.from(sheet), "roles.csv").expect(201);
+    // Feedback would rebuild the roles; instructions keep the team's sheet
+    await step(app, runner, id, "roles", { guidance: "Keep activity wording short" });
+    const frac = await getFrac(app, id);
+    expect(frac.roles.map((r: { title: string }) => r.title)).toEqual(["Conduct VHSND sessions"]);
+    expect(frac.log.map((e: { guidance?: string }) => e.guidance)).toEqual(["Include the state's 104 helpline", undefined, "Keep activity wording short"]);
+
+    const versions = (await request(app).get(`/v1/fracs/${id}/versions`).set(OWNER).expect(200)).body.versions;
+    expect(versions.map((v: { reason: string }) => v.reason)).toContain("Job research (with instructions)");
+  });
+
+  it("refuses instructions longer than 5,000 characters", async () => {
+    const { app } = setup();
+    const id = (await request(app).post("/v1/fracs").set(OWNER).send({ cadre: "ANM", state: "Bihar", size: "compact" })).body.id as string;
+    await request(app).post(`/v1/fracs/${id}/steps/research`).set(OWNER).send({ guidance: "x".repeat(5001) }).expect(400);
+  });
+
   it("seeds a finished FRAC and a review for each owner", async () => {
     const { app, runner, fracs, reviews } = setup();
     await seedMockData({ fracs, reviews, runner }, ["mock-user"]);
